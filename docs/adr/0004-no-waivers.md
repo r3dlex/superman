@@ -8,6 +8,6 @@ lx contained standing "override and do not stop" merge-authority waivers and an 
 
 ## Consequences
 
-- Archgate 0.61.0 supports inline `archgate-ignore <ADR>/<rule> <reason>` comments, and they still suppress a violation under `--strict`. That is a waiver path inside a ticket PR. Recommended follow-up for André to decide at Gate 1: a rule (proposed SUP-005) that reports any `archgate-ignore` directive outside `.archgate/fixtures/`, so suppressions also need a spec PR.
+- Archgate 0.61.0 supports inline `archgate-ignore <ADR>/<rule> <reason>` comments, and they still suppress a violation under `--strict`. That is a waiver path inside a ticket PR. Recommended follow-up for André to decide at Gate 1: a rule (proposed SUP-005) that reports any `archgate-ignore` directive outside `.archgate/fixtures/`, so suppressions also need a spec PR. Amended 2026-10-29: the same proposed rule should also cover Biome's `biome-ignore` and Trivy's inline `trivy:ignore` comments. Trivy ignore files are already banned by SUP-007 (ADR 0009).
 - Platform gaps are reported, not waived: on linux-arm64 G1 prints `n/a (enforced on linux-x64 leg)` while the linux-x64 leg stays required.
 - Work that needs a protected-path change (CI workflows, lock, `.claude/settings.json`) is split into a ticket PR plus a spec-kind follow-up PR, which costs André one more review.

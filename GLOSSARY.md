@@ -50,9 +50,13 @@ _Avoid_: spec approval meeting, sign-off
 André's review, approval on the head SHA, and merge of a ticket PR after `merge-ready` passes.
 _Avoid_: final review, release gate
 
-**Gate (G1–G9)**:
+**Gate (G1–G11)**:
 One deterministic check with a pass, fail or `n/a` result, run by `superman gate` and listed in spec §5.4.
 _Avoid_: hook, policy, check (when the gate is meant)
+
+**Drift job**:
+The scheduled, non-blocking CI job that runs the pinned TypeScript `tsc --noEmit` and diffs its diagnostics against the primary checker, tsrs (ADR 0008).
+_Avoid_: shadow gate (it never blocks a merge)
 
 **Protected path**:
 A path that only a spec-kind PR may change; a ticket PR that touches one fails G4.

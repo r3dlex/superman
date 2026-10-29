@@ -1,5 +1,5 @@
 {
-  "name": "@r3dlex/superman",
+  "name": "superman-ai",
   "version": "0.0.0",
   "private": false,
   "description": "Human-in-the-loop guardrails for AI coding agents: deterministic merge gates, a human approval on the head SHA, and pinned Matt Pocock skills.",

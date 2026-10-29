@@ -13,6 +13,8 @@ const PROTECTED = [
   ".github/workflows/**",
   "CODEOWNERS",
   ".superman/**",
+  "biome.json",
+  "biome.jsonc",
 ];
 // Spec-kind (Gate 1) PRs: specs, decisions, rules, glossary, config, CI and the
 // rest of the protected list, plus the npm setup files. Never source code.

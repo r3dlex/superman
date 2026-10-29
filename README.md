@@ -9,4 +9,4 @@ Status: bootstrapping. The v0 spec lands as the first PR (`spec/superman-v0`), o
 - Decisions: [`docs/adr/`](docs/adr/) (why) and [`.archgate/adrs/`](.archgate/adrs/) (enforced rules)
 - Glossary: [`GLOSSARY.md`](GLOSSARY.md)
 
-Planned distribution: the npm package `@r3dlex/superman` (CLI plus overlay skills), installable as a plugin in Claude Code, Codex and OpenCode. Nothing is published yet.
+Planned distribution: the npm package `superman-ai` (CLI command `superman`, plus overlay skills), installable as a plugin in Claude Code, Codex and OpenCode. Nothing is published yet.

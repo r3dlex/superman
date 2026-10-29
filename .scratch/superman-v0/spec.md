@@ -2,9 +2,9 @@
 
 **Status:** ready-for-agent
 
-*Spec for Gate 1 (milestone M1). Reshaped into Matt Pocock's `to-spec` template (mattpocock/skills@59db609eb1e18aaf59b63284d0e52255aff0c63c) from André's approved draft "superman v0 specification" (written 2026-10-29, Europe/Berlin). The draft's numbered sections are kept, with their numbers, under the template headings, so cross-references like "§5.4" still work. Changes made during M1 are marked **(M1 amendment)** and listed in Further Notes, "Amendments made in M1".*
+*Spec for Gate 1 (milestone M1). Reshaped into Matt Pocock's `to-spec` template (mattpocock/skills@59db609eb1e18aaf59b63284d0e52255aff0c63c) from André's approved draft "superman v0 specification" (written 2026-10-29, Europe/Berlin). The draft's numbered sections are kept, with their numbers, under the template headings, so cross-references like "§5.4" still work. Changes made during M1 are marked **(M1 amendment)** and listed in Further Notes, "Amendments made in M1"; the 2026-10-29 tooling round (Biome, Trivy, tsrs, the `superman-ai` name) is listed there as Amendment 2.*
 *Draft sources: `decisions.md` (authoritative; "hitl" there means `superman`), `zoom-out-northstar-autobahn-archgate.md`, `survey.md`, `magus-notes.md`, both Gemini chats, the repos `ai-catapult`, `r3dlex/skills`, `mattpocock/skills@59db609`, and `legiox-workspace@8768c7b`.*
-*Conventions: **VERIFY** marks a fact nobody has checked hands-on yet. **(rec, confirm)** marks a decision that `decisions.md` lists as recommended but still pending André's explicit OK. Every open question in §15 is resolved. Glossary: `GLOSSARY.md`. Decisions: `docs/adr/0001`–`0007` (why) and `.archgate/adrs/` (enforced).*
+*Conventions: **VERIFY** marks a fact nobody has checked hands-on yet. **(rec, confirm)** marks a decision that `decisions.md` lists as recommended but still pending André's explicit OK. Every open question in §15 is resolved. Glossary: `GLOSSARY.md`. Decisions: `docs/adr/0001`–`0009` (why) and `.archgate/adrs/` (enforced).*
 
 ## Problem Statement
 
@@ -27,7 +27,7 @@
 
 ## Solution
 
-superman is a thin TypeScript CLI, `superman`, plus an overlay of at most three skills on top of Matt Pocock's skills, which are used unmodified and pinned by SHA. A separate agent identity writes code and opens PRs; only André approves the exact head SHA and merges. Deterministic gates (Archgate rules derived from ADRs, typecheck and tests, knip, duplication and mutation ratchets, a protected-path policy, traceability and test-first evidence) run locally and in CI, print only failures, and have no waiver. Work flows through two human gates: Gate 1 reviews the spec, tickets, ADRs and rules before any code exists, and Gate 2 reviews each ticket PR. superman ships as one npm package, `@r3dlex/superman`, that is also installable as a plugin in Claude Code, Codex and OpenCode **(M1 amendment, §12.1)**.
+superman is a thin TypeScript CLI, `superman`, plus an overlay of at most three skills on top of Matt Pocock's skills, which are used unmodified and pinned by SHA. A separate agent identity writes code and opens PRs; only André approves the exact head SHA and merges. Deterministic gates (Archgate rules derived from ADRs, typecheck (tsrs) and tests, Biome lint and format, a Trivy scan, knip, duplication and mutation ratchets, a protected-path policy, traceability and test-first evidence) run locally and in CI, print only failures, and have no waiver. Work flows through two human gates: Gate 1 reviews the spec, tickets, ADRs and rules before any code exists, and Gate 2 reviews each ticket PR. superman ships as one npm package, `superman-ai` (CLI command `superman`), that is also installable as a plugin in Claude Code, Codex and OpenCode **(M1 amendment, §12.1)**.
 
 ### 2. Goals (v0)
 
@@ -45,7 +45,7 @@ superman is a thin TypeScript CLI, `superman`, plus an overlay of at most three 
 3. **Deterministic first.** Anything checkable lives in the CLI or CI. Skills only hold judgment and sequencing.
 4. **Vanilla upstream.** Pocock files are never edited. An overlay skill never reuses a Pocock skill name or job, to avoid skill clash (arXiv 2610.25064).
 5. **Show only failures.** On success a command prints `ok`. On failure it prints `{rule, file, line, message, fix}` lines, about 2 KB at most. Full detail goes to the JSON receipt.
-6. **Zero runtime dependencies and no hidden processes.** Node built-ins only. External tools (`git`, `gh`, `archgate`, `knip`, `jscpd`, `stryker`) are pinned devDependencies or PATH tools that `doctor` checks.
+6. **Zero runtime dependencies and no hidden processes.** Node built-ins only. External tools (`git`, `gh`, `archgate`, `tsrs`, `biome`, `knip`, `jscpd`, `stryker`, `trivy`) are pinned devDependencies, pinned CI binaries or PATH tools that `doctor` checks **(M1 amendment)**.
 7. **Code over stale prose.** Every generated AGENTS.md block opens with: "If this file disagrees with the code or CI, the code and CI win; flag the drift." (arXiv 2610.30571.) Every directive carries a reason.
 8. **Thin slices.** One ticket is one PR, and every milestone below is one PR.
 
@@ -92,8 +92,10 @@ Actors: **André** (the approver, `br4vesirrobin`), **the agent** (an AI coding 
 37. As a harness user, I want to install the superman overlay as a Claude Code plugin from the `r3dlex/superman` marketplace, so that `ship` and `adr-rule` are available as skills.
 38. As a harness user, I want to install the same overlay as a Codex plugin, so that Codex sessions follow the same flow.
 39. As a harness user, I want OpenCode to load the same overlay skills, so that the flow is harness-independent.
-40. As a harness user, I want `npx @r3dlex/superman doctor` to work from npm, so that I can run superman without cloning the repo.
+40. As a harness user, I want `npx superman-ai doctor` to work from npm **(M1 amendment)**, so that I can run superman without cloning the repo.
 41. As a harness user, I want every harness to read one copy of each skill file, so that the lock's hashes describe what every harness loads.
+42. As André, I want lint, format and a vulnerability, secret and misconfiguration scan to block merges with no ignore files, so that agents can't ship sloppy code or a known-vulnerable dependency **(M1 amendment)**.
+43. As André, I want the fast tsrs type checker as the gate but watched against the official `tsc`, so that a beta checker can't silently pass wrong code **(M1 amendment)**.
 
 ## Implementation Decisions
 
@@ -103,10 +105,13 @@ Actors: **André** (the approver, `br4vesirrobin`), **the agent** (an AI coding 
 
 | Component | What | Where |
 |---|---|---|
-| `superman` CLI | TS, Node ≥26 **(M1 amendment)**, zero runtime deps; deterministic gates, merge check, skill pinning, receipts | npm `@r3dlex/superman` (bin `superman`). Unscoped `superman` is taken on npm, checked 2026-10-29 |
+| `superman` CLI | TS, Node ≥26 **(M1 amendment)**, zero runtime deps; deterministic gates, merge check, skill pinning, receipts | npm `superman-ai` (bin `superman`) **(M1 amendment)**. `superman` and `superman-cli` are taken on npm and André owns no `@r3dlex` scope, checked 2026-10-29 |
 | Overlay plugin | Skills `ship`, `adr-rule`, optional `plan-critic` | Bundled in the npm package under root `skills/`, with Claude Code and Codex plugin manifests pointing at the same files **(M1 amendment, §12.1)** |
 | Pocock skills | Unmodified, at the SHA in `superman.lock.json` | Installed as a pinned plugin from the `r3dlex/superman` catalog (see §5.6). Not vendored |
 | Archgate CLI | Executes `.archgate/adrs/*.rules.ts` | devDependency `archgate@0.61.0` (exact pin), `ARCHGATE_TELEMETRY=0` |
+| tsrs **(M1 amendment)** | Primary type checker, `--noEmit` only, default mode (never `--fast`) (ADR 0008) | devDependency `tsrs@0.20.1-ts7.1.0-beta` (exact pin; tracks TypeScript 7.1.0-beta), native binary via its `@tsrs/*` optionalDependencies |
+| Biome **(M1 amendment)** | Lint + format for TS/JS/JSON, replaces ESLint and Prettier (G10, ADR 0009) | devDependency `@biomejs/biome@2.6.4` (exact pin), config `biome.json` (protected) |
+| Trivy **(M1 amendment)** | `trivy fs` scan: vulnerable deps, secrets, misconfig; HIGH/CRITICAL fail (G11, ADR 0009) | CI: release tarball `v0.76.1` downloaded from `github.com/aquasecurity/trivy/releases` and checked against a sha256 committed in the workflow; locally a PATH tool. Never `trivy-action`/`setup-trivy` |
 | Forge | PRs, reviews, check runs | GitHub in v0 (via `gh`); GitLab/ADO later |
 
 #### 5.2 CLI commands
@@ -116,9 +121,9 @@ Every command exits 0 (ok), 1 (gate failed), or 2 (misconfigured or tool error).
 | Command | Does | Notes |
 |---|---|---|
 | `superman init [--repo-kind ts\|polyglot]` | Writes `superman.config.json`, `superman.lock.json`, `superman.ratchet.json`, `.archgate/config.json` (if missing), the `GEN-001` meta-rule, `.superman/hooks/pre-commit`, a precedence block in `AGENTS.md`, `CODEOWNERS` lines, and the CI workflow from a template; sets `git config core.hooksPath .superman/hooks` | Idempotent and byte-stable: re-running it yields no diff. Refuses to overwrite a changed file without `--force`, and prints a diff instead |
-| `superman doctor` | Checks environment and identity (§9.3), tool pins, `ARCHGATE_TELEMETRY=0`, Node/pnpm/git versions, that lock hashes match the files on disk, and that the hooks path is set | **Refuses to run (exit 1) when the active forge identity is the approver (André).** The `ship` skill runs it first |
-| `superman gate pre-commit` | On staged files: `archgate check --staged`; typecheck; tests related to changed files; knip; a protected-path check | Target p50 under 10 s on the superman repo. Prints failing items only |
-| `superman gate pre-pr [--base origin/main]` | Full typecheck and tests; `archgate check --base --strict`; knip; jscpd ratchet; Stryker on changed files; branch↔ticket↔spec link; PR-kind path policy (§5.4) | Same commands CI runs. Locally it is a fast-fail preview, and CI is authoritative |
+| `superman doctor` | Checks environment and identity (§9.3), tool pins (including tsrs and Biome), whether `trivy` is on PATH and its version, that `TSRS_FAST` is unset (warns otherwise), `ARCHGATE_TELEMETRY=0`, Node/pnpm/git versions, that lock hashes match the files on disk, and that the hooks path is set | **Refuses to run (exit 1) when the active forge identity is the approver (André).** The `ship` skill runs it first |
+| `superman gate pre-commit` | On staged files: `archgate check --staged`; typecheck; `biome check --staged --no-errors-on-unmatched` (G10) **(M1 amendment)**; tests related to changed files; knip; a protected-path check | Target p50 under 10 s on the superman repo. Prints failing items only |
+| `superman gate pre-pr [--base origin/main]` | Full typecheck (tsrs) and tests; `archgate check --base --strict`; `biome ci` (G10); `trivy fs` (G11) when `trivy` is on PATH, otherwise `n/a (enforced in CI)` **(M1 amendment)**; knip; jscpd ratchet; Stryker on changed files; branch↔ticket↔spec link; PR-kind path policy (§5.4) | Same commands CI runs. Locally it is a fast-fail preview, and CI is authoritative |
 | `superman merge-ready <pr>` | Verifies Gate 2 or Gate 1 on GitHub through `gh api` (§9.2) | André runs it before merging. On success it prints the exact `gh pr merge <pr> --match-head-commit <sha>` command (that flag: VERIFY on current gh) |
 | `superman skills sync` | Writes the project's `.claude/settings.json` catalog and enabled-plugin entries, and computes per-file sha256 values for the pinned Pocock commit and the overlay into the lock. A copy fallback applies only for harnesses that can't pin plugins (see §5.6) | Never edits skill files |
 | `superman skills lock --pocock <sha>` | Bumps the pin and re-syncs. The result is a normal PR that André reviews | Never runs on its own |
@@ -135,7 +140,7 @@ Plain JSON validated by a hand-written TS validator (no zod), with a `$schema` p
 
 ```json
 {
-  "$schema": "./node_modules/@r3dlex/superman/schema/config.v1.json",
+  "$schema": "./node_modules/superman-ai/schema/config.v1.json",
   "version": 1,
   "forge": { "kind": "github", "repo": "r3dlex/superman", "baseBranch": "main" },
   "identity": {
@@ -149,11 +154,15 @@ Plain JSON validated by a hand-written TS validator (no zod), with a `$schema` p
     "glossary": "GLOSSARY.md",   // M1 amendment; lx keeps CONTEXT.md (question 6)
     "rules": ".archgate/adrs",
     "protected": [".archgate/**", "docs/adr/**", ".claude/settings.json", "superman.lock.json",
-                  "superman.*.json", ".github/workflows/**", "CODEOWNERS", ".superman/**"]
+                  "superman.*.json", ".github/workflows/**", "CODEOWNERS", ".superman/**", "biome.json"]   // biome.json: M1 amendment
   },
   "branches": { "spec": "spec/{slug}", "ticket": "ticket/{slug}-{nn}" },
   "gates": {
-    "typecheck": ["pnpm", "exec", "tsc", "--noEmit"],
+    "typecheck": ["pnpm", "exec", "tsrs", "--noEmit"],   // M1 amendment: tsrs primary (ADR 0008); revert = ["pnpm","exec","tsc","--noEmit"]
+    "lint": ["pnpm", "exec", "biome", "ci"],               // G10, M1 amendment
+    "lintStaged": ["pnpm", "exec", "biome", "check", "--staged", "--no-errors-on-unmatched"],
+    "trivy": ["trivy", "fs", "--scanners", "vuln,secret,misconfig", "--severity", "HIGH,CRITICAL",
+              "--include-dev-deps", "--exit-code", "1", "."],   // G11; PATH tool locally
     "test": ["pnpm", "exec", "vitest", "run"],
     "testRelated": ["pnpm", "exec", "vitest", "related", "--run"],
     "knip": { "enabled": true, "workspaces": ["."] },
@@ -185,8 +194,9 @@ Plain JSON validated by a hand-written TS validator (no zod), with a `$schema` p
 { "version": 1,
   "pocock": { "repo": "mattpocock/skills", "sha": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
               "files": { "skills/engineering/tdd/SKILL.md": "sha256-…" } },
-  "overlay": { "package": "@r3dlex/superman", "version": "0.1.0", "files": { "…": "sha256-…" } },
-  "tools": { "archgate": "0.61.0", "node": "26", "pnpm": "12.16.1" } }
+  "overlay": { "package": "superman-ai", "version": "0.1.0", "files": { "…": "sha256-…" } },
+  "tools": { "archgate": "0.61.0", "tsrs": "0.20.1-ts7.1.0-beta", "biome": "2.6.4", "trivy": "0.76.1",
+            "node": "26", "pnpm": "12.16.1" } }
 ```
 
 **`superman.ratchet.json`:**
@@ -198,7 +208,7 @@ Plain JSON validated by a hand-written TS validator (no zod), with a `$schema` p
 | # | Gate | Local (pre-commit) | CI on every PR (required) | Nightly on `main` |
 |---|---|---|---|---|
 | G1 | `archgate check --strict` | `--staged` | `--base origin/main --strict --output github` | full |
-| G2 | Typecheck + tests | typecheck + `vitest related` | full typecheck and test suite, on all 3 OS legs | — |
+| G2 | Typecheck + tests. Typecheck = `tsrs --noEmit` (exact pin, default mode) **(M1 amendment, ADR 0008)** | typecheck + `vitest related` | full typecheck and test suite, on all 3 OS legs | non-blocking drift job: pinned TS7 `tsc --noEmit` diffed against tsrs; any diff fails that job and opens an issue |
 | G3 | knip (unused files, exports, deps) | yes | yes, must report 0 issues | — |
 | G4 | No `.archgate/**` or `docs/adr/**` edits in ticket PRs (the whole protected list, §5.3) | yes | yes, by PR kind | — |
 | G5 | jscpd duplicate-code ratchet | changed files | total duplication % ≤ `jscpdPct`, and no new clone that touches changed files | full report |
@@ -206,6 +216,8 @@ Plain JSON validated by a hand-written TS validator (no zod), with a `$schema` p
 | G7 | Pocock unmodified | — | `superman skills verify` | — |
 | G8 | Traceability | — | branch `ticket/{slug}-{nn}` ↔ `.scratch/{slug}/issues/{nn}-*.md` exists on base ↔ `.scratch/{slug}/spec.md` exists on base | — |
 | G9 | Test-first (red→green) on `ticket/*` PRs | — | see below | — |
+| G10 | Biome lint + format, replaces ESLint and Prettier **(M1 amendment, ADR 0009)** | `biome check --staged --no-errors-on-unmatched` | `biome ci` (whole repo), on all 3 OS legs | — |
+| G11 | Trivy `fs`: vulnerable deps (incl. dev), secrets, misconfig; fails on HIGH/CRITICAL; no `.trivyignore` (SUP-007) **(M1 amendment, ADR 0009)** | off; pre-pr runs it if `trivy` is on PATH, otherwise `n/a (enforced in CI)` | `trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --include-dev-deps --exit-code 1 .` on linux-x64 | same scan on `main` (new CVEs against unchanged deps); a failure opens an issue |
 
 **PR kinds and the paths each may touch (G4):**
 - **`spec/*`** (Gate 1):
@@ -238,6 +250,8 @@ Plain JSON validated by a hand-written TS validator (no zod), with a `$schema` p
 **Platform note:**
 - Archgate has no linux-arm64 binary, so on the linux-arm64 CI leg G1 reports `n/a (enforced on linux-x64 leg)`.
 - This is not a waiver: the linux-x64 job is required and runs G1.
+- **(M1 amendment)** tsrs publishes native packages for `darwin-arm64`, `linux-x64-gnu` and `linux-arm64-gnu` (npm metadata, 2026-10-29), so G2 runs on all three legs. Only linux x64 has been checked hands-on (VERIFY the other two in ticket 01's matrix; a missing platform is a revert trigger in ADR 0008).
+- **(M1 amendment)** G11 runs once, on the linux-x64 leg, because the scan result does not depend on the OS; the other legs report `n/a (enforced on linux-x64 leg)`. Trivy also ships Linux-ARM64 and macOS-ARM64 tarballs for local use.
 
 #### 5.5 Receipts (JSON)
 
@@ -404,7 +418,14 @@ jobs:
       - uses: actions/setup-node@<sha>
         with: { node-version: 26, cache: pnpm }   # M1 amendment: Node 26
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec superman gate ci --base origin/${{ github.base_ref || 'main' }}
+      - name: Install Trivy (pinned, sha256-checked; M1 amendment)   # never trivy-action/setup-trivy (GHSA-69fq-xp46-6x23)
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        env: { TRIVY_VERSION: "0.76.1", TRIVY_SHA256: "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0" }
+        run: |
+          curl -fsSLo trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  trivy.tgz" | sha256sum -c -
+          tar -xzf trivy.tgz -C "$RUNNER_TEMP" trivy && echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - run: pnpm exec superman gate ci --base origin/${{ github.base_ref || 'main' }}   # G1–G11; never sets TSRS_FAST
       - uses: actions/upload-artifact@<sha>
         if: always()
         with: { name: superman-receipt-${{ matrix.os }}, path: .superman-ci/receipt.json }
@@ -412,7 +433,16 @@ jobs:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-24.04
     permissions: { contents: read, issues: write }
-    steps: [ "...", { run: "pnpm exec superman gate nightly" } ]  # full Stryker --force, jscpd full, audit
+    steps: [ "...", { run: "pnpm exec superman gate nightly" } ]  # full Stryker --force, jscpd full, Trivy on main, audit
+  tsc-drift:                                 # M1 amendment: non-blocking, never a required check (ADR 0008)
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    permissions: { contents: read, issues: write }
+    steps:
+      - "...checkout, pnpm install --frozen-lockfile..."
+      - run: pnpm exec tsrs --noEmit --pretty false > tsrs.txt || true
+      - run: pnpm exec tsc --noEmit --pretty false > tsc.txt || true    # devDependency typescript, exact pin = the version tsrs tracks
+      - run: diff -u tsc.txt tsrs.txt                                    # any drift fails this job; a follow-up step opens an issue
 ```
 
 - **`gate ci`** is `pre-pr` plus G7 and G8, with CI-specific output formats (`--output github` annotations).
@@ -420,6 +450,9 @@ jobs:
 - **Required checks.** Required status checks are only enforceable with branch protection or rulesets (§9.4).
 - **Archgate in CI.** Archgate is installed through the pinned devDependency. Its npm shim downloads the binary on first use (about 30 s). Cache `~/.archgate/bin` keyed on the version.
 - **Polyglot repos (lx).** The template adds the repo's own typecheck and test commands through config. For example: `mix compile --warnings-as-errors`, `mix test`, `cargo test`, `vue-tsc --noEmit`.
+- **Biome and Trivy in CI (M1 amendment).** Biome comes from its exact-pinned devDependency. Trivy is downloaded from its GitHub release at a pinned version, and the sha256 is checked against `trivy_<v>_checksums.txt`, copied into the workflow when the pin changes. Pin bumps are spec-kind PRs. In March 2026 `aquasecurity/trivy-action` and `setup-trivy` had their tags hijacked and Trivy v0.69.4 was malicious (GHSA-69fq-xp46-6x23, CVE-2026-33634). That is why the pin is to a reviewed release, never `latest`, and why no Trivy action is used. Trivy's misconfig scanner does not cover GitHub workflow files (VERIFY); workflow linting (actionlint or zizmor) is a later candidate, not a v0 gate.
+- **tsrs in CI (M1 amendment).** The three-OS matrix is also tsrs's platform check. CI never sets `TSRS_FAST` and never passes `--fast` (SUP-006). `superman` also strips `TSRS_FAST` from the environment it gives gate processes. The `tsc-drift` job is scheduled and non-blocking. Its pinned TypeScript is the version in tsrs's version suffix (`7.1.0-beta` today).
+- **Linters for lx (M1 amendment).** Biome covers TS/JS/JSON only, so it runs in `apps/web/assets`. G10 for Elixir is `mix format --check-formatted`, plus `mix credo --strict` if credo is a dependency (VERIFY). Rust uses `cargo fmt --check` and `cargo clippy -- -D warnings`. There is no Ruff and no Python tooling anywhere.
 - **GitLab CI and ADO** come after v0.
   - The same `superman gate ci` entrypoint.
   - `merge-ready` checks GitLab MR approvals and pipeline SHA, and ADO PR votes and policy evaluations.
@@ -504,14 +537,15 @@ superman/
   AGENTS.md                 # ≤60 lines; precedence sentence first; CLAUDE.md/GEMINI.md are 1-line pointers
   GLOSSARY.md               # Pocock domain-modeling output (Gate, Receipt, PR kind, Approver, Bot, Ratchet…)
   README.md
-  package.json              # name @r3dlex/superman, bin superman, "dependencies": {}, engines node >=26 (M1 amendment)
+  package.json              # name superman-ai (M1 amendment), bin superman, "dependencies": {}, engines node >=26 (M1 amendment)
   pnpm-lock.yaml  tsconfig.json  vitest.config.ts  stryker.config.json  knip.json  .jscpd.json
+  biome.json                # G10 config (protected; M1 amendment). No .trivyignore (SUP-007)
   superman.config.json  superman.lock.json  superman.ratchet.json   # dogfooded
   src/
     cli.ts                  # argv parsing (node:util parseArgs), command dispatch
     config.ts  lock.ts  ratchet.ts  receipt.ts  exec.ts   # exec.ts = ONLY module allowed child_process
     forge/github.ts         # gh api wrapper; forge/gitlab.ts + forge/ado.ts later
-    gates/{archgate,typecheck,test,knip,jscpd,mutation,paths,trace,skills}.ts
+    gates/{archgate,typecheck,lint,trivy,test,knip,jscpd,mutation,paths,trace,skills}.ts   # typecheck = tsrs; lint = Biome
     commands/{init,doctor,gate,merge-ready,skills,next,audit}.ts
     templates/              # AGENTS block, CI yml, hook, GEN-001 rule (strings, deterministic)
   skills/{ship,adr-rule,plan-critic}/SKILL.md (+ plan-critic/rubrics/{architect,critic}.md)   # M1 amendment: was plugin/skills
@@ -529,6 +563,8 @@ superman/
     SUP-002-exec-boundary.{md,rules.ts}   # child_process imported only in src/exec.ts; no shell:true
     SUP-003-no-sh-py.{md,rules.ts}        # no *.sh / *.py files tracked
     SUP-004-skill-size.{md,rules.ts}      # ship ≤150, adr-rule ≤80, plan-critic ≤60 lines
+    SUP-006-tsrs-typecheck.{md,rules.ts}  # exact tsrs/typescript pins; no --fast/TSRS_FAST in gates; typecheck = tsrs (M1 amendment)
+    SUP-007-no-trivy-ignore.{md,rules.ts} # no .trivyignore / trivy.yaml (M1 amendment)
   .scratch/<slug>/{spec.md,issues/NN-*.md}
   .github/workflows/{superman.yml,release.yml}   # M1 ships a bootstrap ci.yml instead (§17)
   .superman/hooks/pre-commit
@@ -575,6 +611,8 @@ superman/
 | G5 jscpd | `apps/**/lib`, `apps/**/src`, `apps/web/assets/src`. jscpd supports Elixir and Rust tokenizers (VERIFY) |
 | G6 mutation | **Elixir, in v0 (decided 2026-10-29):** `mix muex --since origin/main --preset phoenix` per PR, a full `mix muex` nightly, and the same ratchet (the first full run is the baseline). Tool: [muex](https://hex.pm/packages/muex) (MIT, active), **not** muzak (see open question 8). Stryker stays n/a until `apps/web/assets` has TS tests |
 | G7/G8 | same |
+| G10 lint **(M1 amendment)** | `mix format --check-formatted`; `mix credo --strict` if credo is present (VERIFY); `cargo fmt --check` + `cargo clippy -- -D warnings`; Biome (`biome ci`) in `apps/web/assets` only. No Ruff, no Python |
+| G11 Trivy **(M1 amendment)** | same `trivy fs` command at the repo root (covers `mix.lock`, `Cargo.lock`, the JS lockfile, Dockerfiles/IaC if any) |
 
 #### 11.3 Adoption sequence (each step one PR, bot-authored, André-approved)
 
@@ -589,11 +627,11 @@ superman/
 
 ### 12. Distribution
 
-- **npm (main):** `@r3dlex/superman`, ESM, `bin: superman`, `dependencies: {}`, `engines.node >=26` **(M1 amendment)**.
+- **npm (main):** `superman-ai` (bin `superman`) **(M1 amendment)**, ESM, `bin: superman`, `dependencies: {}`, `engines.node >=26` **(M1 amendment)**.
   - Published by a `release.yml` triggered on a `v*` tag **that André pushes**.
   - Uses npm OIDC trusted publishing plus provenance, (the setup ai-catapult is said to use: VERIFY).
   - The agent can't tag: in App mode the tag ruleset blocks tag creation (in machine-user mode it only has Read). **(M1 amendment:** restated for App mode.**)**
-- **Bun binaries (optional):** `bun build src/cli.ts --compile --target=bun-{darwin-arm64,linux-x64,linux-arm64}`. Bun is used only in `release.yml`, never at dev time.
+- **Bun binaries (optional):** `bun build src/cli.ts --compile --target=bun-{darwin-arm64,linux-x64,linux-arm64}`. Bun is used only in `release.yml`, never at dev time. Bun builds the release artifacts, and tsrs only type checks (`--noEmit`) **(M1 amendment)**.
   - Attach the binaries plus `SHA256SUMS` to the GitHub release.
   - Signing with sigstore/cosign is VERIFY/optional.
   - The binaries still need `git`, `gh` and archgate on PATH.
@@ -606,7 +644,7 @@ superman/
 
 #### 12.1 Harness plugins from one package (M1 amendment, André 2026-10-29)
 
-**Requirement.** superman must be installable as a plugin in **Claude Code**, **OpenAI Codex** (CLI and app) and **OpenCode**, and published on npmjs.org as **`@r3dlex/superman`**. One npm package carries the CLI and the plugin assets. Each harness gets only a thin manifest that points at the same skill files, so nothing is duplicated and `superman.lock.json` hashes one set of files (ADR 0006).
+**Requirement.** superman must be installable as a plugin in **Claude Code**, **OpenAI Codex** (CLI and app) and **OpenCode**, and published on npmjs.org as **`superman-ai`** (renamed from `@r3dlex/superman` in Amendment 2). One npm package carries the CLI and the plugin assets. Each harness gets only a thin manifest that points at the same skill files, so nothing is duplicated and `superman.lock.json` hashes one set of files (ADR 0006).
 
 **Decisions.**
 - **Single skill tree.** The overlay skills move from the draft's `plugin/skills/` to `skills/<name>/SKILL.md` at the package root (also the repo root). The root `skills/` folder is Claude Code's default skill location for a plugin, the only skill path Codex's portable manifest dialect reads, and a path OpenCode can be pointed at. Outside plugin installs, a root `skills/` folder is not auto-loaded by any of the three harnesses, so working on the superman repo itself does not load the overlay.
@@ -626,24 +664,24 @@ superman/
 **Still VERIFY (ticket 10 proves or replaces each with a packed-tarball smoke test):**
 - Codex: which manifest form to ship (root `plugin.json` Agent Plugins dialect vs. `.codex-plugin/plugin.json`); whether one root `plugin.json` would collide with the npm/Claude files (it does not share a name, but Codex would then ignore `.codex-plugin/`); per-plugin SHA pinning; whether Codex reads the Claude marketplace file.
 - Claude Code: that a plugin installed through the `npm` source resolves `skills/` from the unpacked tarball, and that skills are invoked as `superman:ship`.
-- OpenCode: which config version a user runs (v1 folders only vs. v2 `skills` paths), and whether a path into `node_modules/@r3dlex/superman/skills` is accepted.
+- OpenCode: which config version a user runs (v1 folders only vs. v2 `skills` paths), and whether a path into `node_modules/superman-ai/skills` is accepted.
 - All three: that `disable-model-invocation: true` is honoured (Claude Code documents it; Codex and OpenCode behaviour VERIFY). If a harness ignores it, the overlay's baseline cost there is its descriptions only.
 
 #### 12.2 npm publishing setup (M1 amendment, André 2026-10-29)
 
-**Package metadata (initial setup, in the M1 PR):** `name` `@r3dlex/superman`, `version` `0.0.0`, `private: false`, `type: module`, `bin` `{ "superman": "./dist/cli.js" }` (compiled JS: Node does not strip types under `node_modules`; `dist/` arrives with ticket 01), the `files` allowlist from §12.1, `engines.node >=26`, `packageManager` `pnpm@12.16.1`, `publishConfig` `{ "access": "public", "provenance": true, "registry": "https://registry.npmjs.org/" }`, `repository.url` `git+https://github.com/r3dlex/superman.git` (trusted publishing requires it to match the repo exactly), `dependencies: {}`, and `devDependencies` holding only exact pins. **No `license` field yet:** the repo has no LICENSE, and choosing one is André's call (flagged at Gate 1; npm warns until then).
+**Package metadata (initial setup, in the M1 PR):** `name` `superman-ai` **(M1 amendment)**, `version` `0.0.0`, `private: false`, `type: module`, `bin` `{ "superman": "./dist/cli.js" }` (compiled JS: Node does not strip types under `node_modules`; `dist/` arrives with ticket 01), the `files` allowlist from §12.1, `engines.node >=26`, `packageManager` `pnpm@12.16.1`, `publishConfig` `{ "access": "public", "provenance": true, "registry": "https://registry.npmjs.org/" }`, `repository.url` `git+https://github.com/r3dlex/superman.git` (trusted publishing requires it to match the repo exactly), `dependencies: {}`, and `devDependencies` holding only exact pins. **No `license` field yet:** the repo has no LICENSE, and choosing one is André's call (flagged at Gate 1; npm warns until then).
 
 **Release workflow design (built in ticket 11, not enabled in M1).** `.github/workflows/release.yml`:
 - Trigger: `on: push: tags: ['v*']` only. No `workflow_dispatch`, `workflow_call`, `pull_request` or `pull_request_target`. The tag ruleset means only André creates tags; the App cannot.
 - Top-level `permissions: contents: read`. The `publish` job alone adds `id-token: write` (and nothing else). A separate `binaries` job (optional Bun builds plus `SHA256SUMS`, §12) gets `contents: write` only for the release upload.
 - GitHub-hosted `ubuntu-24.04`, every action pinned by full SHA, `persist-credentials: false`, setup-node with `node-version: 26` (ships npm 11.20.0; trusted publishing needs npm ≥11.5.1 and Node ≥22.14.0) and `package-manager-cache: false`.
-- Steps: `pnpm install --frozen-lockfile`, build, the full `superman gate ci` on the tagged commit, a check that the tag equals `v` + `package.json` `version`, then `npm publish` (or `npm stage publish` if André keeps the trusted publisher stage-only; see below). No `NPM_TOKEN` and no `.npmrc` token: npm exchanges the GitHub OIDC token, and provenance is generated automatically for a public repo and public package.
+- Steps: `pnpm install --frozen-lockfile`, build, the full `superman gate ci` on the tagged commit, a check that the tag equals `v` + `package.json` `version`, `npm pack`, then a G11 Trivy scan of the packed tarball and (in the `binaries` job) of the Bun binaries before they are uploaded (`trivy fs` on the unpacked tarball and `trivy rootfs` on the binaries' directory, HIGH/CRITICAL fail, same pinned and sha256-checked install as §8; exact flags VERIFY in ticket 11) **(M1 amendment)**, then `npm publish` of that same tarball (or `npm stage publish` if André keeps the trusted publisher stage-only; see below). No `NPM_TOKEN` and no `.npmrc` token: npm exchanges the GitHub OIDC token, and provenance is generated automatically for a public repo and public package.
 - Sources: [Trusted publishing](https://docs.npmjs.com/trusted-publishers/), [`npm trust`](https://docs.npmjs.com/cli/v11/commands/npm-trust/), [Provenance](https://docs.npmjs.com/generating-provenance-statements/).
 
 **One-time manual steps for André on npmjs.org (not automatable by the agent):**
-1. Create or claim the `r3dlex` npm organization (free) so the `@r3dlex` scope exists, with 2FA on the owning account.
+1. ~~Create or claim the `r3dlex` npm organization so the `@r3dlex` scope exists.~~ **(M1 amendment:** not needed. The package is the unscoped `superman-ai`, and a `0.0.0` placeholder may already be published by André. Keep 2FA on the owning account.**)**
 2. Make the package exist: npm only lets you add a trusted publisher to an existing package. Publish a first `0.0.x` once by hand from a reviewed `main` commit (`npm publish --access public`, with 2FA), or ask the agent to prepare that commit.
-3. Shortly before the first tagged release (ticket 11), add the trusted publisher: package settings on npmjs.com, or `npx npm@11 trust github @r3dlex/superman --file release.yml --repository r3dlex/superman --allow-stage-publish` (add `--allow-publish` to allow direct publish; npm ≥11.15.0, account 2FA, write access). Owner `r3dlex`, repository `superman`, workflow filename `release.yml`, no environment unless ticket 11 adds one. A new trusted publisher expires if no publish uses it within 2 days, so do this right before pushing the tag.
+3. Shortly before the first tagged release (ticket 11), add the trusted publisher: package settings on npmjs.com, or `npx npm@11 trust github superman-ai --file release.yml --repository r3dlex/superman --allow-stage-publish` (add `--allow-publish` to allow direct publish; npm ≥11.15.0, account 2FA, write access). Owner `r3dlex`, repository `superman`, workflow filename `release.yml`, no environment unless ticket 11 adds one. A new trusted publisher expires if no publish uses it within 2 days, so do this right before pushing the tag.
 4. Allowed actions: keep the default (stage publish) and approve staged versions on npmjs.com, or opt in to direct `npm publish`; the workflow uses the matching command (VERIFY which André prefers).
 5. Set the package's publishing access to "Require two-factor authentication and disallow tokens", and revoke any automation tokens.
 6. Choose the license (and add LICENSE) before the first public release.
@@ -667,17 +705,17 @@ G4 forbids protected paths in ticket PRs, but several milestones need protected 
 
 - **What makes a good test here:** it drives `superman` through its public interface (argv, exit code, stdout, receipt) or a pure module through its exported function, and asserts on behaviour a user or CI sees. It never asserts on internal call order, private helpers or mock call counts. Output assertions use golden files, because the writer is deterministic (§5.5).
 - **Fixtures:** tiny git repositories built in temp dirs per test (spec, ticket and chore branches; red-then-green and fix-before-test histories; ratchet up and down), plus fake `gh`/`archgate` executables on `PATH` that replay recorded JSON. No network in tests.
-- **Modules under test:** config validator and schema; lock and ratchet; receipt writer; exec boundary; forge identity (both modes); each gate (G1–G9); commands `init`, `doctor`, `gate`, `merge-ready`, `skills`, `next`, `audit`; Archgate rules through `.archgate/fixtures/<ID>/` (fixture mechanism VERIFY in Archgate 0.61, §6.2).
-- **Runner and quality bar:** Vitest (Stryker has incremental support for it; `node --test` has no Stryker runner, VERIFY), Stryker mutation and jscpd ratchets from the first measured baseline (ticket 01), knip at 0 issues, typecheck clean, on macOS arm64, linux x64 and linux arm64.
+- **Modules under test:** config validator and schema; lock and ratchet; receipt writer; exec boundary; forge identity (both modes); each gate (G1–G11); commands `init`, `doctor`, `gate`, `merge-ready`, `skills`, `next`, `audit`; Archgate rules through `.archgate/fixtures/<ID>/` (fixture mechanism VERIFY in Archgate 0.61, §6.2).
+- **Runner and quality bar:** Vitest (Stryker has incremental support for it; `node --test` has no Stryker runner, VERIFY), Stryker mutation and jscpd ratchets from the first measured baseline (ticket 01), knip at 0 issues, Biome clean, Trivy clean, typecheck clean with tsrs (the drift job compares it with `tsc`), on macOS arm64, linux x64 and linux arm64.
 - **Test-first evidence:** every `Kind: behavior` ticket PR shows a red test-only commit before its first source commit (G9). All M2–M11 tickets are `Kind: behavior`.
-- **Prior art:** the repository has no code yet. M1's Archgate rules were checked by hand against a scratch copy that violated each rule once (all seven rules reported the planted violation and the clean tree passed); ticket 01 turns that into fixtures. Archgate's own `.archgate/adrs/*.rules.ts` are the reference for rule style.
+- **Prior art:** the repository has no code yet. M1's Archgate rules were checked by hand against a scratch copy that violated each rule once (all seven rules reported the planted violation and the clean tree passed; Amendment 2 added four rules, SUP-006's three and SUP-007's one, checked the same way); ticket 01 turns that into fixtures. Archgate's own `.archgate/adrs/*.rules.ts` are the reference for rule style.
 - **Harness installs (ticket 10):** packed-tarball (`pnpm pack`) smoke procedure per harness, recorded in the PR as evidence; automated where the harness has a non-interactive validate command (`claude plugin validate`), manual otherwise (VERIFY for Codex and OpenCode).
 
 ## Out of Scope
 
 ### 3. Non-goals (v0)
 
-- **OMX/OMC engines and any daemon**, including tmux teams, ralph loops and the observer. No Python anywhere, and no bash in hooks.
+- **OMX/OMC engines and any daemon**, including tmux teams, ralph loops and the observer. No Python anywhere (no Ruff or other Python linters either; **M1 amendment**), and no bash in hooks.
 - **Spec Kit, BMAD, Kiro, OpenSpec, Tessl.** Pocock `to-spec`/`to-tickets` covers this.
 - **herdr** fleet and multiplexer, and the voice/mobile gateway.
 - **Epic Lore** CAS for binaries.
@@ -719,6 +757,7 @@ G4 forbids protected paths in ticket PRs, but several milestones need protected 
 4. **Gate cost:** PR CI p50 over 20 min, or more than 5% non-reproducible red runs (flakes), for 2 weeks. Drop per-PR Stryker to nightly-only via Gate 1, and kill G6 if that doesn't fix it.
 5. **Archgate churn:** more than 2 forced pin bumps in a month that each need rule rework, or the binary becomes unavailable. Replace it with plain TS rule scripts run by `superman` (same `.rules.ts` intent, no Archgate).
 6. **Context creep:** the overlay exceeds its line budgets, or a fourth overlay skill is proposed without an observed failure (Pocock's SCOPE.md bar).
+7. **tsrs revert (M1 amendment, ADR 0008):** a confirmed wrong diagnostic compared to `tsc`, a crash, a missing CI platform, or upstream abandonment. Revert G2 to `tsc --noEmit` in one spec PR.
 
 ### 14. Milestones (thin slices, each one PR, bot-authored, André-approved and merged)
 
@@ -729,8 +768,8 @@ G4 forbids protected paths in ticket PRs, but several milestones need protected 
 
 | # | PR | Contents | Done when |
 |---|---|---|---|
-| M1 | `spec/superman-v0` (Gate 1) | This spec as `.scratch/superman-v0/spec.md`; `docs/adr/0001-0004` (identity gate, two ADR tiers, zero deps + TS only, no waivers); `.archgate/` GEN-001 + SUP-001…004; tickets for M2–M11; a minimal CI running `archgate check --strict`; **(M1 amendment)** ADRs 0005–0007, `GLOSSARY.md`, `package.json` publish setup, the bootstrap path policy | André merges it |
-| M2 | Skeleton + raw gates | package.json (no deps), tsconfig, Vitest, knip, jscpd, Stryker configs; `superman --version`; CI matrix (3 OS) running the gates as raw commands (including a small G9 test-first script); baselines in `superman.ratchet.json` | All gates green on 3 OS |
+| M1 | `spec/superman-v0` (Gate 1) | This spec as `.scratch/superman-v0/spec.md`; `docs/adr/0001-0004` (identity gate, two ADR tiers, zero deps + TS only, no waivers); `.archgate/` GEN-001 + SUP-001…004; tickets for M2–M11; a minimal CI running `archgate check --strict`; **(M1 amendment)** ADRs 0005–0007, `GLOSSARY.md`, ADRs 0008–0009 + SUP-006/007 (Amendment 2), `package.json` publish setup, the bootstrap path policy | André merges it |
+| M2 | Skeleton + raw gates | package.json (no deps; exact-pinned devDeps incl. `tsrs`, `@biomejs/biome`, `typescript` for the drift job **(M1 amendment)**), tsconfig, `biome.json`, Vitest, knip, jscpd, Stryker configs; `superman --version`; CI matrix (3 OS) running the gates as raw commands (including a small G9 test-first script, tsrs typecheck, `biome ci` and the pinned Trivy scan); baselines in `superman.ratchet.json` | All gates green on 3 OS |
 | M3 | Config, lock and receipts | `config.ts` validator + schema, `receipt.ts`, `exec.ts` boundary | Golden-file tests; mutation ≥ threshold |
 | M4 | `superman doctor` | Identity, pins, telemetry, versions, collaborator permission | Refuses as `br4vesirrobin` (test with a fake `gh`) |
 | M5 | `superman gate pre-commit` + `init` (hook, config, AGENTS block) | Node-shebang hook; `core.hooksPath`; byte-stable init | Re-running `init` gives no diff; p50 ≤10 s |
@@ -740,7 +779,7 @@ G4 forbids protected paths in ticket PRs, but several milestones need protected 
 | M9 | Plugin catalog + `superman skills sync/lock/verify` + `next` | Pocock pinned at `59db609` through `git-subdir` + `sha` (or newer, chosen by André); hash lock; drift warning locally, G7 in CI | the installed set excludes `implement-spec`; `verify` warns on a 1-byte edit in the cache; CI fails on a lock/catalog mismatch; `pocock:` handoffs resolve |
 | M10 | Overlay `ship` + `adr-rule` (+ `plugin.json`) | ≤150 / ≤80 lines; SUP-004 enforces the sizes | Next ticket shipped end-to-end through `ship` |
 | M10b | Harness manifests (M1 amendment, §12.1) | `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, repo marketplaces, `skills sync --harness` | Packed tarball installs in Claude Code, Codex and OpenCode and `/superman:ship` (or the harness's equivalent) loads |
-| M11 | `release.yml` | npm OIDC publish on André's tag (design §12.2); optional Bun binaries + SHA256SUMS | `npx @r3dlex/superman doctor` works from npm |
+| M11 | `release.yml` | npm OIDC publish on André's tag (design §12.2); optional Bun binaries + SHA256SUMS | `npx superman-ai doctor` works from npm |
 | M12–M14 | lx-A, lx-B, lx-C (§11.3) | In the lx repo | lx `main` merges only via merge-ready |
 | M15 (opt.) | Overlay `plan-critic` | ≤60 lines + 2 rubrics | Used once on a real spec, with notes in a retro |
 
@@ -750,7 +789,7 @@ G4 forbids protected paths in ticket PRs, but several milestones need protected 
 
 | Ticket | Milestone | Title | Blocked by | Protected-path follow-up |
 |---|---|---|---|---|
-| 01 | M2 | Skeleton and raw gates on three OSes | None | CI matrix + raw gate scripts + `superman.ratchet.json` baselines + `AGENTS.md` |
+| 01 | M2 | Skeleton and raw gates on three OSes | None | CI matrix (incl. tsrs, `biome ci`, pinned Trivy, `tsc-drift`) + `biome.json` + raw gate scripts + `superman.ratchet.json` baselines + `AGENTS.md` |
 | 02 | M3 | Config, receipts and the exec boundary | 01 | `schema/` is not protected; none |
 | 03 | M4 | `superman doctor` refuses approver identities | 02 | none |
 | 04 | M5 | `superman gate pre-commit` and byte-stable `superman init` | 02 | dogfood `superman init` output (`superman.config.json`, `.superman/hooks/pre-commit`, AGENTS block) |
@@ -778,6 +817,15 @@ G4 forbids protected paths in ticket PRs, but several milestones need protected 
 - **M1 CI** is `.github/workflows/ci.yml` (Archgate strict + the bootstrap path policy `.superman/ci/pr-policy.ts`), replaced by `superman.yml` in ticket 06's follow-up.
 - New sections §12.1, §12.2, §16, §17, the ticket map and the M10b milestone row.
 
+**Amendment 2 (2026-10-29, André: tooling and package name).** Every edit is marked **(M1 amendment)**:
+- **G10 Biome** (blocking, replaces ESLint and Prettier): pre-commit runs `biome check --staged`, pre-pr and CI run `biome ci`. `biome.json` is protected. Config example, §5.1, §5.4, §10, M2 and tickets 01/04/06. ADR 0009. G9 stays test-first; nothing is renumbered.
+- **G11 Trivy** (blocking): `trivy fs` for vulnerable deps (including dev deps), secrets and misconfig; HIGH/CRITICAL fail. The pinned release is installed with a sha256 check, never through the hijacked actions. No `.trivyignore` (SUP-007, ADR 0004/0009). CI runs it, pre-pr runs it when the binary is present, `doctor` reports it, and the release scans the tarball and binaries before publish (§12.2). ADR 0009.
+- **tsrs is the primary type checker**: exact pin, `--noEmit` only, never `--fast`/`TSRS_FAST` in CI or gates, a scheduled non-blocking `tsc-drift` job, a platform check on the three CI legs, Bun still builds, and revert triggers (§13 item 7). ADR 0008, rule SUP-006.
+- **ADR 0003** amended: dev tools (tsrs, Biome, Trivy) are devDependencies or CI binaries, never runtime deps. **ADR 0004** amended: the proposed SUP-005 should also cover `biome-ignore` and `trivy:ignore` comments (André decides).
+- **No Ruff and no Python** tooling (§3, §8 lx note, §11.2).
+- **Package renamed** `@r3dlex/superman` → unscoped **`superman-ai`**, because `superman` and `superman-cli` are taken and there is no `@r3dlex` scope. The CLI command stays `superman`. Affects §5.1, §5.3, §10, §12, §12.1, §12.2 (trust command; step 1 obsolete), M11, ADR 0006, SUP-001, README, `package.json`, ticket 11. The license field is still absent (André's call).
+- **M1 CI is unchanged**: `ci.yml` runs no typecheck or lint yet and `biome.json`/`tsrs` don't exist, so a Biome or tsrs step would have nothing to run (Biome's defaults also flag the current Markdown and JSON). The CI work is in ticket 01's follow-up (`biome.json`, Trivy install, tsrs on three legs, `tsc-drift`) and ticket 06. The M1 path policy now lists `biome.json` as protected.
+
 ### How this spec was produced (Pocock skills at 59db609)
 
 - **to-spec:** used the template headings (Problem Statement, Solution, User Stories, Implementation Decisions, Testing Decisions, Out of Scope, Further Notes) and the `ready-for-agent` status. The "explore the codebase" step found an empty repo. The seam check (step 2) was answered from the draft (§16) instead of a live question; André confirms at Gate 1. Deviation: the template discourages file paths, but superman's decisions are largely about paths (protected paths, layout, manifests), so paths that encode a decision are kept, which the template allows for decision-encoding snippets.
@@ -788,7 +836,7 @@ G4 forbids protected paths in ticket PRs, but several milestones need protected 
 
 ### VERIFY index
 
-§5.1/§12 pnpm major; §5.4 G9 failure classification; §5.6 `implement-spec` excluded by the catalog entry, `pocock:` handoffs, Codex/Copilot SHA pinning; §6.2 Archgate fixtures in 0.61; §5.4 Vitest vs `node --test` under Stryker; §8 runner labels; §8 ADO forks vs branch permissions; GitLab Free approvals; §9.4 GitHub settings; §11/question 8 muex on the umbrella; question 9 arm64 Archgate self-build; Appendix GitHub Team; §12 sigstore signing; §12 ai-catapult's OIDC setup; §12.1 Codex manifest form, precedence, SHA pinning and Claude-file fallback; §12.1 Claude `npm` source skill resolution; §12.1 OpenCode version and `node_modules` skill paths; §12.1 `disable-model-invocation` outside Claude Code; §12.2 stage vs direct publish.
+§5.1/§12 pnpm major; §5.4 G9 failure classification; §5.6 `implement-spec` excluded by the catalog entry, `pocock:` handoffs, Codex/Copilot SHA pinning; §6.2 Archgate fixtures in 0.61; §5.4 Vitest vs `node --test` under Stryker; §8 runner labels; §8 ADO forks vs branch permissions; GitLab Free approvals; §9.4 GitHub settings; §11/question 8 muex on the umbrella; question 9 arm64 Archgate self-build; Appendix GitHub Team; §12 sigstore signing; §12 ai-catapult's OIDC setup; §12.1 Codex manifest form, precedence, SHA pinning and Claude-file fallback; §12.1 Claude `npm` source skill resolution; §12.1 OpenCode version and `node_modules` skill paths; §12.1 `disable-model-invocation` outside Claude Code; §12.2 stage vs direct publish; **Amendment 2:** tsrs run on macOS arm64 and linux arm64; tsrs `--fast false` vs `TSRS_FAST` precedence; Trivy misconfig coverage of workflow files; Trivy flags for scanning the tarball/binaries; `mix credo` presence in lx; Biome's scope for Markdown and JSON in `biome.json`.
 
 ### 15. Open questions
 

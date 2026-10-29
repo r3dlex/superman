@@ -14,7 +14,7 @@ superman guards merges, so every runtime dependency is supply-chain surface in t
 
 ## Decision
 
-`package.json` declares no `dependencies`, `optionalDependencies` or `peerDependencies`. Tools superman drives (`archgate`, `knip`, `jscpd`, Stryker, Vitest, TypeScript) are exact-pinned `devDependencies` or PATH tools checked by `superman doctor`.
+`package.json` declares no `dependencies`, `optionalDependencies` or `peerDependencies`. Tools superman drives (`archgate`, `tsrs`, Biome, `knip`, `jscpd`, Stryker, Vitest, TypeScript for the drift job) are exact-pinned `devDependencies`. Trivy is a pinned CI binary, or a PATH tool locally. `superman doctor` checks all of them.
 
 ## Do's and Don'ts
 
@@ -27,7 +27,7 @@ superman guards merges, so every runtime dependency is supply-chain surface in t
 
 ### Positive
 
-- `npx @r3dlex/superman` installs one package and nothing else.
+- `npx superman-ai` installs one package and nothing else.
 
 ### Negative
 

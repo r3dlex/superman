@@ -2,7 +2,7 @@
 
 **Milestone:** M5
 
-**What to build:** A maintainer runs `superman init` in a repo and gets `superman.config.json`, `superman.lock.json`, `superman.ratchet.json`, `.archgate/config.json` (if missing), the GEN-001 meta-rule, the Node-shebang `.superman/hooks/pre-commit`, a ≤25-line precedence block in `AGENTS.md`, `CODEOWNERS` lines and the CI workflow, all from deterministic templates, with `core.hooksPath` set. Re-running it changes nothing; a changed file is never overwritten without `--force` and a diff is printed instead. Every commit then runs `superman gate pre-commit` on staged files (Archgate `--staged`, typecheck, related tests, knip, protected-path check), printing only failures.
+**What to build:** A maintainer runs `superman init` in a repo and gets `superman.config.json`, `superman.lock.json`, `superman.ratchet.json`, `.archgate/config.json` (if missing), the GEN-001 meta-rule, the Node-shebang `.superman/hooks/pre-commit`, a ≤25-line precedence block in `AGENTS.md`, `CODEOWNERS` lines and the CI workflow, all from deterministic templates, with `core.hooksPath` set. Re-running it changes nothing; a changed file is never overwritten without `--force` and a diff is printed instead. Every commit then runs `superman gate pre-commit` on staged files (Archgate `--staged`, typecheck with `tsrs --noEmit`, `biome check --staged --no-errors-on-unmatched` (G10), related tests, knip, protected-path check), printing only failures.
 
 **Blocked by:** 02
 
@@ -17,4 +17,5 @@
 - [ ] The generated hook is a `#!/usr/bin/env node` file (SUP-003) that spawns `superman gate pre-commit` and exits with its status.
 - [ ] `init --repo-kind polyglot` writes config with repo-specific gate commands left for the user, and `paths.whyAdrs`/`paths.glossary` configurable (lx: `docs/architecture/adr`, `CONTEXT.md`).
 - [ ] `superman gate pre-commit` p50 is ≤10 s on the superman repo (measured over 10 runs, reported in the PR).
+- [ ] **(M1 amendment)** A staged file that fails Biome makes pre-commit fail with Biome's file:line, and unstaged files are not checked. Gate processes are spawned without `TSRS_FAST` in their environment.
 - [ ] A pre-commit touching a protected path on a `ticket/*` branch fails with one line naming the path.
