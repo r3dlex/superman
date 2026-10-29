@@ -1,0 +1,50 @@
+{
+  "name": "@r3dlex/superman",
+  "version": "0.0.0",
+  "private": false,
+  "description": "Human-in-the-loop guardrails for AI coding agents: deterministic merge gates, a human approval on the head SHA, and pinned Matt Pocock skills.",
+  "keywords": [
+    "ai-agents",
+    "code-review",
+    "guardrails",
+    "claude-code-plugin",
+    "codex-plugin",
+    "opencode",
+    "archgate"
+  ],
+  "homepage": "https://github.com/r3dlex/superman#readme",
+  "bugs": {
+    "url": "https://github.com/r3dlex/superman/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/r3dlex/superman.git"
+  },
+  "type": "module",
+  "bin": {
+    "superman": "./dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "schema/",
+    "skills/",
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json"
+  ],
+  "engines": {
+    "node": ">=26"
+  },
+  "packageManager": "pnpm@12.16.1",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "archgate": "archgate check --strict"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "archgate": "0.61.0"
+  }
+}
