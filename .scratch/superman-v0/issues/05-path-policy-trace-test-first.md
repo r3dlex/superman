@@ -2,7 +2,7 @@
 
 **Milestone:** M6
 
-**What to build:** `superman gate pre-pr` and `superman gate ci` decide the PR kind from the branch and enforce G4 (paths per kind, §5.4 and §17), G8 (ticket file and spec exist on base) and G9 (`Kind:` parsed from the ticket on base; behaviour tickets need a red test-only commit that fails on an assertion or missing symbol before the first source commit and passes at head; refactor tickets stay green at every commit). This replaces the M1 bootstrap path policy and the raw G9 script with tested superman code.
+**What to build:** `superman gate pre-pr` and `superman gate ci` decide the PR kind from the branch and enforce G4 (paths per kind, §5.4 and §17), G8 (ticket file and spec exist on base) and G9 (`Kind:` parsed from the ticket on base; behaviour tickets need a red test-only commit that fails on an assertion or missing symbol before the first source commit and passes at head; refactor tickets stay green at every commit). This replaces the M1 bootstrap path policy and the raw G9 script with tested superman code. **(M1 amendment 3)** G9 stays commit-based and does not read the change model. G4's protected-path list is also the first group of force-full triggers (§5.7), read from the same config key.
 
 **Blocked by:** 04
 

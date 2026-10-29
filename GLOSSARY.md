@@ -74,6 +74,32 @@ _Avoid_: report, log, attestation
 Any way to pass a merge without satisfying a gate; superman has none.
 _Avoid_: override, exception, bypass
 
+### Change-aware CI
+
+**Change model**:
+The one computation per gate run of the changed files and the affected targets they select, recorded in the receipt's `affected` block and read by every gate (ADR 0010).
+_Avoid_: diff (only the first half), change set per gate
+
+**Affected target**:
+A unit of code (a test file, a package or a project) that owns a changed file or depends on one, together with the test command to run for it and the reason it was selected.
+_Avoid_: impacted project, related test (the TS provider's narrower case)
+
+**Provider**:
+A module behind one interface that maps changed files to affected targets for one ecosystem or tool (moon, Nx, Turborepo, TS/JS, Elixir, Rust, C#, Python, Haskell, globs), and states its precision and confidence.
+_Avoid_: plugin, adapter, detector
+
+**Force-full trigger**:
+A changed path, or a condition such as a shallow clone, a provider error or an unclaimed file, that makes a run select every target.
+_Avoid_: global change (only one kind of trigger), escape hatch
+
+**Miss**:
+A target that fails in a full run, fails again on one rerun, and was not selected by the affected run of a PR merged since the last green full run.
+_Avoid_: false negative (too general), flake (a flake passes on rerun)
+
+**Cache key**:
+The sha256 of everything a gate result depends on: gate, target, argv, tool versions, config, platform, allowlisted environment and the hashes of the input files (ADR 0011).
+_Avoid_: cache id, fingerprint
+
 ### Decisions and skills
 
 **Why ADR**:

@@ -2,7 +2,7 @@
 
 **Milestone:** M7
 
-**What to build:** `superman gate pre-pr`, `ci` and `nightly` run the jscpd ratchet (G5: total % ≤ baseline and no new clone touching changed files) and the Stryker ratchet (G6: incremental on the PR's changed `src` files with the nightly incremental cache; nightly full run with `--force`, which opens an issue when the score drops). After this, CI calls `superman gate ci` instead of raw commands. **(M1 amendment)** `gate pre-pr`/`ci` also run G10 (`biome ci`) and G11 (`trivy fs`; pre-pr reports `n/a (enforced in CI)` when `trivy` is not on PATH), and `nightly` re-runs G11 on `main`.
+**What to build:** `superman gate pre-pr`, `ci` and `nightly` run the jscpd ratchet (G5: total % ≤ baseline and no new clone touching changed files) and the Stryker ratchet (G6: incremental on the PR's changed `src` files with the nightly incremental cache; nightly full run with `--force`, which opens an issue when the score drops). After this, CI calls `superman gate ci` instead of raw commands. **(M1 amendment)** `gate pre-pr`/`ci` also run G10 (`biome ci`) and G11 (`trivy fs`; pre-pr reports `n/a (enforced in CI)` when `trivy` is not on PATH), and `nightly` re-runs G11 on `main`. **(M1 amendment 3)** The changed-file list for Stryker `--mutate` and jscpd built here is interim: ticket 13 replaces it with the change model (ticket 12), with identical results on a full run. The nightly job stays full, and SUP-008 becomes active when this ticket's follow-up switches CI to `superman gate ci`.
 
 **Blocked by:** 05
 
