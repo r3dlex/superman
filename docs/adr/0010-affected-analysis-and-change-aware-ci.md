@@ -2,32 +2,38 @@
 Status: accepted
 ---
 
-# One change model selects affected targets for every gate, with a full run on main and nightly
+# One change model selects tests and verified-project typechecks
 
-André decided on 2026-10-29 that superman runs change-aware CI from v0. Each run computes its changed files once: `git diff <merge-base>...<head>` in `gate ci` and `gate pre-pr`, and the staged files in `gate pre-commit`. Providers turn those files into **affected targets**, and each target names the tests and gate inputs to run. The receipt records the base and head, the changed files, every affected target with a reason chain and the provider that chose it, and any force-full trigger. Every gate reads that one result, and none works out its own changes. This replaces the separate changed-files logic in tickets 04–06 (pre-commit related tests, Stryker `--mutate`, jscpd "clones touching changed files").
+André retained all M7b work in the first usable v0 release on 2026-10-30. Change-aware CI is not a post-v0 optimization: it must earn its complexity through the pilot's latency and reliability metrics. One provider result is shared by gates so selection, cache inputs and receipts cannot silently use different dependency models. The authoritative selection and recovery contract is spec §5.7; domain meanings live in `GLOSSARY.md`.
 
-- **Providers behind one interface.** Each one returns `{ targets[], reasons, testCommand per target, precision: "file" | "package" | "project", confidence }`. More than one can be active, and their results are merged by target id. Cross-language edges go through `affected.global` paths (any change → full) or explicit `affected.links` in config. Detection order: a monorepo tool first (moon `moon query projects --affected`, Nx `nx show projects --affected`, Turborepo `--filter=...[<base>]`), then the language-native provider, and config glob mapping only as a last resort, which `doctor` warns about.
-- **v0 providers:** TS/JS (superman's own zero-dependency import-graph parser with TypeScript module resolution), Elixir (`mix xref graph`), Rust (`cargo metadata`), C# (`ProjectReference` graph), Python (static import graph parsed in TS, optional `pytest-testmon`) and Haskell (package level only). Go is post-v0.
-- **Fail toward full.** A file no provider claims (and not in `affected.ignore`), a provider error, a shallow clone, or any force-full trigger runs the full suite. The force-full triggers are every protected path (§5.3, which includes the workflows, the superman config and lock, and `biome.json`), every lockfile and toolchain pin of every detected language, `tsconfig*.json`, root build manifests, provider config (`.moon/**`, `nx.json`, `turbo.json`) and the configured `global` paths.
-- **Change-aware gates.** Tests run only for affected targets. Mutation (Stryker `--mutate` plus incremental, muex `--since`) runs only on changed source files in PRs, as G6 already did. jscpd, Archgate and Biome run on the changed files and the files of affected targets. Typecheck, knip, G4, G7–G9 and G11 stay whole-repo in v0, because they are already cheap or already diff-based.
-- **Full runs stay the oracle.** Pushes to `main` and the nightly job always select every target. The nightly job also ignores cache hits (ADR 0011), so it is the ground truth that `superman audit` compares PR selections against.
-- **Miss tracking and auto-off.** A **miss** is a target that fails in a nightly or `main` full run, still fails on one rerun, and was not selected by the affected run of a PR merged since the last green full run. `superman audit` reports misses per repo and per provider over the pilot window (§13). Above `affected.missThreshold` (default 0.02, i.e. 2% of merged affected-mode PRs), affected mode switches off for that repo or provider: `gate ci --affected` runs the full suite and says why, and `doctor` and `audit` report it. Switching it back on takes a spec PR that sets `affected.missResetAt`.
+## Decisions
 
-## Considered Options
+- **One interface, multiple adapters.** Existing moon/Nx/Turborepo graphs take precedence where they cover a language, followed by language providers and configured globs. Targets carry applicable test/typecheck commands, input files and reason chains. Base and head graphs cover deletions and renames; explicit links cover cross-language and non-import dependencies.
+- **Typechecks are scoped too.** Select complete compiler projects/packages/apps and reverse dependents only from verified project references/native graphs and explicit commands. Missing or ambiguous evidence falls back to the whole-repository command. File-import reachability alone does not establish compiler scope.
+- **Process tests have declared inputs.** CLI integration tests depend on all CLI source unless a narrower dependency map is explicitly declared. Static test imports alone cannot describe subprocess behavior. Packaged skills and other runtime assets are inputs; a blanket Markdown ignore is rejected.
+- **Fail toward full.** Unknown ownership, provider/tool errors, missing base history and protected/global/build inputs select the full repository. A missing or untrustworthy safety ledger additionally disables gate-result reuse. Full selection and uncached execution are distinct (ADR 0011).
 
-- **External tools only (moon, Nx, Turborepo, `vitest related`).** Rejected as the only path. Most target repos (superman itself, single-package TS repos, lx's non-JS parts) have no monorepo tool. `vitest related` and `vitest --changed` cover tests but not mutation, jscpd or deploy selection, and their graph cannot be written into the receipt for Gate 2 review. Monorepo tools stay first in the detection order wherever a repo already has one.
-- **Our own TS import-graph parser (chosen for TS/JS).** About 400 lines in `src/affected/ts.ts`, zero runtime dependencies, deterministic, and it reports why each target was selected. Its risk is module resolution edge cases (`exports` conditions, `paths` wildcards, dynamic `import()` with non-literal specifiers), which fall back to file-level "unknown edge → target's whole package" or to full.
-- **Per-gate change detection (the M1 design).** Rejected. Pre-commit, Stryker and jscpd each computed changes differently, and nothing recorded what was skipped.
-- **No change-aware CI in v0, full suite on every PR.** Rejected by André: PR wall time on polyglot repos (lx) would break the §13 ≤12 min budget.
+## Deliberate precision trade-offs
+
+| Choice | Reason and accepted limit |
+|---|---|
+| Own zero-runtime-dependency TS/JS import parser | Explains test selection without adopting a build system; uncertain resolution broadens the package/full selection rather than claiming exactness. |
+| Elixir module-name heuristic in CI | André retained the finer subset rather than app-wide CI tests. Confidence is heuristic; repeatable omissions can be detected after merge. |
+| Scoped PR duplication scan | André accepted post-merge detection of cross-scope clones and the total-percentage ratchet. The PR scan is not a complete pre-merge duplication guarantee. |
+| Full selection on main, uncached full nightly | Main may reuse eligible passes; nightly supplies fresh execution for selection and cache correctness checks. |
+
+Other providers remain in v0: Rust, C#, Python and package-level Haskell, plus moon/Nx/Turborepo adapters. Go and affected deploy execution remain post-v0. Runtime `superman` stays a selector/runner, not a build scheduler.
+
+## Reliability and recovery
+
+Selection misses and stale cached passes are separate correctness incidents; ordinary cache lookup misses are normal. A later failing target does not identify an introducing PR by timing alone. Bounded base/head replay verifies attribution; inconclusive evidence is reported as unresolved and conservatively disables affected selection rather than blaming every PR in the merge window.
+
+The selection-miss metric is PR incidence, with each PR counted once per provider and only provider-using PRs in that denominator. The rolling-window, small-sample, safety-ledger freshness and re-enable rules are specified once in spec §5.7. Stale cached passes stop affected reuse immediately under ADR 0011, rather than sharing the selection-miss grace threshold.
 
 ## Consequences
 
-- New milestone M7b (tickets 12–24), new rule **SUP-008** (CI runs tests only through `superman gate`; the nightly full run can't be dropped), receipt field `affected`, config section `affected`.
-- Every PR's receipt says exactly which targets ran and why, so André can see at Gate 2 what was skipped.
-- A miss is no longer silent: the nightly full run fails, `audit` names the PR and provider, and the threshold turns the feature off.
-- `superman.config.json` is a protected path, so provider settings, `global` paths, links, ignores and the threshold can only change in a spec PR.
-- **Revert triggers.** Any one of these turns affected mode off repo-wide (one spec PR sets `affected.enabled: false`; the code stays):
-  - the miss rate is above the threshold for two windows in a row after a provider fix;
-  - a miss on a `main` push that reached a release;
-  - PR CI p50 does not drop by at least 30% compared to the full suite after the pilot window (the feature is not paying for its risk);
-  - the change model and a gate disagree about the changed-file set (a bug, not a miss), more than once.
+- `superman init` renders repo-neutral GEN-002 for tests-through-Superman/full-nightly enforcement, linked to a locally reviewed adoption ADR under the configured why-ADR directory. SUP-008 stays Superman-specific.
+- Provider/typecheck and safety-ledger work expands tickets 12–24. Ticket 24 activates the complete v0 provider set only after its dependencies and manual infrastructure are ready; the release ticket depends on that activation.
+- An implementation that misses a release, repeatedly exceeds the reliability threshold after a provider fix, or fails the latency benefit is disabled through the spec's reviewed recovery path. The code may remain; its optimization authority does not.
+
+Implementation next: finish the Gate 1 prerequisites in spec §17, then build ticket 12's shared interface before its provider adapters.

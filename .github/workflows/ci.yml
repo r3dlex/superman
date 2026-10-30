@@ -1,5 +1,5 @@
-# M1 minimal CI. Ticket 01 (M2) adds the 3-OS raw gates and ticket 06 (M7)
-# switches to `superman gate ci`, each through a spec-kind follow-up PR.
+# M1 minimal CI. Remaining Gate 1 work adds raw checks before ticket 01;
+# ticket 06 replaces them with parity-proved `superman gate ci`.
 # No pull_request_target anywhere; no secrets; read-only token.
 name: ci
 
@@ -32,7 +32,9 @@ jobs:
         with:
           node-version: 26
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: executable policy rule fixtures
+        run: node --test .superman/ci/archgate-policy.test.ts
       - name: archgate check (changed files vs base)
         run: pnpm exec archgate check --base "origin/${BASE_REF}" --strict --output github
         env:
@@ -53,6 +55,8 @@ jobs:
         with:
           node-version: 26
           package-manager-cache: false
+      - name: path policy process fixtures
+        run: node --test .superman/ci/pr-policy.test.ts
       - name: path policy
         run: node .superman/ci/pr-policy.ts
         env:

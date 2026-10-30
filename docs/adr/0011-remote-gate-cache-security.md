@@ -2,28 +2,34 @@
 Status: accepted
 ---
 
-# Gate results are cached by content hash, and only trusted runs on main may write the shared caches
+# Cache only modeled code checks; keep authority and fresh evidence separate
 
-André decided on 2026-10-29 that v0 ships a gate result cache with three tiers: local, the GitHub Actions cache, and a remote content-addressed store over HTTP. A **cache key** is the sha256 of a canonical JSON document holding the cache schema version, the gate and target, the exact argv, the tool versions from `superman.lock.json` plus the resolved binary versions, the hash of the config sections the gate reads, the OS and architecture, an allowlisted set of environment variables, and the sorted `(path, sha256)` list of the target's input files (its own files, its transitive dependencies from the provider, and the `global` paths). Only **pass** results are stored. A hit with a pass skips that gate for that target, and the receipt records `cached: { key, producerSha, tier }`.
+André retained local, Actions and remote gate-result caches in v0, with a conservative eligibility policy on 2026-10-30. Reusing a passing result is useful only when the result's complete inputs and current safety state are known. The key, allowlist, freshness and recovery contract lives in spec §5.7; this ADR records why.
 
-- **Local:** `.git/superman/cache/` (never committed), written by any local run, read only by the same clone.
-- **Actions cache:** the workflow restores and saves the cache directory with `actions/cache` (pinned by SHA). GitHub already scopes it: a `pull_request` run can read caches from its own PR, its base branch and the default branch, and what it saves is scoped to `refs/pull/<n>/merge`, so a PR cannot write a cache that `main` reads.
-- **Remote:** one HTTP blob store, S3-compatible (Cloudflare R2 by default). Entries live at `<prefix>/v1/<repo>/ac/<key>.json`. superman talks to it with Node's `fetch` and `node:crypto` (AWS SigV4 signing written in about 80 lines), so there is still no runtime dependency.
-  - **Read-only for untrusted runs.** PR runs, including fork PRs that get no secrets, read through a read-only path (a public read endpoint for public repos, a read-only token for private ones). They never write.
-  - **Writes only from trusted runs:** `push` to `main` and `schedule` on `main`, through a GitHub Environment `superman-cache-write` that is restricted to `main` and holds the write credential and the signing key.
-  - **Signed and hash-checked entries.** Each entry is `{ key, result, producer: { repo, sha, runId, ref }, createdAt, sig }`. `sig` is Ed25519 over the canonical entry, made with the writer's private key. The public key is in `superman.config.json` (a protected path). A reader recomputes the key from its own inputs, requires `entry.key` to equal it, verifies `sig`, and drops (treats as a miss) any entry that fails.
-  - Optional: reuse the remote cache of moon or Nx when the repo already runs one, for that tool's own tasks only. superman's gate entries always go to its own store.
+## Eligibility and trust
+
+Only fully input-modeled typecheck, test, knip, duplication, mutation and lint checks may reuse passes. Architecture/policy, skill integrity, traceability, behavior replay, forge admission and Trivy always execute afresh. Matching source hashes alone cannot model changed reviews, commit history or vulnerability databases. Keys include actual checker/tool identities as well as version strings, protected configuration, platform, allowed environment and complete source/runtime-asset inputs; missing input evidence means fresh execution.
+
+| Tier | Authority |
+|---|---|
+| Local | Supporting local runs may save passes in the clone's Git metadata; this is not independent merge-admission evidence. Worktree metadata paths are resolved through git, not an assumed `.git/` directory. |
+| Actions | Pinned cache steps may save PR-scoped entries under GitHub's isolation rules. Those saves never become entries that main trusts from a PR namespace. |
+| Remote | S3-compatible R2, read-only to PRs; entries signed by trusted main writers and checked against a protected public key. Private cache data requires authenticated reads; missing credentials skip the tier, never expose data or justify PR secrets. |
+
+Main selects every target and may reuse eligible valid passes. Nightly selects every target and reads no gate-result cache, making it the fresh comparison run. A missing, stale or unverifiable safety ledger makes the fallback an **uncached** full run; otherwise an unread quarantine decision could be bypassed by reusing passes during full selection.
+
+## Credentials and recovery
+
+André chose protected GitHub Environment credentials rather than an OIDC-validating Cloudflare Worker for v0. Cache-writing/signing authority is confined to separate main push/nightly writer jobs; jobs installing dependencies or executing project tests/builds do not receive it. Writers validate the producing run, commit and artifact identities before signing data and do not execute project hooks. Ed25519 signatures authenticate the producer, not freshness or completeness; the latest trusted audit and scope checks remain necessary.
+
+One confirmed stale cached pass quarantines the implicated entries and disables reuse for that gate/input model until a reviewed fix. Fresh gate execution continues. This is not a selection-miss percentage event, and an absent/invalid cache entry that simply causes execution is not an incident.
 
 ## Considered Options
 
-- **No remote cache, only local and Actions.** Rejected by André. Actions caches are per-repo, evicted after 7 days without access and capped per repo (10 GB by default), and they don't help local `pre-pr` runs on the Mac.
-- **A Cloudflare Worker in front of R2 that accepts GitHub OIDC tokens for writes** (no long-lived write secret; the worker checks `repository`, `ref == refs/heads/main` and `event_name`). Stronger, but it is extra infrastructure to deploy and review. Kept as open question 18.
-- **Caching failures too.** Rejected: a failure must always re-run, so that a flaky failure isn't frozen in.
-- **Letting PR runs write to a PR-scoped namespace.** Rejected for v0, because it adds a namespace that `main` must never read. GitHub's Actions cache scoping already gives PR reruns their speed-up.
+- **Only local and Actions tiers:** declined; they do not provide the intended shared/local reuse across pilot environments.
+- **Cache every gate with more elaborate keys:** declined for v0; keep admission, evidence and security checks fresh.
+- **Fresh execution on every main push:** declined; main may reuse valid allowlisted passes while nightly stays uncached.
+- **Cloudflare Worker accepting GitHub OIDC:** deferred until infrastructure scale justifies the additional deployed adapter. The v0 write credential remains Environment-scoped.
+- **Only evict the one known-bad entry:** declined; a shared input-model bug can invalidate other entries for the same gate.
 
-## Consequences
-
-- Cache poisoning from a PR is prevented by design: a PR can't write to the store `main` reads, and a tampered entry fails the key or signature check.
-- A cached pass only proves that a trusted run passed on identical inputs. Hidden inputs (network, time, an unlisted env var) can make it wrong. The nightly run never reads the cache, so it catches these, and a nightly failure on a cached target counts as a miss (ADR 0010).
-- A leaked write credential lets an attacker write entries but not sign them, unless the signing key in the same environment leaks too. Rotating both is one spec PR that changes the public key in config.
-- Remote cache setup (bucket, endpoint, Environment, keys) is a manual André step, plus a spec-kind follow-up for the config and workflow (ticket 22).
+Setup remains André's manual step before ticket 22's activation follow-up: choose the R2 account/bucket and authenticated/private or public read endpoint as appropriate, provision the write credential and signing key, and verify the Environment restrictions. No such setup or credential change was performed by this design reconciliation.

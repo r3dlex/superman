@@ -16,4 +16,7 @@
 - [ ] Relative imports, `src/` layout and a `conftest.py` change each have a fixture.
 - [ ] `importlib.import_module(name)` with a non-literal name marks the package's tests `heuristic`.
 - [ ] Root `pyproject.toml`, lockfiles (`uv.lock`, `poetry.lock`, `requirements*.txt`) and `.python-version` force full.
-- [ ] No code path spawns `python`; the only spawned tool is the repo's configured `pytest` argv.
+- [ ] Superman does not ship/spawn its own Python program; it invokes only the target repo's configured test/typecheck tools. The static test-import graph does not claim to prove a Python typecheck project.
+- [ ] An explicitly verified configured/native project graph and typecheck argv can select complete projects; missing evidence invokes the full configured checker, or its reviewed not-applicable policy.
+
+Start with the test-import fixture, then an unavailable-typecheck-graph fixture proving the conservative fallback.

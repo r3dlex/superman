@@ -15,4 +15,7 @@
 - [ ] A fake `cargo` replaying recorded `metadata` JSON for a three-crate workspace (`core ← api ← cli`) selects `core`, `api` and `cli` for a `core` change and only `cli` for a `cli` change (test-first).
 - [ ] A dev-dependency edge counts; a build-dependency edge counts.
 - [ ] A file in a non-member path (e.g. `examples/` outside any package) is unclaimed and forces full unless ignored.
+- [ ] The same verified package graph supplies explicit complete-crate typecheck commands for affected crates/reverse dependents; feature/config/input ambiguity falls back to the configured full check, not an arbitrary Rust file list.
+
+Start with the recorded crate graph, adding complete-project typecheck targets alongside test targets.
 - [ ] On lx, `apps/sarif-core` changes select `cargo test -p sarif-core` (recorded at adoption).

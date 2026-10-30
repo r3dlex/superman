@@ -16,6 +16,8 @@ tsrs is a beta Rust port of TypeScript 7's checker. Its `--fast` preset (also `T
 
 The typecheck gate runs `tsrs --noEmit` in default mode. `tsrs`, and `typescript` if present for the drift job, are exact-pinned devDependencies. Workflows and `superman.config.json` never pass `--fast` and never set `TSRS_FAST`.
 
+The 2026-10-30 design also permits verified complete-project typecheck argv (spec §5.7). The current executable companion checks the full fallback command only; extending its scope to those project commands/protected compiler inputs is pending bootstrap/activation work, not installed by this Markdown amendment.
+
 ## Do's and Don'ts
 
 - Do pin `tsrs` to an exact version such as `0.20.1-ts7.1.0-beta`, and upgrade it only in a PR that passes full CI.

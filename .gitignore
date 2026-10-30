@@ -4,3 +4,6 @@ dist/
 .archgate/rules.d.ts
 # local receipts live under .git/superman; CI receipts are artifacts
 .superman-ci/
+# optional external agent context; never gate evidence
+/.codegraph/
+/.codegraph-wsl/

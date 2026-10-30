@@ -10,7 +10,7 @@ Source: docs/adr/0003-zero-runtime-deps-typescript-only.md
 
 ## Context
 
-The tooling superman replaces carried about 6.7k lines of Python and 1.8k of bash. v0 is TypeScript only, with no bash in hooks.
+The tooling superman replaces carried about 6.7k lines of Python and 1.8k of bash. Superman's tracked tooling/hooks remain TypeScript/Node; Amendment 4 adopts external Lefthook only through a controlled Node adapter.
 
 ## Decision
 
@@ -22,6 +22,7 @@ The repository tracks no `*.sh` or `*.py` file, and every file in `.superman/hoo
 - Do generate git hooks as Node-shebang files (`superman init`).
 - Don't add helper scripts in bash or Python, including under CI folders.
 - Don't hide shell logic in a hook without an extension.
+- **M1 amendment 4:** the Node adapter delegates with `--no-auto-install --no-stage-fixed`; never use Lefthook's native shell-hook installer. Its external static `sh -c` executor is the explicit ADR 0003 exception, not tracked shell glue or permission to interpolate gate arguments.
 
 ## Consequences
 

@@ -1,43 +1,47 @@
 # superman
 
-superman is a thin TypeScript CLI plus a three-skill overlay on Matt Pocock's skills. It makes a human approval on the exact head SHA, and deterministic gates, the conditions for every merge done by an AI coding agent.
+superman separates human approval, automated checks and their evidence for agent-authored changes. These terms distinguish planning authority, implementation work and performance optimizations.
 
 ## Language
 
 ### People and identities
 
 **Approver**:
-A human account listed in `identity.approvers` (today `br4vesirrobin`, André) that reviews, approves and merges PRs.
+A designated human account authorized to review, approve the exact proposed head and merge agent-authored PRs.
 _Avoid_: owner, reviewer bot, human-in-the-loop account
 
 **Agent identity**:
-The non-approver identity that authors commits and opens PRs, in one of two modes: `app` (the GitHub App `r3dlex-superman-bot`, v0 default) or `machine-user` (a separate account that works from its own fork).
+The non-approver identity under which agents author commits and open PRs. It may be an App bot or a fork-based machine-user.
 _Avoid_: bot account (ambiguous between the two modes), r3dlex-bot (the old plan)
 
 ### Work units
 
 **Spec**:
-The design document for one piece of work at `.scratch/<slug>/spec.md`, written in Pocock's to-spec format and merged at Gate 1.
+The design document for one piece of work, reviewed and merged at Gate 1 before its implementation tickets proceed.
 _Avoid_: PRD, plan, design doc
 
 **Ticket**:
-One thin vertical slice of a spec at `.scratch/<slug>/issues/<NN>-<slug>.md`, built and merged as exactly one PR.
+One thin vertical slice of a spec, built and merged as exactly one implementation PR.
 _Avoid_: issue, task, story
 
+**Ticket claim**:
+An exclusive reservation of a ticket for one active worker, distinct from the ticket's completion status.
+_Avoid_: claimed status (alone does not coordinate workers)
+
 **Kind**:
-The ticket's declared change type, `behavior` or `refactor`, set at Gate 1 and used by G9.
+The ticket's declared change type, `behavior`, `refactor` or content-only `knowledge`, fixed at Gate 1. Knowledge work cannot change code or policy and has no code-behavior replay.
 _Avoid_: type, category
 
 **Spec-kind PR**:
-A PR from a `spec/<slug>` branch that changes specs, tickets, ADRs, rules, ratchet baselines, CI or other protected paths, and nothing else.
+A PR for planning, policy, adoption or distribution artifacts, reviewed at Gate 1 and distinct from product implementation.
 _Avoid_: docs PR, config PR
 
 **Ticket PR**:
-A PR from a `ticket/<slug>-<nn>` branch that implements one ticket and touches no protected path.
+A PR implementing one ticket, leaving protected policy inputs unchanged except for permitted ratchet tightening.
 _Avoid_: feature PR, implementation PR
 
 **Protected-path follow-up**:
-The spec-kind PR that adds the protected files (workflows, lock, ratchet baselines, `.claude/settings.json`) a ticket needs, merged after the ticket PR.
+A spec-kind PR that activates protected settings or adoption artifacts after their ticket implementation has merged.
 _Avoid_: companion hack, side PR
 
 ### Gates and evidence
@@ -47,79 +51,157 @@ André's review and merge of a spec-kind PR.
 _Avoid_: spec approval meeting, sign-off
 
 **Gate 2**:
-André's review, approval on the head SHA, and merge of a ticket PR after `merge-ready` passes.
+André's review, approval on the exact head, and merge of a ticket PR after its applicable admission evidence passes.
 _Avoid_: final review, release gate
 
-**Gate (G1–G11)**:
-One deterministic check with a pass, fail or `n/a` result, run by `superman gate` and listed in spec §5.4.
+**Gate (G1–G12)**:
+One deterministic acceptance check within the delivery workflow, with a pass, fail or not-applicable outcome.
 _Avoid_: hook, policy, check (when the gate is meant)
 
 **Drift job**:
-The scheduled, non-blocking CI job that runs the pinned TypeScript `tsc --noEmit` and diffs its diagnostics against the primary checker, tsrs (ADR 0008).
+A scheduled, non-blocking comparison of primary and reference checker diagnostics.
 _Avoid_: shadow gate (it never blocks a merge)
 
+**Protected policy input**:
+A file or field whose contents define a gate or its governing policy. Changes require Gate 1 review, except explicitly permitted ratchet tightening.
+_Avoid_: configuration file (a policy input may be a field)
+
+**Hook wrapper**:
+The delivery layer invoking the authoritative gate pipeline, not selecting checks or defining a second pipeline.
+_Avoid_: gate scheduler, gate authority
+
 **Protected path**:
-A path that only a spec-kind PR may change; a ticket PR that touches one fails G4.
+A path protected as a whole, rather than only selected fields. A ticket PR may change it only through explicitly permitted ratchet tightening.
 _Avoid_: locked file, frozen file
 
 **Ratchet**:
-A baseline number (mutation score, duplication percentage) in `superman.ratchet.json` that may only get stricter.
+A quality baseline that ticket work may only tighten: mutation scores may rise or hold, and duplication percentages may fall or hold. Mutation regressions are judged over equivalent file scopes.
 _Avoid_: threshold (a ratchet moves), budget
 
 **Receipt**:
-The JSON record of one gate run, with every command, exit code, tool version and output hash.
+The evidence record of one gate run, including its inputs, outcomes and evaluated revisions. A PR integration receipt distinguishes the PR head, tested base and tested merge result.
 _Avoid_: report, log, attestation
 
+**Red–green replay**:
+A comparison in which a behavior test fails against the approved-base implementation and passes against the proposed implementation. It demonstrates regression sensitivity, not the order in which changes were authored.
+_Avoid_: proof of TDD order, red-commit requirement
+
 **Waiver**:
-Any way to pass a merge without satisfying a gate; superman has none.
+An authorized exemption that permits a merge without satisfying its applicable gate policy. Superman provides no such exemption; policy changes receive Gate 1 review.
 _Avoid_: override, exception, bypass
+
+### Governed knowledge
+
+**Vault**:
+The governed collection of source material and memory proposals from which the wiki is maintained.
+_Avoid_: wiki (the published knowledge view), scratch directory
+
+**Vault policy**:
+The reviewed format, write-permission and resource-budget rules governing the vault and wiki.
+_Avoid_: agent preference, wiki instruction
+
+**Raw source**:
+A reviewed source artifact retained unchanged for agent readers. Adding or replacing one is a source import, not memory editing.
+_Avoid_: draft memory, editable evidence
+
+**Source import**:
+A Gate 1-reviewed addition or replacement of raw source material, distinct from ordinary agent ingestion.
+_Avoid_: ingestion (which derives knowledge without changing raw sources)
+
+**Candidate memory**:
+A proposed knowledge addition awaiting promotion or explicit resolution.
+_Avoid_: accepted memory, published fact
+
+**Promotion**:
+Incorporation of a candidate into the wiki within its associated PR. The wiki becomes the canonical copy and the promoted candidate is removed.
+_Avoid_: automatic acceptance, second publication PR
+
+**Wiki**:
+The agent-maintained knowledge collection whose changes are reviewed with the work they describe.
+_Avoid_: vault, governing policy, gate authority
+
+**OKF bundle**:
+A portable collection of typed knowledge entries, optionally accompanied by navigation and change history.
+_Avoid_: arbitrary Markdown folder, approval record
+
+**Freshness warning**:
+A notice that a page's declared freshness window has elapsed, requiring source rechecking before its claims are relied on.
+_Avoid_: automatic truth assessment, automatic merge block
+
+**Wiki maintenance PR**:
+A knowledge-only change proposal subject to human review and the same wiki-validity checks as other changes.
+_Avoid_: automatic cleanup merge, policy repair
+
+**Context graph**:
+A source-navigation aid for agents, distinct from the authoritative change model and acceptance evidence.
+_Avoid_: gate graph, source of truth
 
 ### Change-aware CI
 
 **Change model**:
-The one computation per gate run of the changed files and the affected targets they select, recorded in the receipt's `affected` block and read by every gate (ADR 0010).
+The shared account of changed inputs, selected affected targets and selection reasons for one run.
 _Avoid_: diff (only the first half), change set per gate
 
 **Affected target**:
-A unit of code (a test file, a package or a project) that owns a changed file or depends on one, together with the test command to run for it and the reason it was selected.
+A test file, compiler project, package or application selected because it owns changed inputs or depends on them. It carries the applicable gate commands and selection reasons.
 _Avoid_: impacted project, related test (the TS provider's narrower case)
 
 **Provider**:
-A module behind one interface that maps changed files to affected targets for one ecosystem or tool (moon, Nx, Turborepo, TS/JS, Elixir, Rust, C#, Python, Haskell, globs), and states its precision and confidence.
+An ecosystem-specific mapping from changed inputs to affected targets, with declared precision and confidence.
 _Avoid_: plugin, adapter, detector
 
 **Force-full trigger**:
 A changed path, or a condition such as a shallow clone, a provider error or an unclaimed file, that makes a run select every target.
 _Avoid_: global change (only one kind of trigger), escape hatch
 
-**Miss**:
-A target that fails in a full run, fails again on one rerun, and was not selected by the affected run of a PR merged since the last green full run.
-_Avoid_: false negative (too general), flake (a flake passes on rerun)
+**Full run**:
+A gate run that selects every applicable target; eligible checks may still reuse valid cached passes.
+_Avoid_: fresh execution, all checks rerun
+
+**Uncached full run**:
+A full run that executes every applicable check without reusing gate results. It is the reference run for detecting selection misses and stale cached passes.
+_Avoid_: cache-restored full run
+
+**Safety ledger**:
+The current trusted record of whether affected selection and cached-pass reuse are permitted for a repository and its providers or gates.
+_Avoid_: miss ledger (too narrow), cache index
+
+**Selection miss**:
+An affected run's omission of a target needed to detect a regression introduced by that change.
+_Avoid_: miss (ambiguous with a cache lookup miss), false negative (too general), flake
+
+**Selection-miss rate**:
+The fraction of affected-mode PRs with at least one confirmed selection miss, counted once per PR. A provider's rate includes only PRs that used that provider.
+_Avoid_: missed targets per PR, cache miss rate
+
+**Stale cached pass**:
+A reused passing result that masks a repeatable failure under the consuming run's conditions. An ordinary cache lookup miss is not a correctness incident.
+_Avoid_: selection miss, cache miss
 
 **Cache key**:
-The sha256 of everything a gate result depends on: gate, target, argv, tool versions, config, platform, allowlisted environment and the hashes of the input files (ADR 0011).
+The identity of a gate/target execution and its complete inputs. Matching keys alone do not establish current permission to reuse a pass.
 _Avoid_: cache id, fingerprint
 
 ### Decisions and skills
 
 **Why ADR**:
-A short Pocock-format decision record in `docs/adr/` that explains why.
+A decision record preserving the trade-offs and rationale, whether or not mechanical enforcement is possible.
 _Avoid_: design note
 
 **Archgate ADR**:
-A frontmatter decision record in `.archgate/adrs/` with a companion `.rules.ts` that enforces it, linked to its why ADR by a `Source:` line.
+The enforceable companion to a why ADR, linking its decision to mechanically checkable rules.
 _Avoid_: rule doc, policy file
 
 **Overlay**:
-superman's own skills, `ship`, `adr-rule` and the optional `plan-critic`, used on top of Pocock's skills and never replacing them.
+superman's own `ship`, `adr-rule`, `wiki-ingest`, `wiki-lint` and optional `plan-critic` skills, used on top of Pocock's skills and never replacing them.
 _Avoid_: superman skills pack, extension
 
 **Catalog**:
-The repo's plugin marketplace files, which list the Pocock skills pinned to a commit and the superman overlay.
+The reviewed selection of upstream and overlay skills offered for installation, including their pinned origins.
 _Avoid_: registry, store
 
 **Lock**:
-`superman.lock.json`, which records the pinned upstream commit and a sha256 per installed skill file.
+The reviewed record of selected skill revisions, content identities and tool pins.
 _Avoid_: manifest, pins file
 
 **Harness**:

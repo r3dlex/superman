@@ -34,7 +34,7 @@ The repo has no `.trivyignore`, `.trivyignore.yaml` or `trivy.yaml`. Gate G11 is
 
 ### Risks
 
-- Inline `trivy:ignore` comments in IaC files aren't covered here. They are part of ADR 0004's proposed SUP-005.
+- Inline `trivy:ignore` directives are not covered by this executable rule. SUP-005 was adopted in ADR 0004 on 2026-10-30 and remains a Gate 1 bootstrap implementation prerequisite; this documentation edit does not install it.
 
 ## Compliance and Enforcement
 

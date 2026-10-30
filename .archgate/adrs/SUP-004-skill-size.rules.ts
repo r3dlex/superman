@@ -1,12 +1,12 @@
 /// <reference path="../rules.d.ts" />
 
-const BUDGETS: Record<string, number> = { ship: 150, "adr-rule": 80, "plan-critic": 60 };
-const TOTAL_BUDGET = 290;
+const BUDGETS: Record<string, number> = { ship: 150, "adr-rule": 80, "plan-critic": 60, "wiki-ingest": 100, "wiki-lint": 80 };
+const TOTAL_BUDGET = 470;
 
 export default {
   rules: {
     "skill-budget": {
-      description: "Only ship, adr-rule and plan-critic exist, within 150/80/60 lines (290 total), user-invoked only",
+      description: "Only the five reviewed overlay names exist within individual budgets and 470 total lines, user-invoked only",
       async check(ctx) {
         let total = 0;
         for (const file of ctx.scopedFiles) {
@@ -17,7 +17,7 @@ export default {
           const budget = BUDGETS[name];
           if (budget === undefined) {
             ctx.report.violation({
-              message: `Unknown overlay skill "${name}"; only ship, adr-rule and plan-critic are allowed`,
+              message: `Unknown overlay skill "${name}"; only ${Object.keys(BUDGETS).join(", ")} are allowed`,
               file,
               fix: "Remove it, or propose it in a spec PR with the observed failure",
             });

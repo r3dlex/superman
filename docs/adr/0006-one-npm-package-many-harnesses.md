@@ -16,5 +16,10 @@ superman must install as a plugin in Claude Code, OpenAI Codex and OpenCode, and
 ## Consequences
 
 - The per-harness manifest shapes are partly VERIFY (spec §12.1); ticket 10 proves each with a packed-tarball install.
-- npm only allows a trusted publisher on a package that already exists, so the first `0.0.x` publish and the trusted-publisher setup are one-time manual steps for André (spec §12.2).
+- Public registry metadata checked on 2026-10-30 shows an MIT-licensed `superman-ai@0.0.0` placeholder published on 2026-10-29 and pointing at this repository. This proves existence, not André's account access; verify that access and configure trusted publishing before the first usable release.
 - `files` in `package.json` is an allowlist; the overlay skill files, manifests, `dist/` and `schema/` ship, while `.scratch/`, `.archgate/`, tests and CI do not.
+- André chose MIT and direct OIDC publication on his release tag on 2026-10-30. Staged publication plus a second npm approval was considered and declined; the tag is the final human release authorization.
+- Build/test/scan jobs have no publishing or cache-write authority. A separate publisher consumes the exact scanned tarball without project install/build/publish hooks; optional release-asset uploads are likewise separate. This keeps dependency hooks and tests away from credentials and OIDC publishing authority (spec §12.2).
+- The first usable v0 release waits for every v0 ticket, including M7b's complete provider/cache work and its reviewed activation follow-ups. A placeholder is not evidence that the usable CLI is shipped.
+
+Sources: [public package metadata](https://registry.npmjs.org/superman-ai), [trusted publishing](https://docs.npmjs.com/trusted-publishers/), [staged publishing](https://docs.npmjs.com/staged-publishing/).

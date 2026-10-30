@@ -2,9 +2,9 @@
 
 **Milestone:** M3
 
-**What to build:** `superman` reads and validates `superman.config.json` with a hand-written validator (no zod) against `schema/config.v1.json`, reports every invalid field with its path and exits 2, and every gate command writes a deterministic JSON receipt (§5.5) to `.git/superman/receipts/`. All process spawning goes through one module with `shell: false` (SUP-002 now has files to check). The schema settles the G9 key names (`paths.tests`, `testCmd.related` vs `gates.testRelated`) and the lock and ratchet schemas.
+**What to build:** Validate strict JSON using the hand-written config/schema contract in spec §5.3 and write deterministic receipts (§5.5). Cover protected fields, declared test/support inputs, App IDs/repository scope, required check origins, verified-project typechecking and safety/cache settings. Explicit test files use `gates.test`; `gates.testRelated` is for source-file selection. All product spawning crosses `src/exec.ts` with `shell: false`; resolve Git metadata paths correctly in worktrees.
 
-**Blocked by:** 01
+**Blocked by:** 01, spec/superman-v0-baselines
 
 **Status:** ready-for-agent
 
@@ -17,4 +17,7 @@
 - [ ] Receipts have sorted keys, `schema: superman.receipt/1`, and differ between two runs only in `startedAt`/`durationMs` (golden-file test).
 - [ ] A gate with `enabled: false` is recorded as `n/a`, never `pass`.
 - [ ] Only the exec module imports `node:child_process`; SUP-002 passes on `src/` and fails on a fixture that imports it elsewhere or passes `shell: true`.
-- [ ] Mutation score on the changed files is at least the ratchet baseline; jscpd does not rise.
+- [ ] Mutation compares equivalent base/candidate file scopes; lower duplication and higher mutation tighten correctly. Metric-key deletion/addition and scope substitution cannot evade policy.
+- [ ] PR receipts distinguish H/B/M/evaluated SHA and per-gate/target cache outcomes; worktrees with a `.git` file write only to resolved Git metadata.
+
+Start with invalid-config and H/B/M receipt fixtures through the CLI seam.

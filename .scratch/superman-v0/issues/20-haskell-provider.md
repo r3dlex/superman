@@ -15,3 +15,6 @@
 - [ ] A fixture with packages `core ← web` selects both for a `core` change and only `web` for a `web` change, with `cabal test` argv (test-first); the same fixture with `stack.yaml` yields `stack test` argv.
 - [ ] `build-depends` spread over several lines, with version bounds and conditionals, is parsed into the right package names.
 - [ ] A `cabal.project` change forces full.
+- [ ] Verified package/compiler inputs and explicit argv supply whole-package typechecks for affected packages/reverse dependents; unresolved build conditions/inputs use full-check fallback.
+
+Start with two package targets exposing distinct test and complete-package check commands.

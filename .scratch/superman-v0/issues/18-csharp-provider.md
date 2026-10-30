@@ -15,4 +15,7 @@
 - [ ] A fixture solution `Core ← Api ← Api.Tests`, `Core ← Core.Tests` selects both test projects for a `Core` change and only `Api.Tests` for an `Api` change (test-first; the `.csproj` files are fixtures, no .NET SDK needed).
 - [ ] A conditional `ProjectReference` is still an edge.
 - [ ] A `Directory.Build.props` change in a subfolder affects every project below it; at the root it forces full.
+- [ ] Typecheck targets include every affected complete compiler project and reverse dependent, not only test projects. Unknown imported MSBuild/config inputs or missing argv produces full-check fallback.
+
+Start with a library-only project change whose dependent test project is distinct from its compiler scope.
 - [ ] The `dotnet test <project>` argument form under Microsoft.Testing.Platform vs VSTest is checked on a real SDK (VERIFY result recorded).
