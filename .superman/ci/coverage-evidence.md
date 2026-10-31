@@ -1,6 +1,6 @@
 # Overall coverage enforcement — 2026-10-31
 
-**Outcome:** corrected local verification passes **358/358 tests and all eight stages**. Overall coverage is **96.05% lines, 95.30% statements, 93.00% branches and 95.95% functions**, independently above the approved floor. Independent Standards and Spec rechecks have no remaining hard findings in scope. The 100% target is not yet reached. Changes remain uncommitted/unpushed; hosted enforcement and Gate 1 readiness are not established. Spec §5.4 and ADR 0014 own the acceptance contract; this file records evidence, not new policy or authority.
+**Outcome:** corrected local verification passes **358/358 tests and all eight stages**. Overall coverage is **96.05% lines, 95.30% statements, 93.00% branches and 95.95% functions**, independently above the approved floor. Independent Standards and Spec rechecks have no remaining hard findings in scope. The 100% target is not yet reached. The changes are committed and pushed on `spec/superman-v0`; hosted enforcement of the corrected tree and Gate 1 readiness are not established. Spec §5.4 and ADR 0014 own the acceptance contract; this file records evidence, not new policy or authority.
 
 ## Approved boundaries and tools
 
@@ -92,8 +92,30 @@ Artifacts: `superman-coverage-2SyoRO/verification-wXdjdd/` under the approved te
 
 The verifier reports **`sourcePreserved: true` and `indexPreserved: true`**. Original index SHA-256 remains **`0815c0494ac9f22b76ffa7691ba3316240ed3d410d1d518187006b88cd6e00ba`**. This document's subsequent results-only update is outside that immutable snapshot; measured code/tests/config/tool inputs are unchanged.
 
+## Hosted run 41185030855 and the re-measurement that followed
+
+Publishing `294ed4c94c63d2d0bfed351e9b47a07feb542404` started hosted run **41185030855**. The two x64/macOS legs reached the coverage floor and failed there with **358 tests / 350 passed / 8 failed**. All 8 were fixture-environment defects, not coverage-accounting defects: five G11 tests died with `ENOENT` because `raw-fixture.ts` only created the `.tools` sandbox when the self-managed pnpm layout existed (a hosted runner has none), and three coverage tests compared an unresolved `mkdtemp` root against the command's `realpathSync`-resolved root (macOS `TMPDIR` is a symlink). The analysis, the corrections and the Linux-arm64 decision are recorded in [bootstrap evidence](bootstrap-evidence.md).
+
+After the corrections, the same command was re-measured locally on macOS-arm64 / Node **26.12.1** with the pinned archgate **0.61.0** at commit **`9caaaa79379285d47b4288832811577e8eb996b5`**: **358 passed / 0 failed / 0 skipped**, verdict `pass`, and the recorded metric table is **unchanged**, because the corrected files are test-only or excluded from the measured inventory.
+
+| Metric | Covered / total | Percentage |
+|---|---|---|
+| Lines | 1414 / 1472 | **96.05%** |
+| Statements | 1585 / 1663 | **95.30%** |
+| Branches | 1528 / 1643 | **93.00%** |
+| Functions | 190 / 198 | **95.95%** |
+
+| Artifact | SHA-256 |
+|---|---|
+| Coverage receipt | `911ba8527342422465de705a261151da86befd33ccf6f0451ab7aee5acdeed0a` |
+| Coverage summary | `2c15013c85bd7c4fcbb7db69de22e03f031ded76b18b2b2bd1dd183b9b3d4520` |
+| Raw bootstrap receipt | `d3c3afb0137e0adb1a4c5055c6199547989285b429a193a3fd0dc35bfa2a0997` |
+| Coverage inputs hash | `b6cb3abfadbebee2682adf6f5bc9e88526e0a5c3bb41c39d657e6713c7088041` |
+
+The coverage receipt records `requestedMode: incremental`, `execution: full`, `cachedFiles: 0`, the explicit inactive-ledger fallback, `mergeAuthority: none` and `evaluatedSha: 9caaaa79379285d47b4288832811577e8eb996b5`. All 17 inventoried source files are represented with zero skipped items.
+
 ## Remaining authority and hosted work
 
-Local coverage implementation and verification are complete. Obtain separate authorization before any working-branch commit/push or PR update. Hosted PR coverage and actual scheduled execution remain unverified until publication and runs; nightly evidence is not PR admission. The original approved arm64 redistribution/registered-asset, exact hosted three-platform and applicable small-corpus blockers remain, and ticket 01 is not admitted. Incremental coverage reuse stays off until its complete provenance/selection contract is verified in the later activation work.
+Local coverage implementation and verification are complete and the corrections are committed and pushed on `spec/superman-v0`. Hosted PR coverage on the corrected head and actual scheduled execution remain unverified until the runs land; nightly evidence is not PR admission. The original approved arm64 redistribution/registered-asset, exact hosted three-platform and applicable small-corpus blockers remain, and ticket 01 is not admitted. Incremental coverage reuse stays off until its complete provenance/selection contract is verified in the later activation work.
 
-Next: review `.github/workflows/ci.yml` and this evidence before deciding whether to authorize commit/push and a PR update.
+Next: collect the hosted results for the pushed head on the two x64/macOS legs; the `ubuntu-24.04-arm` leg remains blocked on the human-authorized published archgate asset described in [bootstrap evidence](bootstrap-evidence.md).
