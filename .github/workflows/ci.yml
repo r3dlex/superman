@@ -24,8 +24,12 @@ env:
 
 jobs:
   bootstrap:
+    # Keep the hosted image names in the job title. The main ruleset requires
+    # exactly `bootstrap (macos-15)`, `bootstrap (ubuntu-24.04)` and
+    # `bootstrap (ubuntu-24.04-arm)`. A bare hosted label always selects a
+    # GitHub-hosted runner, so routing is a separate self-hosted label set.
     name: bootstrap (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON(matrix.runner) }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -33,10 +37,13 @@ jobs:
         include:
           - os: macos-15
             platform: darwin-arm64
+            runner: '["self-hosted","macOS","ARM64","r3dlex-org"]'
           - os: ubuntu-24.04
             platform: linux-x64
+            runner: '["self-hosted","Linux","X64","r3dlex-org"]'
           - os: ubuntu-24.04-arm
             platform: linux-arm64
+            runner: '["self-hosted","Linux","ARM64","r3dlex-linux-arm64"]'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
