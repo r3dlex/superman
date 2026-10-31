@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "minimum": { "lines": 90, "statements": 90, "branches": 90, "functions": 90 },
+  "target": 100,
+  "node": [".superman/ci/**/*.ts", ".archgate/adrs/*.rules.ts"],
+  "product": ["src/**/*.ts"],
+  "exclude": ["**/*.test.ts", "**/*.d.ts", ".superman/ci/raw-fixture.ts"],
+  "tests": [".superman/ci/**/*.test.ts"]
+}

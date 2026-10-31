@@ -5,7 +5,10 @@ const SOURCE_LINE = /^Source: (docs\/adr\/\d{4}-[a-z0-9-]+\.md)$/u;
 function firstBodyLine(text: string): string | undefined {
   const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n/u.exec(text);
   const body = match ? text.slice(match[0].length) : text;
-  return body.split(/\r?\n/u).find((line) => line.trim() !== "")?.trim();
+  return body
+    .split(/\r?\n/u)
+    .find((line) => line.trim() !== "")
+    ?.trim();
 }
 
 export default {

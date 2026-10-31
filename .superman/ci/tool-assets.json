@@ -1,0 +1,26 @@
+{
+  "archgate": {
+    "version": "0.61.0",
+    "sourceCommit": "f65d99f56d02757cca94d53f6d717333770e0170",
+    "darwin-arm64": {
+      "url": "https://github.com/archgate/cli/releases/download/v0.61.0/archgate-darwin-arm64.tar.gz",
+      "sha256": "44c645602313bc6be7ef99ebc34c5e08f3169695b631bd9ab09bda0d3b699cf3"
+    },
+    "linux-x64": {
+      "url": "https://github.com/archgate/cli/releases/download/v0.61.0/archgate-linux-x64.tar.gz",
+      "sha256": "82037281f74617323715703db492d7284d75531cf8032bcf7af41148a9f416b3"
+    },
+    "linux-arm64": null
+  },
+  "trivy": {
+    "version": "0.76.1",
+    "linux-x64": {
+      "url": "https://github.com/aquasecurity/trivy/releases/download/v0.76.1/trivy_0.76.1_Linux-64bit.tar.gz",
+      "sha256": "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0"
+    },
+    "darwin-arm64": {
+      "url": "https://github.com/aquasecurity/trivy/releases/download/v0.76.1/trivy_0.76.1_macOS-ARM64.tar.gz",
+      "sha256": "11a9b6cd2752011b54f01ea4bd0dbfa9f0c41dc6538d5a3f9d23955f471bf4e5"
+    }
+  }
+}

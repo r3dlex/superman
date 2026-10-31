@@ -12,7 +12,7 @@ On 2026-10-30 André confirmed that effective policy includes compiler/test-runn
 
 ## Consequences
 
-- Adopt SUP-005 before ticket 01: reject effective `archgate-ignore`, `biome-ignore` and `trivy:ignore` directives in ticket PRs. Inert fixture/example strings are not suppressions; a violation is fixed or its governing rule changes through Gate 1. The currently committed executable rules do not yet close this gap.
+- Adopt SUP-005 before ticket 01: reject effective `archgate-ignore`, `biome-ignore` and `trivy:ignore` directives in ticket PRs. Inert fixture/example strings are not suppressions; a violation is fixed or its governing rule changes through Gate 1. The Gate 1 bootstrap adds the executable rule; [bootstrap evidence](../../.superman/ci/bootstrap-evidence.md) records its verified scope and the remaining readiness blockers.
 - The previously accepted linux-arm64 Archgate self-build is still required: a reviewed v0.61.0 build, release asset and locked checksum replace stale `n/a` notes. Platform execution remains to be proved before the first implementation merge.
 - Work that needs a protected-path change (CI workflows, lock, `.claude/settings.json`) is split into a ticket PR plus a spec-kind follow-up PR, which costs André one more review.
 - Initial gate configuration and raw checks are an earlier prerequisite, not a follow-up to ticket 01; see the bootstrap completion criteria in spec §17. Later follow-ups activate capabilities only after their implementation is merged.

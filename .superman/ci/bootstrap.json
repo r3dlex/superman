@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "tools": {
+    "node": "26",
+    "pnpm": "12.16.1",
+    "archgate": "0.61.0",
+    "tsrs": "0.20.1-ts7.1.0-beta",
+    "typescript": "7.1.0-beta",
+    "biome": "2.6.4",
+    "vitest": "5.0.5",
+    "coverageV8": "5.0.5",
+    "c8": "12.0.0",
+    "knip": "6.43.0",
+    "jscpd": "5.4.2",
+    "stryker": "10.1.1",
+    "trivy": "0.76.1"
+  },
+  "policyInputs": [
+    "tsconfig.json",
+    "vitest.config.ts",
+    "biome.json",
+    "knip.json",
+    ".superman/ci/coverage.json",
+    ".jscpd.json",
+    "stryker.config.json"
+  ],
+  "test": {
+    "files": ["test/**/*.test.ts", "src/**/*.test.ts"],
+    "support": ["test/**"]
+  },
+  "requiredChecks": [
+    { "workflow": ".github/workflows/ci.yml", "job": "bootstrap (macos-15)", "app": "github-actions", "appId": 15368 },
+    {
+      "workflow": ".github/workflows/ci.yml",
+      "job": "bootstrap (ubuntu-24.04)",
+      "app": "github-actions",
+      "appId": 15368
+    },
+    {
+      "workflow": ".github/workflows/ci.yml",
+      "job": "bootstrap (ubuntu-24.04-arm)",
+      "app": "github-actions",
+      "appId": 15368
+    }
+  ]
+}

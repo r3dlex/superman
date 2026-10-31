@@ -1,0 +1,6 @@
+{
+  "minTokens": 50,
+  "format": ["typescript"],
+  "reporters": ["console", "json"],
+  "output": ".superman-ci/duplication"
+}

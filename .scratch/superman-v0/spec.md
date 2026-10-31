@@ -7,7 +7,7 @@ Design agreed with André on 2026-10-30. Product implementation is blocked on th
 **Next action:** complete §17's Gate 1 bootstrap work, obtain André's approval, then admit ticket 01. The first usable release includes all v0 tickets, including M7b, verified-project typechecking and **M7c**; Go and deploy execution (25–26) remain post-v0.
 
 *Spec for Gate 1 (M1), originally reshaped from André's 2026-10-29 draft into Matt Pocock's `to-spec` template at `59db609eb1e18aaf59b63284d0e52255aff0c63c`. Numbered sections are retained for stable cross-references. Older M1 amendment markers identify provenance; the reconciled operational text and the 2026-10-30 decision index below are current.*
-*Historical draft sources: `decisions.md` ("hitl" there meant `superman`), `zoom-out-northstar-autobahn-archgate.md`, `survey.md`, `magus-notes.md`, both Gemini chats and the cited upstream repos. The 2026-10-30 interview supersedes conflicting draft recommendations; current operational rules live in this spec, meanings in `GLOSSARY.md`, and rationale in `docs/adr/0001`–`0013`.*
+*Historical draft sources: `decisions.md` ("hitl" there meant `superman`), `zoom-out-northstar-autobahn-archgate.md`, `survey.md`, `magus-notes.md`, both Gemini chats and the cited upstream repos. The 2026-10-30 interview supersedes conflicting draft recommendations; current operational rules live in this spec, meanings in `GLOSSARY.md`, and rationale in `docs/adr/`. The 2026-10-31 coverage amendment is in §5.4 and ADR 0014.*
 *Conventions: **VERIFY** means evidence is still required, not permission to assume success. Public pin/checksum metadata was checked on 2026-10-30; platform execution and live setup remain unproved. §15 records resolved choices and stage-bound manual work. `.archgate/adrs/` contains the current executable companions; §17 identifies the code still needed to implement the amended design.*
 
 ## Problem Statement
@@ -200,7 +200,8 @@ Stored config is strict JSON, validated by a hand-written TS validator (no zod),
                   ".claude-plugin/**", ".codex-plugin/**", ".agents/plugins/**"],
     "protectedFields": [{ "file": "package.json", "pointers": [
       "/packageManager", "/engines/node", "/devDependencies/archgate", "/devDependencies/tsrs",
-      "/devDependencies/typescript", "/devDependencies/@biomejs~1biome", "/devDependencies/vitest",
+       "/devDependencies/typescript", "/devDependencies/@biomejs~1biome", "/devDependencies/vitest",
+       "/devDependencies/c8", "/devDependencies/@vitest~1coverage-v8", "/scripts/coverage",
       "/devDependencies/knip", "/devDependencies/jscpd", "/devDependencies/@stryker-mutator~1core",
        "/devDependencies/@stryker-mutator~1vitest-runner", "/devDependencies/lefthook", "/pnpm",
        "/scripts/preinstall", "/scripts/install", "/scripts/postinstall", "/scripts/preprepare",
@@ -288,7 +289,7 @@ Stored config is strict JSON, validated by a hand-written TS validator (no zod),
 | # | Gate | Local (pre-commit) | CI on every PR (required) | Nightly on `main` |
 |---|---|---|---|---|
 | G1 | `archgate check --strict` | `--staged` | `--base origin/main --strict --output github` | full |
-| G2 | Typecheck + tests; TS uses exact-pinned `tsrs --noEmit`, default mode (ADR 0008) | complete verified typecheck projects or full fallback; related tests | affected tests and verified complete project checks with reverse dependents; full fallback on uncertain compiler scope, on all 3 legs | uncached full checks; separate non-blocking pinned `tsc` drift job |
+| G2 | Typecheck + tests and overall coverage; TS uses exact-pinned `tsrs --noEmit`, default mode (ADR 0008); coverage contract below (ADR 0014) | complete verified typecheck projects or full fallback; related tests | affected tests and verified complete project checks with reverse dependents; complete overall coverage evidence or uncached full fallback, on all 3 legs | uncached full checks/coverage; separate non-blocking pinned `tsc` drift job |
 | G3 | knip (unused files, exports, deps) | yes | yes, must report 0 issues | — |
 | G4 | Protected paths, effective config/includes and gate-tool pin fields (§5.3) | yes | by PR kind; expressly permitted ratchet tightening only | — |
 | G5 | jscpd duplicate-code ratchet | changed files | affected mode checks new clones only within its scanned corpus; full mode checks the whole corpus/total-% baseline | full corpus and total percentage |
@@ -299,6 +300,14 @@ Stored config is strict JSON, validated by a hand-written TS validator (no zod),
 | G10 | Biome lint + format (ADR 0009) | `biome check --staged --no-errors-on-unmatched` | selected files in affected mode; whole repo in full mode, all 3 legs | full |
 | G11 | Trivy `fs`: vulnerable deps (incl. dev), secrets, misconfig; fails on HIGH/CRITICAL; no `.trivyignore` (SUP-007) **(M1 amendment, ADR 0009)** | off; pre-pr runs it if `trivy` is on PATH, otherwise `n/a (enforced in CI)` | `trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --include-dev-deps --exit-code 1 .` on linux-x64 | same scan on `main` (new CVEs against unchanged deps); a failure opens an issue |
 | G12 | OKF wiki/vault validity (§5.8), blocking after ticket 28 activation **(M1 amendment 4)** | staged knowledge impact; no PR-log requirement before a PR exists | change-aware content validation plus full inventory/index/budget checks and current-PR log entry on **every PR kind**, all 3 legs | uncached full validation; freshness warnings feed `wiki-lint` |
+
+**Overall coverage (2026-10-31 amendment, ADR 0014).** Every required PR leg enforces **at least 90% independently for lines, statements, branches and functions**, with **100% as the target** and remaining gaps visible in reports. Aggregate covered/total counts across the repository, not file percentages or an average of the four metrics; compare actual counts, not rounded display values. This is an overall floor, not a per-file minimum or an automatic ratchet.
+
+1. Inventory all repository-owned runtime, bootstrap-verifier and Archgate-rule code, including unexecuted files. Exclude only tests/test-only fixtures, declarations/generated files and dependencies. Unmodeled runtime files block, so new roots cannot silently shrink the denominator. Coverage-ignore directives, additional runtime exclusions and threshold reductions are not ways to obtain a pass; improve meaningful tests instead.
+2. In incremental CI, combine fresh measurements of all affected code with verified unchanged-code evidence over that same complete inventory. Bind source/test bytes, complete dependency/selection inputs, effective policy, tool/instrumentation identities and trusted producer provenance. A previous passing full result is necessary supporting evidence, not permission to reuse stale coverage. Missing, stale, mismatched or incomplete evidence forces an **uncached full** run; changed-files-only coverage never satisfies the floor.
+3. Nightly remeasures the complete inventory without coverage-result reuse. Reports and receipts distinguish requested mode, actual execution, reused file count, fallback reason, input/tool identities and each metric's counts. These records are supporting evidence, not PR H/B/M admission or merge authority.
+
+Bootstrap enforcement uses the protected `.superman/ci/coverage.ts` process: native Node V8 subprocess/rule data, c8 **12.0.0**'s locked merge/report tools and Vitest V8 **5.0.5**'s AST conversion for every inventoried file; product measurements use Vitest. AST-derived denominators include every function/branch in unexecuted files, unlike c8's synthetic empty-file count. The approved dev-only tools do not enter product dependencies. Required `bootstrap (…)` jobs invoke the collector directly; the scheduled bootstrap run checks whole-repository coverage, not the later product nightly/audit workflow. There is no trusted incremental coverage ledger or selector in this bootstrap, so an incremental request explicitly executes the full uncached fallback. Coverage-result reuse stays off until the later provider/cache activation proves the complete contract above; no product ticket, quality baseline or cache profile is activated by this amendment.
 
 **PR kinds and the paths each may touch (G4):**
 - **`spec/*`** (Gate 1):
@@ -477,6 +486,7 @@ Non-literal TS imports broaden the package's test selection. Elixir CI does not 
 |---|---|---|---|
 | G1 Archgate | Changed plus target files; rules reading wider inputs broaden/fall back until fixture-proven | Full | Never |
 | G2 tests | Selected explicit test commands, including declared process-test inputs | Every test target | Eligible |
+| G2 overall coverage | §5.4's complete combined inventory evidence or uncached full fallback; never changed-files percentages alone | Complete inventory; nightly remeasures all | Reuse only after complete coverage provenance/selection is verified; bootstrap reuse is off |
 | G2 typecheck | Verified complete projects and reverse dependents, otherwise full command | Whole configured check | Eligible |
 | G3 knip | Whole repo | Whole repo | Eligible |
 | G5 jscpd | Changed plus affected files; new clones checked **within that corpus only** | Whole corpus and total-% ratchet | Eligible |
@@ -1002,10 +1012,12 @@ superman/
 - **One internal seam: `src/exec.ts`.** It is the only module that spawns processes (SUP-002), so it is where fakes enter; unit tests of pure modules (config validator, receipt writer, glob and path policy) call them directly only where the CLI seam would be too slow.
 - **Seam check:** the CLI process seam was retained in the 2026-10-30 interview. Its tests declare broad source dependencies by default (§5.7); a narrower unit-test import graph must not silently replace that process coverage.
 - **M1 amendment 4 seam approval:** current bootstrap tests execute `pr-policy.ts` in temporary Git repositories, and pinned Archgate against temporary SUP-004/SUP-009 rule fixtures. Observe process outcomes/diagnostics, not private helpers. These cover policy patterns/path boundaries, not general privacy proof or future G12 parser behavior. Product tickets keep the CLI seam for G12, init, hook and doctor fixtures.
+- **Gate 1 bootstrap seam approval (2026-10-30):** André additionally approved `node .superman/ci/raw-gates.ts` as a protected bootstrap-only process boundary. Temporary Git fixtures observe raw-tool routing, exit codes, diagnostics and receipts, including G9 replay/failure classification. This is not product `src/`, chronological TDD proof, live credential/protection proof or remote platform evidence; those require their own verification.
+- **Coverage seam approval (2026-10-31):** André approved the protected coverage-command process boundary with real collectors in tiny temporary repositories, plus supplemental tests of actual exported rule checks using controlled external Archgate contexts. Those callback tests make rule code measurable; the real pinned-Archgate process fixtures remain required parser/engine evidence. Observe measured reports, receipts, failures and diagnostics, not private helper behavior.
 
 ### 17. Protected-path follow-ups and bootstrap readiness
 
-**Current position:** design agreed; the M1 workflow runs Archgate and the interim path policy/fixtures, whose G9 remains `n/a`. **Amendment 4** adds SUP-009, expands SUP-004 and permits governed knowledge writes while protecting vault/Lefthook inputs; it does not add G12, SUP-005, full protected-field enforcement, raw replay checks or the three-platform matrix. Ticket 01 stays blocked until the following Gate 1 work is complete. M7c activates later through the explicit follow-ups below; it does not retroactively require a wiki before its scaffold exists.
+**Current position:** design agreed; this Gate 1 branch adds protected bootstrap tooling/configs, SUP-005, protected-input/field enforcement, raw routing/replay fixtures, §5.4's overall coverage policy and the three-platform workflow. [Bootstrap evidence](../../.superman/ci/bootstrap-evidence.md) distinguishes local verification, unsupported capabilities and the remaining live/platform prerequisites; the previous hosted run exercised only the old two-job implementation. Neither the branch contents nor the earlier Amendment 4 complete Gate 1 or activate G12. Ticket 01 stays blocked until the following work and André's approval/merge are complete. M7c activates later through the explicit follow-ups below; it does not retroactively require a wiki before its scaffold exists.
 
 Earlier local verification used PATH Archgate **0.43.0** and rejected `--strict`; that is not gate evidence. Amendment 4 provisions the locked **0.61.0** through **pnpm 12.16.1** with lifecycle scripts suppressed and records fresh strict-check/fixture results in its PR evidence. No weaker-command fallback authorizes readiness.
 
@@ -1031,7 +1043,7 @@ Later ticket PRs implement code/tests without editing protected policy, except p
 | 31 context | `spec/superman-v0-codegraph`: reviewed selected-harness MCP config and ignores, never CodeGraph installer or instruction edits |
 | 11 release | After 24, 27–32 and their activation follow-ups; separate verified-artifact publisher/upload jobs, MIT and confirmed npm authority |
 
-Next: finish and review step 1's remaining bootstrap changes in this Gate 1 PR; Amendment 4 does not authorize product implementation or any merge.
+Next: verify the bootstrap changes and close the remaining live/platform prerequisites recorded in the evidence. No bootstrap result authorizes product implementation or any merge.
 
 ## Testing Decisions
 

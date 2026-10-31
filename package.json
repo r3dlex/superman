@@ -41,10 +41,27 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "archgate": "archgate check --strict"
+    "archgate": "archgate check --strict",
+    "typecheck": "tsrs --noEmit",
+    "test": "vitest run",
+    "coverage": "node .superman/ci/coverage.ts",
+    "lint": "biome ci",
+    "knip": "knip",
+    "duplication": "jscpd --config .jscpd.json src"
   },
   "dependencies": {},
   "devDependencies": {
-    "archgate": "0.61.0"
+    "@biomejs/biome": "2.6.4",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
+    "@types/node": "26.6.6",
+    "@vitest/coverage-v8": "5.0.5",
+    "archgate": "0.61.0",
+    "c8": "12.0.0",
+    "jscpd": "5.4.2",
+    "knip": "6.43.0",
+    "tsrs": "0.20.1-ts7.1.0-beta",
+    "typescript": "7.1.0-beta",
+    "vitest": "5.0.5"
   }
 }

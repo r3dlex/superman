@@ -1,12 +1,19 @@
 /// <reference path="../rules.d.ts" />
 
-const BUDGETS: Record<string, number> = { ship: 150, "adr-rule": 80, "plan-critic": 60, "wiki-ingest": 100, "wiki-lint": 80 };
+const BUDGETS: Record<string, number> = {
+  ship: 150,
+  "adr-rule": 80,
+  "plan-critic": 60,
+  "wiki-ingest": 100,
+  "wiki-lint": 80,
+};
 const TOTAL_BUDGET = 470;
 
 export default {
   rules: {
     "skill-budget": {
-      description: "Only the five reviewed overlay names exist within individual budgets and 470 total lines, user-invoked only",
+      description:
+        "Only the five reviewed overlay names exist within individual budgets and 470 total lines, user-invoked only",
       async check(ctx) {
         let total = 0;
         for (const file of ctx.scopedFiles) {

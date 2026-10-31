@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@6.43.0/schema.json",
+  "entry": [
+    "src/cli.ts",
+    ".superman/ci/pr-policy.ts",
+    ".superman/ci/raw-gates.ts",
+    ".superman/ci/coverage.ts",
+    ".superman/ci/**/*.test.ts"
+  ],
+  "project": ["src/**/*.ts", "test/**/*.ts", ".superman/ci/**/*.ts"]
+}

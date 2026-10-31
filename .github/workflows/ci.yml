@@ -1,51 +1,42 @@
-# M1 minimal CI. Remaining Gate 1 work adds raw checks before ticket 01;
-# ticket 06 replaces them with parity-proved `superman gate ci`.
+# M1 raw enforcement. Ticket 06 replaces it only after failure-fixture parity.
 # No pull_request_target anywhere; no secrets; read-only token.
 name: ci
 
 on:
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "17 2 * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number }}
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
   ARCHGATE_TELEMETRY: "0"
+  HEAD_REF: ${{ github.head_ref }}
+  BASE_REF: ${{ github.base_ref }}
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+  BASE_SHA: ${{ github.event.pull_request.base.sha }}
 
 jobs:
-  archgate:
-    name: G1 archgate --strict
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 26
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: executable policy rule fixtures
-        run: node --test .superman/ci/archgate-policy.test.ts
-      - name: archgate check (changed files vs base)
-        run: pnpm exec archgate check --base "origin/${BASE_REF}" --strict --output github
-        env:
-          BASE_REF: ${{ github.base_ref }}
-      - name: archgate check (full repo)
-        run: pnpm exec archgate check --strict --output github
-
-  pr-policy:
-    name: G4 path policy + G8 traceability (G9 placeholder)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+  bootstrap:
+    name: bootstrap (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: darwin-arm64
+          - os: ubuntu-24.04
+            platform: linux-x64
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -54,11 +45,52 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26
-          package-manager-cache: false
-      - name: path policy process fixtures
-        run: node --test .superman/ci/pr-policy.test.ts
-      - name: path policy
+      - name: Protected policy and traceability before dependency installation
+        if: github.event_name == 'pull_request'
         run: node .superman/ci/pr-policy.ts
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      - name: Verify platform and install checksum-locked external tools
         env:
-          HEAD_REF: ${{ github.head_ref }}
-          BASE_REF: ${{ github.base_ref }}
+          EXPECTED_PLATFORM: ${{ matrix.platform }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import { createHash } from 'node:crypto';
+          import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          const platform = `${process.platform}-${process.arch}`;
+          if (platform !== process.env.EXPECTED_PLATFORM) throw new Error(`Wrong runner platform: ${platform}`);
+          const assets = JSON.parse(readFileSync('.superman/ci/tool-assets.json', 'utf8'));
+          for (const tool of ['archgate', ...(platform === 'linux-x64' ? ['trivy'] : [])]) {
+            const asset = assets[tool][platform];
+            if (!asset) throw new Error(`Gate 1 blocked: reviewed, published ${tool} ${platform} asset/checksum is missing`);
+            if (!/^[a-f0-9]{64}$/.test(asset.sha256) || !asset.url.startsWith('https://github.com/')) throw new Error('Invalid tool asset identity');
+            const response = await fetch(asset.url);
+            if (!response.ok) throw new Error(`Asset download failed: ${response.status}`);
+            const bytes = Buffer.from(await response.arrayBuffer());
+            if (createHash('sha256').update(bytes).digest('hex') !== asset.sha256) throw new Error(`${tool} checksum mismatch`);
+            const directory = join(process.env.RUNNER_TEMP, `superman-${tool}`);
+            mkdirSync(directory, { recursive: true });
+            const archive = join(directory, 'asset.tar.gz');
+            writeFileSync(archive, bytes);
+            execFileSync('tar', ['-xzf', archive, '-C', directory], { shell: false });
+            const binary = join(directory, tool);
+            console.log(execFileSync(binary, ['--version'], { encoding: 'utf8', shell: false }));
+            appendFileSync(process.env.GITHUB_ENV, `${tool.toUpperCase()}_BIN=${binary}\n`);
+            appendFileSync(process.env.GITHUB_PATH, `${directory}\n`);
+          }
+          NODE
+      - name: Overall coverage floor (90% each; 100% target), including bootstrap and rules
+        env:
+          COVERAGE_MODE: ${{ github.event_name == 'schedule' && 'nightly' || 'incremental' }}
+        run: node .superman/ci/coverage.ts --mode "$COVERAGE_MODE"
+      - name: Applicable raw G1–G11 (direct tools, no package scripts)
+        if: github.event_name == 'pull_request'
+        run: node .superman/ci/raw-gates.ts --receipt .superman-ci/bootstrap.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: bootstrap-${{ matrix.platform }}
+          path: .superman-ci/
+          if-no-files-found: warn

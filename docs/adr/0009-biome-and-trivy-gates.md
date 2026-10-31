@@ -19,7 +19,7 @@ Consistent with ADR 0004, there is no `.trivyignore` (or any Trivy ignore or con
 ## Consequences
 
 - Rule SUP-007 reports any `.trivyignore*` or `trivy.yaml` file. `biome.json` joins the protected paths, so rule changes need a spec PR.
-- Inline suppressions (`biome-ignore` and `trivy:ignore` comments) are the same kind of waiver as `archgate-ignore`. SUP-005 was adopted on 2026-10-30; implementation is a Gate 1 bootstrap prerequisite in spec §17, not yet present in the executable rules.
+- Inline suppressions (`biome-ignore` and `trivy:ignore` comments) are the same kind of waiver as `archgate-ignore`. SUP-005 was adopted on 2026-10-30 and implemented in the Gate 1 bootstrap; [bootstrap evidence](../../.superman/ci/bootstrap-evidence.md) records its verified scope and outstanding spec §17 prerequisites.
 - Biome covers only TS, JS and JSON. Polyglot repos (lx) map G10 to their own linters through config.
 - Pins checked on 2026-10-29: `@biomejs/biome@2.6.4` and Trivy `v0.76.1`. The linux-x64 tarball sha256 is `c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0`, verified against `trivy_0.76.1_checksums.txt`.
 - G11 always executes afresh because vulnerability databases are external inputs. Biome is cache-eligible only under ADR 0011's complete-input allowlist.
