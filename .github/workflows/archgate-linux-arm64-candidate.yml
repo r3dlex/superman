@@ -2,6 +2,9 @@ name: archgate-linux-arm64-candidate
 
 on:
   workflow_dispatch:
+  push:
+    branches: [spec/superman-v0]
+    paths: [".github/workflows/archgate-linux-arm64-candidate.yml"]
 
 permissions:
   contents: read
