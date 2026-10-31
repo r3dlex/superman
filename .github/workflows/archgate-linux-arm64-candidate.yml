@@ -21,11 +21,39 @@ jobs:
           curl -fsSL -o bun-linux-aarch64.zip https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-linux-aarch64.zip
           curl -fsSL -o SHASUMS256.txt https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/SHASUMS256.txt
           grep ' bun-linux-aarch64.zip$' SHASUMS256.txt | sha256sum -c
-          if ! command -v unzip >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y unzip
-          fi
-          unzip -q bun-linux-aarch64.zip
+          curl -fsSL -o node.tar.gz https://nodejs.org/dist/v26.13.0/node-v26.13.0-linux-arm64.tar.gz
+          curl -fsSL -o node-SHASUMS256.txt https://nodejs.org/dist/v26.13.0/SHASUMS256.txt
+          grep ' node-v26.13.0-linux-arm64.tar.gz$' node-SHASUMS256.txt | sha256sum -c
+          tar -xzf node.tar.gz
+          ./node-v26.13.0-linux-arm64/bin/node --input-type=module <<'JS'
+          import { inflateRawSync } from "node:zlib";
+          import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+          import { dirname } from "node:path";
+          const data = readFileSync("bun-linux-aarch64.zip");
+          let eocd = -1;
+          for (let i = data.length - 22; i >= Math.max(0, data.length - 65557); i--) {
+            if (data.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+          }
+          if (eocd < 0) throw new Error("Bun zip has no end-of-central-directory");
+          const count = data.readUInt16LE(eocd + 10);
+          let offset = data.readUInt32LE(eocd + 16);
+          for (let n = 0; n < count; n++) {
+            if (data.readUInt32LE(offset) !== 0x02014b50) throw new Error("Bun zip central directory is invalid");
+            const method = data.readUInt16LE(offset + 10);
+            const compSize = data.readUInt32LE(offset + 20);
+            const nameLen = data.readUInt16LE(offset + 28);
+            const extraLen = data.readUInt16LE(offset + 30);
+            const commentLen = data.readUInt16LE(offset + 32);
+            const localOff = data.readUInt32LE(offset + 42);
+            const name = data.subarray(offset + 46, offset + 46 + nameLen).toString();
+            const start = localOff + 30 + data.readUInt16LE(localOff + 26) + data.readUInt16LE(localOff + 28);
+            const compressed = data.subarray(start, start + compSize);
+            const bytes = method === 0 ? compressed : inflateRawSync(compressed);
+            if (name.endsWith("/")) mkdirSync(name, { recursive: true });
+            else { mkdirSync(dirname(name), { recursive: true }); writeFileSync(name, bytes); }
+            offset += 46 + nameLen + extraLen + commentLen;
+          }
+          JS
           install -m 755 bun-linux-aarch64/bun "$RUNNER_TEMP/bun"
           git clone --depth 1 --branch v0.61.0 https://github.com/archgate/cli.git archgate-src
           git -C archgate-src fetch --depth 1 origin f65d99f56d02757cca94d53f6d717333770e0170
