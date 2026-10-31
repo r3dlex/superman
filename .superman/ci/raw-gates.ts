@@ -31,6 +31,13 @@ const { values } = parseArgs({
 });
 const env = { ...fixtureEnvironment(), GIT_OPTIONAL_LOCKS: "0" };
 const git = (...args: string[]) => execFileSync("git", args, { env, encoding: "utf8", shell: false }).trim();
+function gitOptional(...args: string[]): string | undefined {
+  try {
+    return execFileSync("git", args, { env, encoding: "utf8", shell: false }).trim();
+  } catch {
+    return undefined;
+  }
+}
 function committedInputsMatch(sha: string): boolean {
   const format = git("rev-parse", "--show-object-format");
   if (!["sha1", "sha256"].includes(format)) throw new Error("Unknown Git object format");
@@ -100,20 +107,43 @@ try {
     if (process.env.GITHUB_EVENT_NAME !== "pull_request" || !process.env.GITHUB_EVENT_PATH)
       throw new Error("G9: missing CI pull-request identity evidence");
     const pr = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")).pull_request;
-    if (
-      !pr ||
-      !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(pr.head?.sha ?? "") ||
-      pr.base?.sha !== receipt.baseSha ||
-      pr.head.ref !== receipt.branch ||
-      process.env.GITHUB_SHA !== receipt.evaluatedSha ||
-      (pr.merge_commit_sha && pr.merge_commit_sha !== receipt.evaluatedSha)
-    )
-      throw new Error("G9: CI H/B/M identity mismatch");
+    const mismatches: string[] = [];
+    if (!pr) mismatches.push("pull_request evidence missing");
+    else {
+      if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(pr.head?.sha ?? ""))
+        mismatches.push(`head.sha=${String(pr.head?.sha)} is not a commit id`);
+      if (pr.base?.sha !== receipt.baseSha)
+        mismatches.push(`base.sha=${String(pr.base?.sha)} != ${String(receipt.baseSha)}`);
+      if (pr.head?.ref !== receipt.branch)
+        mismatches.push(`head.ref=${String(pr.head?.ref)} != ${String(receipt.branch)}`);
+    }
+    if (process.env.GITHUB_SHA !== receipt.evaluatedSha)
+      mismatches.push(`GITHUB_SHA=${String(process.env.GITHUB_SHA)} != ${String(receipt.evaluatedSha)}`);
+    if (mismatches.length) throw new Error(`G9: CI H/B/M identity mismatch: ${mismatches.join("; ")}`);
     const parents = git("rev-list", "--parents", "-n", "1", String(receipt.evaluatedSha)).split(" ").slice(1);
     if (parents.length !== 2 || parents[0] !== receipt.baseSha || parents[1] !== pr.head.sha)
       throw new Error("G9: tested merge is not the recorded base/head integration");
+    // The forge rebuilds refs/pull/<n>/merge after it serializes the synchronize
+    // payload, so the recorded merge pointer can still name an earlier merge of
+    // the same base while the tested tree is the current one. A merge commit is
+    // therefore identified by its parent pair, not by a byte-identical commit id
+    // (spec: CI proves the integration of that head with a recorded base).
+    const eventMergeSha = typeof pr.merge_commit_sha === "string" ? pr.merge_commit_sha : undefined;
+    if (eventMergeSha) {
+      if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(eventMergeSha))
+        throw new Error(`G9: CI H/B/M identity mismatch: merge_commit_sha=${eventMergeSha} is not a commit id`);
+      const recorded = gitOptional("rev-list", "--parents", "-n", "1", eventMergeSha);
+      if (recorded) {
+        const recordedParents = recorded.split(" ").slice(1);
+        if (recordedParents.length !== 2 || recordedParents[0] !== receipt.baseSha)
+          throw new Error(
+            `G9: CI H/B/M identity mismatch: merge_commit_sha=${eventMergeSha} does not integrate the recorded base ${String(receipt.baseSha)}`,
+          );
+      }
+    }
     receipt.headSha = git("rev-parse", "--verify", `${pr.head.sha}^{commit}`);
     receipt.testedMergeSha = receipt.evaluatedSha;
+    receipt.eventMergeSha = eventMergeSha ?? null;
   } else if (git("symbolic-ref", "--quiet", "--short", "HEAD") !== receipt.branch)
     throw new Error("G9: HEAD_REF does not match the local branch");
   if (

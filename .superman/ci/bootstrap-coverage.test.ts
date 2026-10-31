@@ -48,6 +48,20 @@ function integration(repo: Repo) {
   return { branch, head, base, merge: repo.git("rev-parse", "HEAD").trim() };
 }
 
+// The forge rebuilds refs/pull/<n>/merge after it serializes the synchronize
+// payload, so the payload can carry the merge of an earlier head over the same
+// base. This reproduces that earlier merge of the recorded base.
+function staleForgeMerge(repo: Repo, tuple: { branch: string; head: string; base: string; merge: string }) {
+  repo.git("switch", "--quiet", "-c", "stale/head", tuple.head);
+  repo.write("README.md", "earlier proposed documentation\n");
+  repo.commit();
+  repo.git("switch", "--quiet", "--detach", tuple.base);
+  repo.git("merge", "--quiet", "--no-ff", "-m", "stale integration", "stale/head");
+  const staleMerge = repo.git("rev-parse", "HEAD").trim();
+  repo.git("switch", "--quiet", "main");
+  return staleMerge;
+}
+
 function trivy(repo: Repo, version: string) {
   const binary = join(repo.root, ".tools/trivy");
   const scan = join(repo.root, ".git/trivy-scan.json");
@@ -270,7 +284,15 @@ test("raw CI rejects missing or mismatched H/B/M evidence even for a spec-kind g
   const repo = fixture(t, "spec/bootstrap");
   const tuple = integration(repo);
   const event = join(repo.root, ".git/event.json");
-  for (const scenario of ["no PR", "missing head", "wrong base", "wrong branch", "wrong checkout", "wrong merge"]) {
+  for (const scenario of [
+    "no PR",
+    "missing head",
+    "wrong base",
+    "wrong branch",
+    "wrong checkout",
+    "wrong merge",
+    "malformed merge",
+  ]) {
     await t.test(scenario, () => {
       repo.write(
         ".git/event.json",
@@ -284,7 +306,12 @@ test("raw CI rejects missing or mismatched H/B/M evidence even for a spec-kind g
                       ? undefined
                       : { sha: tuple.head, ref: scenario === "wrong branch" ? "spec/other" : tuple.branch },
                   base: { sha: scenario === "wrong base" ? repo.baseSha : tuple.base },
-                  merge_commit_sha: scenario === "wrong merge" ? tuple.head : tuple.merge,
+                  merge_commit_sha:
+                    scenario === "wrong merge"
+                      ? tuple.head
+                      : scenario === "malformed merge"
+                        ? "not-a-commit-id"
+                        : tuple.merge,
                 },
         }),
       );
@@ -300,6 +327,79 @@ test("raw CI rejects missing or mismatched H/B/M evidence even for a spec-kind g
       assert.equal(result.receipt.testedMergeSha, undefined);
     });
   }
+});
+
+test("raw CI binds the merge by its parent pair when the forge pointer names an earlier merge", (t) => {
+  const repo = fixture(t, "spec/bootstrap");
+  const tuple = integration(repo);
+  const staleMerge = staleForgeMerge(repo, tuple);
+  repo.write(
+    ".git/event.json",
+    JSON.stringify({
+      pull_request: {
+        head: { sha: tuple.head, ref: tuple.branch },
+        base: { sha: tuple.base },
+        merge_commit_sha: staleMerge,
+      },
+    }),
+  );
+  const result = repo.runGate("G9", [], {
+    GITHUB_ACTIONS: "true",
+    GITHUB_EVENT_NAME: "pull_request",
+    GITHUB_EVENT_PATH: join(repo.root, ".git/event.json"),
+    GITHUB_SHA: tuple.merge,
+  });
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.receipt.headSha, tuple.head);
+  assert.equal(result.receipt.baseSha, tuple.base);
+  assert.equal(result.receipt.testedMergeSha, tuple.merge);
+  assert.equal(result.receipt.eventMergeSha, staleMerge);
+});
+
+test("raw CI accepts a forge merge pointer that the tested clone cannot resolve", (t) => {
+  const repo = fixture(t, "spec/bootstrap");
+  const tuple = integration(repo);
+  const absent = "d".repeat(40);
+  repo.write(
+    ".git/event.json",
+    JSON.stringify({
+      pull_request: {
+        head: { sha: tuple.head, ref: tuple.branch },
+        base: { sha: tuple.base },
+        merge_commit_sha: absent,
+      },
+    }),
+  );
+  const result = repo.runGate("G9", [], {
+    GITHUB_ACTIONS: "true",
+    GITHUB_EVENT_NAME: "pull_request",
+    GITHUB_EVENT_PATH: join(repo.root, ".git/event.json"),
+    GITHUB_SHA: tuple.merge,
+  });
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.receipt.testedMergeSha, tuple.merge);
+  assert.equal(result.receipt.eventMergeSha, absent);
+});
+
+test("raw CI accepts a pull-request payload that carries no merge pointer", (t) => {
+  const repo = fixture(t, "spec/bootstrap");
+  const tuple = integration(repo);
+  repo.write(
+    ".git/event.json",
+    JSON.stringify({
+      pull_request: { head: { sha: tuple.head, ref: tuple.branch }, base: { sha: tuple.base } },
+    }),
+  );
+  const result = repo.runGate("G9", [], {
+    GITHUB_ACTIONS: "true",
+    GITHUB_EVENT_NAME: "pull_request",
+    GITHUB_EVENT_PATH: join(repo.root, ".git/event.json"),
+    GITHUB_SHA: tuple.merge,
+  });
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.receipt.headSha, tuple.head);
+  assert.equal(result.receipt.testedMergeSha, tuple.merge);
+  assert.equal(result.receipt.eventMergeSha, null);
 });
 
 test("raw CI verifies both merge-parent count and base/head order", async (t) => {

@@ -109,4 +109,5 @@ jobs:
         with:
           name: bootstrap-${{ matrix.platform }}
           path: .superman-ci/
+          include-hidden-files: true
           if-no-files-found: warn
