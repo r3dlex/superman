@@ -1,0 +1,67 @@
+{
+  "name": "superman-ai",
+  "version": "0.0.0",
+  "private": false,
+  "description": "Human-in-the-loop guardrails for AI coding agents: deterministic merge gates, a human approval on the head SHA, and pinned Matt Pocock skills.",
+  "keywords": [
+    "ai-agents",
+    "code-review",
+    "guardrails",
+    "claude-code-plugin",
+    "codex-plugin",
+    "opencode",
+    "archgate"
+  ],
+  "homepage": "https://github.com/r3dlex/superman#readme",
+  "bugs": {
+    "url": "https://github.com/r3dlex/superman/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/r3dlex/superman.git"
+  },
+  "type": "module",
+  "bin": {
+    "superman": "./dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "schema/",
+    "skills/",
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json"
+  ],
+  "engines": {
+    "node": ">=26"
+  },
+  "packageManager": "pnpm@12.16.1",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "archgate": "archgate check --strict",
+    "typecheck": "tsrs --noEmit",
+    "test": "vitest run",
+    "coverage": "node .superman/ci/coverage.ts",
+    "lint": "biome ci",
+    "knip": "knip",
+    "duplication": "jscpd --config .jscpd.json src"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
+    "@types/node": "26.6.6",
+    "@vitest/coverage-v8": "5.0.5",
+    "archgate": "0.61.0",
+    "c8": "12.0.0",
+    "jscpd": "5.4.2",
+    "knip": "6.43.0",
+    "tsrs": "0.20.1-ts7.1.0-beta",
+    "typescript": "7.1.0-beta",
+    "vitest": "5.0.5"
+  }
+}
