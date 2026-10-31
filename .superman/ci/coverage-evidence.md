@@ -1,6 +1,6 @@
 # Overall coverage enforcement — 2026-10-31
 
-**Outcome:** corrected local verification passes **358/358 tests and all eight stages**. Overall coverage is **96.05% lines, 95.30% statements, 93.00% branches and 95.95% functions**, independently above the approved floor. Independent Standards and Spec rechecks have no remaining hard findings in scope. The 100% target is not yet reached. The changes are committed and pushed on `spec/superman-v0`; hosted enforcement of the corrected tree and Gate 1 readiness are not established. Spec §5.4 and ADR 0014 own the acceptance contract; this file records evidence, not new policy or authority.
+**Outcome:** corrected local verification passes **360/360 tests and all eight stages**. Overall coverage is **96.05% lines, 95.30% statements, 93.00% branches and 95.95% functions**, independently above the approved floor. Independent Standards and Spec rechecks have no remaining hard findings in scope. The 100% target is not yet reached. The changes are committed and pushed on `spec/superman-v0`; hosted enforcement of the corrected tree and Gate 1 readiness are not established. Spec §5.4 and ADR 0014 own the acceptance contract; this file records evidence, not new policy or authority.
 
 ## Approved boundaries and tools
 
@@ -96,7 +96,7 @@ The verifier reports **`sourcePreserved: true` and `indexPreserved: true`**. Ori
 
 Publishing `294ed4c94c63d2d0bfed351e9b47a07feb542404` started hosted run **41185030855**. The two x64/macOS legs reached the coverage floor and failed there with **358 tests / 350 passed / 8 failed**. All 8 were fixture-environment defects, not coverage-accounting defects: five G11 tests died with `ENOENT` because `raw-fixture.ts` only created the `.tools` sandbox when the self-managed pnpm layout existed (a hosted runner has none), and three coverage tests compared an unresolved `mkdtemp` root against the command's `realpathSync`-resolved root (macOS `TMPDIR` is a symlink). The analysis, the corrections and the Linux-arm64 decision are recorded in [bootstrap evidence](bootstrap-evidence.md).
 
-After the corrections, the same command was re-measured locally on macOS-arm64 / Node **26.12.1** with the pinned archgate **0.61.0** at commit **`9caaaa79379285d47b4288832811577e8eb996b5`**: **358 passed / 0 failed / 0 skipped**, verdict `pass`, and the recorded metric table is **unchanged**, because the corrected files are test-only or excluded from the measured inventory.
+After the corrections, and after rebasing onto the upstream commits that landed during the repair (`cf5c103`, `5044412`), the same command was re-measured locally on macOS-arm64 / Node **26.12.1** with the pinned archgate **0.61.0** at commit **`3f7f71738a56c891fb4b563c62ba89dcec5349b0`**: **360 passed / 0 failed / 0 skipped**, verdict `pass`, and the recorded metric table is **unchanged**, because the corrected files are test-only or excluded from the measured inventory. The two upstream commits added two tests and changed one measured line in `pr-policy.ts` without moving a single covered/total count.
 
 | Metric | Covered / total | Percentage |
 |---|---|---|
@@ -107,12 +107,12 @@ After the corrections, the same command was re-measured locally on macOS-arm64 /
 
 | Artifact | SHA-256 |
 |---|---|
-| Coverage receipt | `911ba8527342422465de705a261151da86befd33ccf6f0451ab7aee5acdeed0a` |
+| Coverage receipt | `416d1556ea6550c47bd7ea4ff3fb9a4701cf9907972e7729bab1e7335c788437` |
 | Coverage summary | `2c15013c85bd7c4fcbb7db69de22e03f031ded76b18b2b2bd1dd183b9b3d4520` |
-| Raw bootstrap receipt | `d3c3afb0137e0adb1a4c5055c6199547989285b429a193a3fd0dc35bfa2a0997` |
-| Coverage inputs hash | `b6cb3abfadbebee2682adf6f5bc9e88526e0a5c3bb41c39d657e6713c7088041` |
+| Raw bootstrap receipt | `e1486d243fe3d33fe6f09c89dc4b1ea32a327bf03da2dee06ebcefec1a103c22` |
+| Coverage inputs hash | `bb3a0bfc59ac5d83bfb53f7eabdb8a1275713495de44ff0aa79a4b2aee6a6e08` |
 
-The coverage receipt records `requestedMode: incremental`, `execution: full`, `cachedFiles: 0`, the explicit inactive-ledger fallback, `mergeAuthority: none` and `evaluatedSha: 9caaaa79379285d47b4288832811577e8eb996b5`. All 17 inventoried source files are represented with zero skipped items.
+The coverage receipt records `requestedMode: incremental`, `execution: full`, `cachedFiles: 0`, the explicit inactive-ledger fallback, `mergeAuthority: none` and `evaluatedSha: 3f7f71738a56c891fb4b563c62ba89dcec5349b0`. All 17 inventoried source files are represented with zero skipped items.
 
 ## Remaining authority and hosted work
 
