@@ -88,7 +88,7 @@ _Avoid_: proof of TDD order, red-commit requirement
 
 **Waiver**:
 An authorized exemption that permits a merge without satisfying its applicable gate policy. Superman provides no such exemption; policy changes receive Gate 1 review.
-_Avoid_: override, exception, bypass
+_Avoid_: override, gate exception, bypass
 
 ### Governed knowledge
 
@@ -135,6 +135,24 @@ _Avoid_: automatic cleanup merge, policy repair
 **Context graph**:
 A source-navigation aid for agents, distinct from the authoritative change model and acceptance evidence.
 _Avoid_: gate graph, source of truth
+
+### CI execution
+
+**CI execution profile**:
+The reviewed execution conditions for a class of CI work, including its platform, runner route, environment identity and trust boundary.
+_Avoid_: runner label (only a selector), CI default (without scope)
+
+**Approved CI image**:
+An execution environment whose exact immutable identity and provenance have been reviewed for a CI execution profile. Approval does not transfer to another image sharing its name.
+_Avoid_: trusted tag, approved runner label
+
+**Hosted-runner exception**:
+A reviewed allowance to use GitHub-hosted runners for specified CI work without changing that work's gate obligations.
+_Avoid_: waiver, gate bypass, hosted-only policy
+
+**Runner fallback**:
+An explicitly authorized switch from an unavailable preferred CI execution profile to a reviewed alternative. It is not automatic failover or a remedy for a failed gate.
+_Avoid_: label fallback, automatic retry
 
 ### Change-aware CI
 

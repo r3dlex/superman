@@ -10,7 +10,7 @@
 
 **Kind:** behavior
 
-**Protected-path follow-up:** `spec/superman-v0-remote-cache` configures the URL/public key and separate restricted writer. Before activation André chooses account/bucket, public or authenticated-private reads, Environment restrictions and credentials/keys. Protected Environment credentials were selected for v0; no OIDC Worker or live infrastructure is implied by this ticket.
+**Protected-path follow-up:** `spec/superman-v0-remote-cache` configures the URL/public key and separate restricted writer. Before activation André chooses account/bucket, public or authenticated-private reads, Environment restrictions and credentials/keys, plus §8's actual restricted runner/image/access profile and disposable trust boundary. Public shared-fleet assignments do not establish an approved writer identity/image; a separate label/job/Environment on a reused project worker is insufficient. Protected Environment credentials were selected for v0; no OIDC Worker or live infrastructure is implied by this ticket.
 
 - [ ] Against an in-process HTTP stub, a `pull_request` run never sends PUT, even with write credentials present in its environment (test-first).
 - [ ] A dedicated verified main writer writes a signed entry and matches the SigV4 test vector; a main build/test job with planted credentials still does not PUT.
@@ -18,5 +18,6 @@
 - [ ] A network error or 5xx is a miss, never a failure of the gate.
 - [ ] `doctor` reports the remote tier as `read-only`, `read-write` or `off`.
 - [ ] Missing private read credentials skip remote without exposing data; wrong source run/attempt/ref/SHA/digest blocks signing/upload, and project hooks never execute in the privileged writer.
+- [ ] Writer fixtures validate producer/consumer execution identities and image/profile provenance (§5.5/§8); mismatched/unapproved identities cannot be signed into trusted passes. PR/project workers cannot access writer workers, credentials or persistent storage; lifecycle/isolation proof is an activation prerequisite outside the transport unit tests.
 
 Start with a fake main build job carrying credentials and prove that it cannot enter the writer operation.

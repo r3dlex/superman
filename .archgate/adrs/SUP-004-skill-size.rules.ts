@@ -22,7 +22,7 @@ export default {
           const lines = text.endsWith("\n") ? text.split("\n").length - 1 : text.split("\n").length;
           total += lines;
           const budget = BUDGETS[name];
-          if (budget === undefined) {
+          if (!Object.hasOwn(BUDGETS, name)) {
             ctx.report.violation({
               message: `Unknown overlay skill "${name}"; only ${Object.keys(BUDGETS).join(", ")} are allowed`,
               file,

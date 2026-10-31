@@ -10,7 +10,7 @@
 
 **Kind:** behavior
 
-**Protected-path follow-up:** `spec/superman-v0-gate-ci` switches raw CI to the parity-proved CLI, preserving reviewed configs/pins, three-platform checks and non-blocking drift. Retire bootstrap scripts only after equivalent failure fixtures pass; do not remove privileged-writer helpers by deleting `.superman/ci/` wholesale.
+**Protected-path follow-up:** `spec/superman-v0-gate-ci` switches raw CI to the parity-proved CLI, preserving reviewed configs/pins, §8 execution profiles/exceptions, three-platform checks and non-blocking drift. Unknown runner groups/labels/image identities or missing activation authority block routing changes, not silently select defaults. Retire bootstrap scripts only after equivalent failure fixtures pass; preserve historical evidence and privileged-writer helpers rather than deleting `.superman/ci/` wholesale.
 
 - [ ] A same-scope mutation regression fails with survivors; a legacy file improving 20%→30% does not fail merely because the whole-repo baseline is 80%. New-file initialization and nightly whole-repo comparisons are separate cases.
 - [ ] A fixture PR that adds a clone touching changed files fails G5.
@@ -18,5 +18,7 @@
 - [ ] Whether Stryker `--since` exists is checked (VERIFY) and the PR records the result; `--mutate` with changed files is used either way.
 - [ ] **(M1 amendment)** A fixture with a HIGH-severity vulnerable lockfile entry fails G11, and a fixture with a Biome error fails G10. Both show in the receipt with tool versions. A `.trivyignore` in a fixture makes G1 fail (SUP-007).
 - [ ] `superman gate nightly` runs full Stryker with `--force` and full jscpd.
+- [ ] Self-hosted and hosted-exception template fixtures preserve native macOS arm64/Linux x64/Linux arm64, all applicable gates and §5.4's independent 90% overall coverage floors/100% target. Nightly executes uncached full checks/coverage on all three; changing route cannot narrow the corpus or reuse nightly results.
+- [ ] §8.2 fallback fixtures keep unavailable self-hosted work blocked/queued unless an authorized reviewed routing change selects an approved alternative. Label lists never mean ordered failover; a gate failure never triggers a provider switch. Missing/skipped/cancelled selected legs or wrong platform/profile/image cannot satisfy required checks; new attempts retain prior evidence and fresh H/B/M bindings.
 
 Start with the improving-legacy-file fixture and a genuine same-scope regression.

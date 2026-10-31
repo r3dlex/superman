@@ -12,6 +12,8 @@
 
 **Protected-path follow-up:** `spec/superman-v0-baselines` commits the exact approved first measurements before ticket 02 or another source ticket proceeds. The initial matrix, configs, pin checks, protected-input/SUP-005 enforcement and raw G9 scripts belong to the earlier Gate 1 bootstrap, not this follow-up.
 
+**Proposed CI amendment:** spec §8/ADR 0015 do not admit this ticket or delegate runner setup to it. Chosen bootstrap profiles require evidenced isolation/runner/image identities and either approved-image self-hosted routes or scoped hosted-runner exceptions before admission (§17). §8.4's partial public runner names/job selectors do not prove current Superman access, complete registered labels or approved images; routing stays unchanged. The arm64 redistribution/registered-asset, fresh three-platform and applicable undersized-corpus blockers remain, with historical failures/evidence preserved.
+
 ## CLI and build
 
 - [ ] `superman --version` prints the package version and exits 0 through the Vitest process seam; tests run red locally, then green before committing.
@@ -25,6 +27,7 @@
 
 - [ ] Before merge, the pre-wired G9 verifier replays the candidate tests against base and candidate, accepting a missing-behavior/assertion failure but rejecting syntax/config/tool failures. No historical red commit is required.
 - [ ] All applicable raw gates actually execute before this merge on all three platforms, including the reviewed/checksummed arm64 Archgate build; metadata-only checks or arm64 `n/a` do not satisfy this criterion.
+- [ ] Chosen routes have §8's approval/identity/isolation evidence; hosted exceptions do not remove any platform or gate. Each required leg enforces §5.4's independent 90% overall coverage floors (100% target); nightly remains uncached full on all three platforms. Runner activation is earlier Gate 1 work, not part of this ticket.
 - [ ] First measured duplication/mutation scores, scopes, tool/config identities and survivors are reviewed on this head and recorded for the baseline follow-up; initialization is not represented as a comparison with nonexistent prior code.
 - [ ] `AGENTS.md` and `docs/agents/` exist as written by `setup-matt-pocock-skills`, with no Pocock file modified.
 - [ ] This PR edits no protected policy input; any tightening obeys metric direction. Initial raw CI, not merely the old two-job M1 checks, is green.

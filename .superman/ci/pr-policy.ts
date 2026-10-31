@@ -4,6 +4,7 @@
 // Runs on Node 26 type stripping, no dependencies. Ticket 06 (M7) replaces it
 // with `superman gate ci`. Protected path: changes only in spec-kind PRs.
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { posix } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
@@ -202,7 +203,7 @@ function effectivePolicy(base: string): { paths: Set<string>; findings: Finding[
               "Executable policy comments, slash expressions and templates require reviewed lexical modeling",
             );
           for (const match of text.matchAll(
-            /(?:^|[;\n}])\s*(?:import\s+(?:[^;]*?\sfrom\s*)?|export\s+[^;]*?\sfrom\s*)["']([^"']+)["']|\b(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)/gu,
+            /(?:^|[;\r\n\u2028\u2029}])\s*(?:import\s+(?:[^;]*?\sfrom\s*)?|export\s+[^;]*?\sfrom\s*)["']([^"']+)["']|\b(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)/gu,
           ))
             refs.push(match[1] ?? match[2]);
           if (
@@ -210,6 +211,19 @@ function effectivePolicy(base: string): { paths: Set<string>; findings: Finding[
           ) {
             throw new Error("Dynamic policy input loading is not modeled by the bootstrap");
           }
+          // Data literals/static includes are supported; ambient capabilities, reflection
+          // and computed access need reviewed modeling, not an expanding loader blacklist.
+          const executable = text
+            .replace(/"(?:\\[\s\S]|[^"\\\r\n])*"|'(?:\\[\s\S]|[^'\\\r\n])*'/gu, '""')
+            .replace(/\bmodule\s*\.\s*exports\b/gu, "");
+          if (
+            /\\|\b(?:process|globalThis|global|module|eval|Function|Reflect|Object|fetch|constructor|getBuiltinModule)\b|\brequire\b(?!\s*\(\s*""\s*\))|(?:[\w$)\]}]|[{,])\s*\[/u.test(
+              executable,
+            )
+          )
+            throw new Error(
+              "Module-loader capabilities, computed access and escaped identifiers require reviewed input modeling",
+            );
         } else {
           // No hook configuration is installed at bootstrap. Refuse unknown include
           // syntax rather than claiming a complete TOML/YAML/remote resolver.
@@ -232,7 +246,24 @@ function effectivePolicy(base: string): { paths: Set<string>; findings: Finding[
           ) {
             throw new Error("Local package policy aliases require reviewed input modeling");
           }
-          if (!ref.startsWith(".")) continue; // Package inputs are frozen by the protected lockfile.
+          // A lock can freeze a local package's destination without freezing its bytes.
+          if (!ref.startsWith(".")) {
+            // Only the existing external Vitest helper has a reviewed resolution profile.
+            // Pin/lock/workspace changes must establish a new profile at Gate 1.
+            if (
+              ref === "vitest/config" &&
+              file === "vitest.config.ts" &&
+              /^100(?:644|755) /u.test(tree.get("package.json") ?? "") &&
+              JSON.parse(readAt(revision, "package.json") ?? "{}").devDependencies?.vitest === "5.0.5" &&
+              JSON.parse(readAt(revision, ".superman/ci/bootstrap.json") ?? "{}").tools?.vitest === "5.0.5" &&
+              !tree.has("pnpm-workspace.yaml") &&
+              createHash("sha256")
+                .update(readAt(revision, "pnpm-lock.yaml") ?? "")
+                .digest("hex") === "cdeabea99c80d8d4bbb3bf09d7f9677defbcd94ec22a0064d9c0b1159091772b"
+            )
+              continue;
+            throw new Error("Package policy resolution requires reviewed input modeling");
+          }
           const relative = posix.normalize(posix.join(posix.dirname(file), ref));
           if (relative.startsWith("../") || posix.isAbsolute(relative))
             throw new Error("Policy input escapes the repository");
@@ -354,6 +385,7 @@ function checkHookToolPolicy(base: string): Finding[] {
   const gateFields = [
     ["engines", "node"],
     ["scripts", "coverage"],
+    ["knip"],
     ["overrides"],
     ["resolutions"],
     ...["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"].flatMap((section) =>

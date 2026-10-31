@@ -26,5 +26,6 @@ Preserve the already reviewed bootstrap configs; this ticket does not first enab
 - [ ] Partial staging, deletions, untracked files and hostile/space/newline filenames produce direct/hook scope parity with unchanged index/worktree/stash state; staged paths do not imply an unproved index-only execution sandbox.
 - [ ] Existing hook managers, hand-edited adapters and global hooksPath are refused/diffed without native install, hook replacement, `.old` backup chaining, `.github/hooks/lefthook.json` deletion or global Git-config changes. Parallel linked-worktree runs do not rewrite shared hook metadata.
 - [ ] Dependency provisioning uses lifecycle suppression; neither npm postinstall nor `LEFTHOOK=0` is mistaken for a safe installer. CI/nightly continue calling Superman directly.
+- [ ] CI templates require resolved reviewed execution profiles (§8/ADR 0015): prefer approved-image self-hosted routes, permit scoped hosted exceptions, and refuse missing selectors/image/access evidence rather than guessing or silently failing over. Regeneration preserves existing approved routing/checks; an `r3dlex` owner name is not adoption evidence. Concrete provider/cache/writer activation remains ticket 24's follow-up.
 
 Start with partial-staging direct/hook parity, then twice-run init with pre-existing reviewed configs and a conflicting hook manager.

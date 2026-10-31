@@ -19,5 +19,6 @@
 - [ ] Only the exec module imports `node:child_process`; SUP-002 passes on `src/` and fails on a fixture that imports it elsewhere or passes `shell: true`.
 - [ ] Mutation compares equivalent base/candidate file scopes; lower duplication and higher mutation tighten correctly. Metric-key deletion/addition and scope substitution cannot evade policy.
 - [ ] PR receipts distinguish H/B/M/evaluated SHA and per-gate/target cache outcomes; worktrees with a `.git` file write only to resolved Git metadata.
+- [ ] §5.5/§8 execution-identity fixtures bind requested/selected profile hashes, provider, actual runner/group/selectors, platform, runner software, image/provenance or hosted image version, exception/fallback authority and lifecycle evidence to the run/attempt. Unknown values stay explicit and cannot fabricate readiness; local evidence is not hosted proof. Golden tests use fixed identity inputs, not invented r3dlex fleet values.
 
 Start with invalid-config and H/B/M receipt fixtures through the CLI seam.

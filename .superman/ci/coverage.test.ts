@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
+  chmodSync,
   copyFileSync,
   mkdirSync,
   mkdtempSync,
@@ -185,6 +186,67 @@ test("coverage cannot silently omit repository runtime code outside the modeled 
   const result = repo.run();
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /Coverage scope does not model.*tools\/unmodeled\.ts/u);
+});
+
+test("coverage rejects an unmodeled extensionless Node program instead of reporting false 100 percent", (t) => {
+  const repo = coveredBootstrap(t);
+  repo.write(
+    "bin/helper",
+    `#!/usr/bin/env node\n${Array.from({ length: 100 }, (_, i) => `function missed${i}(flag) { return flag ? ${i} : -${i}; }`).join("\n")}\nconsole.log("ok");\n`,
+  );
+  chmodSync(join(repo.root, "bin/helper"), 0o755);
+  repo.write(
+    ".superman/ci/subject.test.ts",
+    'import assert from "node:assert/strict"; import { execFileSync } from "node:child_process"; import { test } from "node:test"; import { sign } from "./subject.ts"; test("both sides and Node subprocess", () => { assert.equal(sign(1), "positive"); assert.equal(sign(0), "other"); assert.equal(execFileSync(process.execPath, ["bin/helper"], { encoding: "utf8", shell: false }).trim(), "ok"); });\n',
+  );
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /Coverage scope does not model.*bin\/helper/u);
+  assert.equal(result.directory, undefined, "An incomplete inventory cannot publish passing measurements");
+});
+
+test("coverage never drops unmodeled Node programs without shebangs", async (t) => {
+  for (const [file, executable, executed] of [
+    ["bin/helper", true, true],
+    ["bin/helper", false, false],
+    ["bin/helper.data", false, true],
+  ] as const) {
+    await t.test(`${file}, executable=${executable}, executed=${executed}`, (t) => {
+      const repo = coveredBootstrap(t);
+      repo.write(
+        file,
+        `${Array.from({ length: 100 }, (_, i) => `function missed${i}(flag) { return flag ? ${i} : -${i}; }`).join("\n")}\nconsole.log("ok");\n`,
+      );
+      if (executable) chmodSync(join(repo.root, file), 0o755);
+      if (executed)
+        repo.write(
+          ".superman/ci/subject.test.ts",
+          `import assert from "node:assert/strict"; import { execFileSync } from "node:child_process"; import { test } from "node:test"; import { sign } from "./subject.ts"; test("both sides and Node subprocess", () => { assert.equal(sign(1), "positive"); assert.equal(sign(0), "other"); assert.equal(execFileSync(process.execPath, ["--input-type=commonjs", "--eval", ${JSON.stringify(`require("./${file}")`)}], { encoding: "utf8", shell: false }).trim(), "ok"); });\n`,
+        );
+      const result = repo.run();
+      assert.equal(result.status, 1, result.output);
+      assert.match(result.output, /Coverage scope does not model repository runtime code/u);
+      assert.ok(result.output.includes(file), result.output);
+      assert.equal(result.directory, undefined, "Unmodeled runtime cannot publish passing measurements");
+    });
+  }
+});
+
+test("coverage cannot hide observed runtime behind a preserved symlink identity", (t) => {
+  const repo = coveredBootstrap(t);
+  repo.write(
+    "bin/body.data",
+    `${Array.from({ length: 100 }, (_, i) => `function missed${i}(flag) { return flag ? ${i} : -${i}; }`).join("\n")}\nconsole.log("ok");\n`,
+  );
+  symlinkSync("body.data", join(repo.root, "bin/helper.data"));
+  repo.write(
+    ".superman/ci/subject.test.ts",
+    `import assert from "node:assert/strict"; import { execFileSync } from "node:child_process"; import { test } from "node:test"; import { sign } from "./subject.ts"; test("both sides and symlinked Node subprocess", () => { assert.equal(sign(1), "positive"); assert.equal(sign(0), "other"); assert.equal(execFileSync(process.execPath, ["--preserve-symlinks", "--input-type=commonjs", "--eval", ${JSON.stringify('require("./bin/helper.data")')}], { encoding: "utf8", shell: false }).trim(), "ok"); });\n`,
+  );
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /Coverage scope does not model repository runtime code: bin\/helper\.data/u);
+  assert.equal(result.directory, undefined, "An observed alias cannot publish passing measurements");
 });
 
 test("coverage policy cannot add an exclusion for untested runtime code", (t) => {

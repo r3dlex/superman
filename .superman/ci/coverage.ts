@@ -14,8 +14,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createRequire, stripTypeScriptTypes } from "node:module";
-import { join, matchesGlob } from "node:path";
-import { pathToFileURL } from "node:url";
+import { extname, isAbsolute, join, matchesGlob, relative, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { fixtureEnvironment } from "./fixture-env.ts";
 import { runOwned } from "./replay.ts";
 
@@ -108,7 +108,11 @@ async function main() {
   );
   for (const file of files) {
     if (
-      /\.[cm]?[jt]sx?$/u.test(file) &&
+      (/\.[cm]?[jt]sx?$/u.test(file) ||
+        (lstatSync(file).isFile() &&
+          ((lstatSync(file).mode & 0o111) !== 0 ||
+            readFileSync(file, "utf8").startsWith("#!") ||
+            (!extname(file) && ![".gitignore", ".npmrc", "CODEOWNERS", "LICENSE", "NOTICE"].includes(file))))) &&
       !excluded(file) &&
       file !== "vitest.config.ts" &&
       !sources.includes(file) &&
@@ -184,6 +188,25 @@ async function main() {
     readdirSync(raw).map((file) => {
       const report = JSON.parse(readFileSync(join(raw, file), "utf8"));
       if (!Array.isArray(report.result)) throw new Error("Coverage has invalid native V8 evidence");
+      // Reject observed owned programs before filtering; a filename cannot hide runtime.
+      for (const script of report.result) {
+        if (typeof script.url !== "string") throw new Error("Coverage has invalid native V8 script identity");
+        if (!script.url.startsWith("file:")) continue;
+        const path = fileURLToPath(script.url);
+        const owned = relative(root, path);
+        if (
+          owned === ".." ||
+          owned.startsWith(`..${sep}`) ||
+          isAbsolute(owned) ||
+          (owned.split(sep).includes("node_modules") && !files.includes(owned)) ||
+          excluded(owned) ||
+          owned === "vitest.config.ts" ||
+          sources.includes(owned) ||
+          product.includes(owned)
+        )
+          continue;
+        throw new Error(`Coverage scope does not model repository runtime code: ${owned}`);
+      }
       return { result: report.result.filter((script: { url: string }) => urls.has(script.url)) };
     }),
   );

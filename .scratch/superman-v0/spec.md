@@ -4,10 +4,12 @@
 
 Design agreed with André on 2026-10-30. Product implementation is blocked on the Gate 1 bootstrap checklist in §17; ticket 01 must pass the initial raw checks before merging. **(M1 amendment 4)** This amendment includes the approved document reconciliation plus SUP-004/SUP-009 and interim path-policy enforcement/fixtures. It does not implement M7c, install hooks or change credentials/hosted settings.
 
-**Next action:** complete §17's Gate 1 bootstrap work, obtain André's approval, then admit ticket 01. The first usable release includes all v0 tickets, including M7b, verified-project typechecking and **M7c**; Go and deploy execution (25–26) remain post-v0.
+**Proposed CI amendment (2026-10-31, existing PR #1):** §8 makes approved-image self-hosted execution the preferred r3dlex default, with explicit hosted-runner exceptions rather than exclusivity. This local amendment changes planning/rationale/tickets only; runner routing, bootstrap manifests, historical evidence and ticket status are unchanged. New execution-profile/receipt/cache requirements remain unimplemented and unapproved for activation.
+
+**Next action:** review this amendment and resolve §8.4's runner inventory/authorization gaps for the chosen routes, then complete §17's Gate 1 bootstrap work and obtain André's approval/merge before admitting ticket 01. An approved hosted-runner exception can satisfy the routing policy; self-hosted capacity is not an exclusive prerequisite. The first usable release includes all v0 tickets, including M7b, verified-project typechecking and **M7c**; Go and deploy execution (25–26) remain post-v0.
 
 *Spec for Gate 1 (M1), originally reshaped from André's 2026-10-29 draft into Matt Pocock's `to-spec` template at `59db609eb1e18aaf59b63284d0e52255aff0c63c`. Numbered sections are retained for stable cross-references. Older M1 amendment markers identify provenance; the reconciled operational text and the 2026-10-30 decision index below are current.*
-*Historical draft sources: `decisions.md` ("hitl" there meant `superman`), `zoom-out-northstar-autobahn-archgate.md`, `survey.md`, `magus-notes.md`, both Gemini chats and the cited upstream repos. The 2026-10-30 interview supersedes conflicting draft recommendations; current operational rules live in this spec, meanings in `GLOSSARY.md`, and rationale in `docs/adr/`. The 2026-10-31 coverage amendment is in §5.4 and ADR 0014.*
+*Historical draft sources: `decisions.md` ("hitl" there meant `superman`), `zoom-out-northstar-autobahn-archgate.md`, `survey.md`, `magus-notes.md`, both Gemini chats and the cited upstream repos. The 2026-10-30 interview supersedes conflicting draft recommendations; current operational rules live in this spec, meanings in `GLOSSARY.md`, and rationale in `docs/adr/`. The 2026-10-31 coverage amendment is in §5.4 and ADR 0014; the proposed CI execution amendment is in §8 and ADR 0015.*
 *Conventions: **VERIFY** means evidence is still required, not permission to assume success. Public pin/checksum metadata was checked on 2026-10-30; platform execution and live setup remain unproved. §15 records resolved choices and stage-bound manual work. `.archgate/adrs/` contains the current executable companions; §17 identifies the code still needed to implement the amended design.*
 
 ## Problem Statement
@@ -372,6 +374,7 @@ Normal TDD runs red locally, implements, runs green, then commits both together.
 ```
   Each result identifies its gate and target; a hit adds `cached: { "key": "sha256-…", "tier": "remote", "producerSha": "…" }` to that result. A shared target can have a cached test result and a fresh typecheck result without conflating them.
 - **merge-ready receipt:** records PR/author/approver/review IDs, `reviewCommitId == headSha`, tested base/merge identities, producing workflow/job/check identities, current base and verdict. The final squash commit is distinct from the reviewed head and synthetic merge; audit checks their relationship, not SHA equality.
+- **Execution identity (proposed CI amendment, §8):** each CI gate/coverage receipt also binds the repository, workflow revision, job, run/attempt and H/B/M/evaluated revision to its requested and selected execution-profile IDs/hashes, provider, requested/observed OS/architecture, exact routing selectors and actual runner ID/name/group ID/name where applicable. Record runner application version/content identity, approved image URI plus immutable digest or VM-image identity, build-recipe revision/provenance and approval reference. Hosted exceptions instead record the exception reference and observed provider image version/release evidence; a hosted label is not an immutable image pin. Record fallback reason/authorization and superseded attempt when applicable, plus external worker-lifecycle/isolation evidence. Local runs identify themselves as local supporting evidence, not hosted profile proof. Unknown fields are explicit, not invented. Admission verifies required identities against protected policy and forge/operator provenance, not candidate-supplied environment variables alone; unknown or mismatched required identity/isolation blocks activation/admission. Per-run worker IDs belong in receipts, not automatically in reusable cache keys (§5.7). Existing historical receipts lack this new contract and retain their original scope; they are not retroactively upgraded.
 - **Purpose:** receipts are evidence for `audit` and the metrics. They do not replace the forge as the record of approval.
 
 #### 5.6 Skills installation and context budget
@@ -498,7 +501,9 @@ Non-literal TS imports broaden the package's test selection. Elixir CI does not 
 
 **Accepted G5 limit:** a clone between a changed file and an unscanned unrelated file, or a total-percentage regression, may be found only after merge. Full main/nightly failures remain incidents; they are not claimed as successful pre-merge enforcement.
 
-**Gate cache.** The key is sha256 of canonical `{ schema, gate, target, argv, checkerIdentity, tools, policyHash, os, arch, env, inputs, comparisonInputs }`. Identities include actual checker/tool content or locked integrity, not a mutable version label alone. Inputs include runtime assets, transitive dependencies, effective config and global paths; comparison gates also bind base/baseline content and scope. Store passes only and record each gate/target hit's key, tier and producer.
+**Gate cache.** The key is sha256 of canonical `{ schema, gate, target, argv, checkerIdentity, tools, policyHash, executionIdentity, os, arch, env, inputs, comparisonInputs }`. Identities include actual checker/tool content or locked integrity, not a mutable version label alone. Inputs include runtime assets, transitive dependencies, effective config and global paths; comparison gates also bind base/baseline content and scope. Store passes only and record each gate/target hit's key, tier and producer.
+
+**Execution inputs (proposed CI amendment).** `executionIdentity` binds provider, effective execution-profile/trust-policy hash, immutable self-hosted image identity or observed hosted image version, runner application identity and relevant host OS/kernel/libc, CPU/virtualization and toolchain/environment characteristics. An image digest alone does not describe a container's host. Inventory those inputs per gate; unmodeled or unverifiable inputs disable result/unchanged-coverage reuse and execute uncached full checks. A route, image, runner software or relevant host-input change must miss even with identical source and tool version labels. Ephemeral worker names/IDs and run/attempt IDs remain receipt provenance, not cache-key entropy unless they affect execution. Actions restore prefixes only locate candidate entries; validate the complete inner key and trusted producer before reuse, including across a hosted fallback. Missing image/isolation approval still blocks route activation under §8; fresh execution is not a substitute for that approval. Coverage also retains §5.4's complete-inventory/provenance contract, and nightly never reads gate/coverage-result caches.
 
 | Tier | Storage and trust |
 |---|---|
@@ -684,7 +689,97 @@ flowchart TD
 
 ### 8. CI templates
 
-**GitHub Actions first.** `superman init` renders `.github/workflows/superman.yml`. The sketch is not an installed workflow; ticket 24 must supply and test the concrete data-only privileged writer. Default PR checkout evaluates the synthetic merge, while the CLI separately binds H/B/M from the event and forge.
+**Current position — proposed Gate 1 CI amendment, 2026-10-31.** The local `.github/workflows/ci.yml` and `.superman/ci/bootstrap.json` still declare the three GitHub-hosted bootstrap legs. This amendment does not reroute them or authorize infrastructure/hosted changes. §8.1–8.4 is the proposed execution contract; §8.5 is a hosted-exception sketch, not an activated default. Meanings live in `GLOSSARY.md`; ADR 0015 records why.
+
+#### 8.1 Preferred default and bounded hosted-runner exceptions
+
+**Organization-wide intent, repository-local adoption.** For r3dlex CI, prefer self-hosted runners using approved immutable images when their platform support, isolation and authorized capacity are proved. This is a preference, not a self-hosted-only requirement. This PR governs Superman only: it neither changes another repository nor proves organization policy/settings or adoption there. Other repositories need their own reviewed adoption and actual inventory; `init` must not infer adoption from the owner name.
+
+Every execution profile is protected Gate 1 policy. Bind its repository/workflow/jobs, allowed events/refs, trust class, OS/architecture, provider, exact group/labels, image policy and proof, permitted authorities, and any hosted exception/fallback. Separate the stable platform check identity from the execution route so changing providers does not erase a required leg. Exception records identify the reason, scope, André's approval reference and review/expiry condition; eligible categories below are not self-authorizing runtime choices.
+
+| Hosted-runner exception | Scope and review condition |
+|---|---|
+| Transitional Gate 1 bootstrap | Proposed for this PR's existing `ci.yml` bootstrap jobs on the three routes in §8.4. Revisit at the next runner-routing amendment; all §17 blockers and Gate 1 approval remain. The absence of self-hosted capacity alone need not block an approved hosted bootstrap. |
+| Untrusted public/fork PR execution | Use an explicitly approved hosted profile when self-hosted isolation/public-PR access has not been demonstrated safe. GitHub warns against public-repo self-hosting; read-only tokens and job cleanup alone do not prove safety. Revisit only with reviewed isolation/access evidence. |
+| Capacity, maintenance/outage, missing platform or provider-parity verification | A reviewed record names the affected jobs/platforms/events and the alternative hosted route, with an end date or explicit re-review condition. Availability is not permission to omit a platform or relax a gate. Apply §8.2 rather than silently switching. |
+| Provider-required npm OIDC publisher | The separate `publish` job stays GitHub-hosted `ubuntu-24.04` (§12.2). npm currently does not support self-hosted trusted publishing; recheck the provider requirement at release activation. This does not require build/test/scan, uploads or cache writers to be hosted. |
+
+All routes preserve native **macOS arm64, Linux x64 and Linux arm64** verification, exact tool/action pins, applicable G1–G12, §5.4's independent **90% lines/statements/branches/functions floors with 100% target**, mutation/duplication ratchets and H/B/M approval evidence. G11 remains required on Linux x64; existing applicability and G12 activation rules do not change. Full main selection, permitted cache reuse and **uncached full nightly execution on all three platforms** remain as specified; a route exception never becomes a waiver.
+
+#### 8.2 Explicit fallback, not label failover
+
+1. **Select before dispatch from reviewed policy.** v0 has no automatic failover service. An authorized human selects a pre-reviewed hosted alternative through a Gate 1-reviewed protected routing change; an ordinary rerun retains the original routing. Untrusted PR content, arbitrary inputs or environment variables cannot choose another trust profile. Without a scoped exception and current authorization, leave routing/activation blocked.
+2. **Treat unavailable capacity as unavailable.** GitHub matches all supplied labels and the selected group; these are constraints, not ordered alternatives. An unmatched/offline self-hosted route queues and ultimately fails under GitHub's queue policy, not on a hosted runner. A job `timeout-minutes` is not a queue-failover mechanism. Retain the unavailable attempt and its reason; an authorized operator must explicitly handle a queued attempt before replacement, rather than expecting labels to reroute it.
+3. **Execute fresh evidence for the selected route.** After an authorized switch, verify the actual platform/profile/image, rerun the complete applicable checks and bind the new run/attempt/H/B/M and exception to receipts. Revalidate current head/base/policy rather than splicing successes from unrelated attempts; preserve previous failures. An assertion, coverage, security or policy failure is not a capacity event and cannot trigger fallback to obtain green. Nightly stays uncached full even on the alternative.
+4. **Keep required checks mandatory.** Each platform must have a successful selected execution with the expected workflow/job/App producer. Skipped/missing/queued/cancelled required work is not success. If implementation uses alternative jobs, prove the required-check accounting with negative fixtures before activation; a success-only aggregator cannot hide an unexecuted leg. Any check-context rename also needs protected-manifest reconciliation and separately authorized hosted-setting updates. This amendment changes neither.
+
+The fallback policy introduces no `pull_request_target`, privileged PR-head `workflow_run`, or additional release trigger. §12.2's André-tag-only release authorization is unchanged.
+
+#### 8.3 Disposable workers, images and privilege separation
+
+| Boundary | Required proof before activating that profile, and why |
+|---|---|
+| Single-job worker | Use a fresh disposable VM or demonstrably equivalent isolated worker per job, with fresh workspace/HOME/temp and at-most-one-job registration. External lifecycle control must destroy/wipe it and retain logs/evidence on success, failure, cancellation and timeout before capacity is reused. Ephemeral deregistration, workspace deletion or a container on a persistent shared host alone is not proof of cleanup/isolation. |
+| Untrusted execution | PR code, dependencies and tests receive only the existing minimal read-only token; no approver/App key, bot/model, publish, cache-sign/write or runner-management credentials. No host home/keychain/SSH-agent/Docker socket, privileged mounts or access to metadata/internal management services. Network/storage/process boundaries must prevent access to other jobs, repositories, trusted workers and control-plane authority. Unknown boundaries block self-hosted public/fork routing; use a reviewed hosted exception instead. The accepted same-user **local agent** risk (§9.3) is not permission to share a developer machine with CI. |
+| Privileged consumers | Cache/safety writers, wiki maintenance, npm publication and optional release uploads use separately restricted profiles/workers/access scopes. A separate job name, label or GitHub Environment on the same mutable worker is insufficient. PR/project execution cannot reach these workers; privileged jobs validate run/attempt/ref/SHA/artifact digests as data and do not install/build/test or execute project hooks. Wiki maintenance alone may execute its reviewed agent/skill with bounded bot/model authority (§6.5), never PR code or cache/publish authority. |
+| Approved immutable images | Pin the actual OCI digest or immutable VM-image version/snapshot and artifact checksum as applicable, plus build-recipe revision, provenance, review/approval and OS/architecture. Tags, runner labels, base-image names and tool version strings alone are insufficient. Approval must cover the full worker/host trust boundary, not just a container's contents; macOS requires a real macOS arm64 worker, not a Linux image or an emulated substitute. Images contain no embedded credentials. Image build/publication/provisioning remain separately authorized control-plane work. |
+| Runtime identity and updates | Verify actual platform and image against the profile before checks. Record runner application version/content identity and host inputs (§5.5/§5.7). Self-hosted image/runner updates require refreshed review/evidence; an unrecorded auto-update must not inherit approval or cached results. Hosted image evolution is permitted only within the exception's reviewed provider policy, with observed version/release evidence and cache invalidation, not a claimed immutable pin. Keep runner security updates current through the reviewed image lifecycle, not indefinite pinning of an unsupported agent. |
+| Caches and artifacts | No shared writable workspace, HOME or cross-trust persistent local cache between jobs; only §5.7's isolated/validated cache tiers and provenance-checked artifacts may cross boundaries. Hosted exceptions record their observed provider image version/release rather than inventing an immutable pin for a moving hosted label. Missing execution-input evidence forces fresh checks, while missing required isolation/approval still blocks activation. |
+
+#### 8.4 Actual inventory and blocked activation
+
+**Current workflow plus public runner-source/job evidence (2026-10-31):**
+
+| Required platform | Current hosted `runs-on` label | Required bootstrap check in `bootstrap.json` | Self-hosted group ID/name, exact labels and approved image identity |
+|---|---|---|---|
+| macOS arm64 (`darwin-arm64`) | `macos-15` | `bootstrap (macos-15)` | No verified Superman route/image from the checked source/job evidence |
+| Linux x64 (`linux-x64`) | `ubuntu-24.04` | `bootstrap (ubuntu-24.04)` | Example x64 labels are not proof of a native x64 worker; route/image unverified |
+| Linux arm64 (`linux-arm64`) | `ubuntu-24.04-arm` | `bootstrap (ubuntu-24.04-arm)` | Main/probe assignments identify workers below, group ID 1/name `default`; Superman access and approved image unverified |
+
+The source workflow is `.github/workflows/ci.yml`; the protected manifest binds all three jobs to `github-actions`, App **15368**. These hosted aliases do not identify their actual image builds; observed image versions still require run evidence. Public evidence now supplies a **partial observed inventory**, not complete current registration, a privileged-pool assignment or Superman authorization. No authenticated runner/settings inspection was performed; missing evidence does **not** mean the organization has no runners.
+
+The identified project is [`r3dlex/github-runners-for-repo`](https://github.com/r3dlex/github-runners-for-repo), a GitHub Actions runner manager, not a GitLab runner/image catalog. At inspected `main` commit [`8e878b1`](https://github.com/r3dlex/github-runners-for-repo/tree/8e878b1de0b29d58f58887d9b702ce91901d7b70), the following public assignments are independently observable without credentials:
+
+| Observed worker | Public run/job evidence | What it establishes |
+|---|---|---|
+| `r3dlex-runner-3`, runner ID **117** | [Run 41175485646, attempt 1, job 124462043304](https://github.com/r3dlex/github-runners-for-repo/actions/runs/41175485646/job/124462043304), 2026-10-31 06:10 UTC | Group ID **1**, exact API name **`default`**; requested job labels **`self-hosted`, `ubuntu-latest`**; successful heartbeat on the recorded source |
+| `r3dlex-runner-4`, runner ID **118** | [Run 41126704453, attempt 1, job 124306979103](https://github.com/r3dlex/github-runners-for-repo/actions/runs/41126704453/job/124306979103), 2026-10-30 20:53 UTC | Same observed group and requested labels; successful heartbeat on the recorded source |
+| `r3dlex-linux-arm64-1`, runner ID **204** | [Probe run 41191935183, attempt 1, job 124510317292](https://github.com/r3dlex/github-runners-for-repo/actions/runs/41191935183/job/124510317292), 2026-10-31 10:14–10:17 UTC | Group **1/`default`**; requested **`[self-hosted, Linux, ARM64, r3dlex-linux-arm64]`**; Archgate tests failed, build/package/upload skipped |
+| `r3dlex-linux-arm64-4`, runner ID **206** | [Newer probe run 41192313096, attempt 1, job 124511414201](https://github.com/r3dlex/github-runners-for-repo/actions/runs/41192313096/job/124511414201), 2026-10-31 10:20–10:21 UTC | Same group/selectors; latency-budget tests failed, full suites/build/package/upload skipped; not a successful replacement for the earlier failure |
+
+The pinned [AGENTS source](https://github.com/r3dlex/github-runners-for-repo/blob/8e878b1de0b29d58f58887d9b702ce91901d7b70/AGENTS.md) describes the two `r3dlex-runner-*` workers as **aarch64 in a persistent Colima VM**; this does not establish the newer probe workers' host/image topology or four simultaneously available machines. Job labels are requested constraints, not the complete registered label set or an architecture/image attestation; `ubuntu-latest` here does not imply GitHub-hosted Ubuntu or Linux x64. [`config.py`](https://github.com/r3dlex/github-runners-for-repo/blob/8e878b1de0b29d58f58887d9b702ce91901d7b70/github_runners_for_repo/config.py) defaults to `self-hosted,linux,x64` and group `Default`, while `.env.example`/README add `r3dlex-org`. These are conflicting defaults/examples, not verified fleet configuration. Adding an extra opt-in label does not prevent a runner matching an existing less-specific `self-hosted` request; access restrictions and explicit platform selectors are still needed.
+
+**Solution suitability:** this inspected manager installs official native `actions/runner` packages and persistent launchd/systemd services. Its ordinary registration token is not GitHub's single-job JIT configuration; the configure path supplies neither `--ephemeral` nor disposable-worker lifecycle proof. The retained `github-runner:latest` config default is unused by that native lifecycle, not a published immutable image. The source's host provisioning, shared disk cleanup and Archgate arm64 source-build recipes are references, not approved Superman image/asset provenance: provisioning defaults to Node 22 and Archgate v0.60.0 rather than Superman's reviewed pins, and its runner archive installer performs no digest verification. Its test workflow's `continue-on-error`/hosted fallback after self-hosted failure neither handles unmatched queue capacity nor satisfies §8.2's gate-failure policy. Keep the relevant concepts, not these routing/security/toolchain defaults. Detailed source/version findings belong in [runner research](runner-research.md); neither source capabilities nor past job assignments activate this repository.
+
+**Latest-version check (2026-10-31, independently rechecked 10:22 UTC):** upstream [`actions/runner` stable **2.338.2**](https://github.com/actions/runner/releases/tag/v2.338.2), published **2026-10-26**, has native archives for all three required platforms. The manager has no observed GitHub releases/tags; `main` remains `8e878b1…`, and its **2.334.0** default is unchanged in the inspected newer heads. That default is not the installed fleet version. Newer available work includes open PRs **#30** (GitHub CLI provisioning), **#31** (cleanup) and **#33** (tier health), plus the probe advanced to **`d1f126572cf43ab57254122e61a6385dedef8748`**; these are not merged/adopted image releases. The two probe failures above preserve the existing Archgate arm64 asset/platform blocker. Record reviewed immutable revisions/asset identities and prove compatibility before selecting a pin; progressive upstream rollout also needs repository-specific availability checks. Version research alone changes no Superman tool pin or image approval.
+
+PR #33 at [`fa89cc3`](https://github.com/r3dlex/github-runners-for-repo/blob/fa89cc3943ced2458a0ab876ff9c4efadabe6ed7/.github/workflows/runner-health.yml) proposes these exact tier selectors. Tier strings are matrix names, **not runner groups**, and the inspected run list does not prove this current proposal ran successfully:
+
+| Proposed tier | Exact requested labels | Expected platform, not current capacity proof |
+|---|---|---|
+| `mac-arm64-primary` | `[self-hosted, macOS, arm64-primary]` | macOS arm64 |
+| `linux-arm64-standard` | `[self-hosted, Linux, arm64-standard]` | Linux arm64 |
+| `linux-x64` | `[self-hosted, Linux, X64]` | Linux x64 |
+
+**Available building blocks, not selected fleet solutions:** the public Linux image `ghcr.io/actions/actions-runner:2.338.2` has an index plus amd64/arm64 digests recorded in [runner research §3](runner-research.md). Latest stable ARC **0.15.1** offers Kubernetes runner scale sets; Scale Set Client **0.5.0** is a preview client for custom lifecycle control; Tart **2.41.1** offers Apple Silicon VM tooling. These do not collectively prove an installed three-platform fleet: Linux containers do not supply macOS, example scale-set names are not registered r3dlex routes, and a moving macOS template tag is not an approved immutable VM identity. Evaluate isolated per-job lifecycle/access/image provenance before any selection; public digests are not r3dlex approvals. The manager's older Docker branch is historical, not the latest solution.
+
+The pinned README also reports exhausted spending limits preventing hosted jobs for private organization repositories, with public repositories unaffected. Treat that as a source-reported operational limitation, not current billing/settings verification: confirm hosted-route availability before approving a private-repository fallback. This public Superman amendment changes no billing or other repository's posture.
+
+Historical Bun build-image and local Node Linux-arm64 toolchain digests in [bootstrap evidence](../../.superman/ci/bootstrap-evidence.md#local-linux-arm64-archgate-self-build-candidate) identify those recorded experiments only (see also “Stable policy/rule platform snapshot” and “Native evidence identity” there). They are not approved fleet images, registry publications, runner-group assignments or permission to reuse those local images. Preserve that evidence, including failures and the unpublished Archgate candidate.
+
+| Missing fact/authorization | Responsible party and completion criterion |
+|---|---|
+| Actual self-hosted routes for each platform | Extend the partial public observations above with a sanitized, dated inventory from André or an explicitly authorized organization runner administrator: current runner scope/group IDs/names, complete labels/scale-set selectors, Superman/workflow/public-PR access and native OS/architecture/capacity. Observed shared group `default` does not establish a restricted/public-PR-safe route. Do not invent missing groups or assume default labels/ARC support. |
+| Approved images and worker lifecycle | The runner/image operator (unassigned until André designates one) supplies immutable image locations/identities, recipe revisions, provenance/approval, runner software/host inputs and destruction/network/isolation proof. No image is approved by this amendment alone. |
+| Privileged profile separation | André designates actual restricted routes for cache/safety writers and wiki maintenance, and verifies their trust/access/Environment boundaries before their respective activation follow-ups. npm's hosted publish route remains §12.2's separate exception; no privileged fleet identity is inferred. |
+| Hosted exception/fallback authority | André reviews the exact job/platform/event/ref scope, routes, reason and expiry/re-review conditions; the transitional bootstrap exception is proposed here, not pre-approved. Missing self-hosted inventory may be resolved by that scoped hosted exception, not by fabricating self-hosted values. |
+| Activation evidence and permission | The authorized implementer supplies profile/receipt/cache/fallback failure fixtures and fresh exact-source three-platform runs. André separately authorizes any runner/image provisioning/publication, routing or hosted-setting change. Existing live-setting evidence remains historical; reverify only with authority before activation/admission. |
+
+**Blocked now:** self-hosted migration, new fallback routing and privileged-profile activation have neither sufficient inventory nor live authorization. The existing hosted bootstrap stays unchanged and still needs §17 completion/approval; this is not ticket 01 admission. Collect the missing inventory or review a scoped hosted exception before proposing executable routing changes.
+
+#### 8.5 Template sketch (hosted exceptions only; not installed)
+
+**GitHub Actions first.** `superman init` renders `.github/workflows/superman.yml` only from resolved, reviewed execution profiles; it refuses unresolved self-hosted selectors rather than inventing them or silently falling back. The hosted routes below illustrate §8.1's exceptions, not a hosted-only default or approved writer pool. Ticket 06 proves full-mode parity, and ticket 24 must supply/test the concrete data-only privileged writer and complete provider wiring. Default PR checkout evaluates the synthetic merge, while the CLI separately binds H/B/M from the event and forge.
 
 ```yaml
 name: superman
@@ -696,17 +791,18 @@ permissions: { contents: read, actions: read } # read receipt/run evidence; no P
 env: { ARCHGATE_TELEMETRY: "0" }
 jobs:
   gates:
+    if: github.event_name != 'schedule'      # scheduled checks belong to uncached nightly on all three platforms
     strategy:
       fail-fast: false
-      matrix: { os: [macos-15, ubuntu-24.04, ubuntu-24.04-arm] }   # runner labels: VERIFY for private repos
+      matrix: { os: [macos-15, ubuntu-24.04, ubuntu-24.04-arm] }   # hosted-exception illustration; actual profiles/access require review
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@<sha>       # all actions pinned by full SHA
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, persist-credentials: false }
       - uses: pnpm/action-setup@<sha>
       - uses: actions/setup-node@<sha>
         with: { node-version: 26, cache: pnpm }   # M1 amendment: Node 26
-      - run: pnpm install --frozen-lockfile --ignore-scripts # M1 amendment 4: no Lefthook postinstall/native hook rewrites
+      - run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile # preserve reviewed lifecycle/pnpmfile suppression
       - name: Install Trivy (pinned, sha256-checked; M1 amendment)   # never trivy-action/setup-trivy (GHSA-69fq-xp46-6x23)
         if: runner.os == 'Linux' && runner.arch == 'X64'
         env: { TRIVY_VERSION: "0.76.1", TRIVY_SHA256: "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0" }
@@ -723,31 +819,34 @@ jobs:
         with: { name: "superman-receipt-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}-${{ matrix.os }}", path: .superman-ci/receipt.json }
   nightly:
     if: github.event_name == 'schedule'
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix: { os: [macos-15, ubuntu-24.04, ubuntu-24.04-arm] }
+    runs-on: ${{ matrix.os }}               # same required platforms, explicitly uncached full execution
     permissions: { contents: read, actions: read }
     steps: [ "...checkout/install with no privileged credentials...", { run: "pnpm exec superman gate nightly" }, "...always upload run-bound audit/cache data..." ] # uncached; produces data, never signs/writes remotely
   cache-write:
     if: always() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule')
     needs: [gates, nightly]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04                   # hosted-exception illustration; separate restricted profile required
     environment: superman-cache-write        # restricted to main; only this separate job gets write/signing credentials
     permissions: { contents: read, actions: read, issues: write }
     steps: [ "...verify source run/attempt/ref/SHA and artifact integrity...", "...reviewed built-in-only writer: sign passes/safety state and report incidents; no install/test/project hooks..." ]
   tsc-drift:                                 # M1 amendment: non-blocking, never a required check (ADR 0008)
     if: github.event_name == 'schedule'
     runs-on: ubuntu-24.04
-    permissions: { contents: read, issues: write }
+    permissions: { contents: read, actions: read } # produces diagnostics; incident writes belong to a separate data-only consumer
     steps:
       - "...checkout, pnpm install --frozen-lockfile..."
       - run: pnpm exec tsrs --noEmit --pretty false > tsrs.txt || true
       - run: pnpm exec tsc --noEmit --pretty false > tsc.txt || true    # devDependency typescript, exact pin = the version tsrs tracks
-      - run: diff -u tsc.txt tsrs.txt                                    # any drift fails this job; a follow-up step opens an issue
+      - run: diff -u tsc.txt tsrs.txt                                    # drift fails this job; upload diagnostics for separate issue reporting
 ```
 
 - **`gate ci`** is `pre-pr` plus G7 and G8, with CI-specific output formats (`--output github` annotations).
 - **No secrets.** PR jobs need no secrets, so fork PRs work with the default read-only token.
 - **Required checks.** The protected manifest names workflow, job and expected App producer; all required jobs must be present and successful for the attested integration. Optional drift jobs are not silently promoted to merge blockers. Public strict up-to-date protection closes the base race that `--match-head-commit` alone cannot close (§9.4).
-- **Archgate in CI.** Archgate is installed through the pinned devDependency. Its npm shim downloads the binary on first use (about 30 s). Cache `~/.archgate/bin` keyed on the version.
+- **Archgate in CI.** The pinned devDependency's shim resolves the binary; bootstrap instead verifies the reviewed release URL/checksum in `tool-assets.json`. Any binary cache must bind actual asset digest, platform and execution inputs, not just a version label. The missing approved Linux-arm64 distribution remains blocking (§17); an image containing the unpublished candidate does not resolve it.
 - **Polyglot repos (lx).** The template adds the repo's own typecheck and test commands through config. For example: `mix compile --warnings-as-errors`, `mix test`, `cargo test`, `vue-tsc --noEmit`.
 - **Biome and Trivy in CI (M1 amendment).** Biome comes from its exact-pinned devDependency. Trivy is downloaded from its GitHub release at a pinned version, and the sha256 is checked against `trivy_<v>_checksums.txt`, copied into the workflow when the pin changes. Pin bumps are spec-kind PRs. In March 2026 `aquasecurity/trivy-action` and `setup-trivy` had their tags hijacked and Trivy v0.69.4 was malicious (GHSA-69fq-xp46-6x23, CVE-2026-33634). That is why the pin is to a reviewed release, never `latest`, and why no Trivy action is used. Trivy's misconfig scanner does not cover GitHub workflow files (VERIFY); workflow linting (actionlint or zizmor) is a later candidate, not a v0 gate.
 - **tsrs in CI (M1 amendment).** The three-OS matrix is also tsrs's platform check. CI never sets `TSRS_FAST` and never passes `--fast` (SUP-006). `superman` also strips `TSRS_FAST` from the environment it gives gate processes. The `tsc-drift` job is scheduled and non-blocking. Its pinned TypeScript is the version in tsrs's version suffix (`7.1.0-beta` today).
@@ -993,7 +1092,7 @@ superman/
 **Release workflow design (built in ticket 11, not enabled in M1).** `.github/workflows/release.yml`:
 - Trigger: `on: push: tags: ['v*']` only. No `workflow_dispatch`, `workflow_call`, `pull_request` or `pull_request_target`. The tag ruleset means only André creates tags; the App cannot.
 - Top-level `permissions: contents: read`. A build/test/scan job has no publishing, upload or cache-signing credentials. The separate `publish` job alone adds `id-token: write`; an optional separate upload job alone gets `contents: write`. Neither privileged job installs project dependencies, rebuilds, reruns tests or executes package hooks.
-- GitHub-hosted `ubuntu-24.04`, every action pinned by full SHA, `persist-credentials: false`, setup-node with `node-version: 26` (ships npm 11.20.0; trusted publishing needs npm ≥11.5.1 and Node ≥22.14.0) and `package-manager-cache: false`.
+- **Provider-required hosted-runner exception (§8.1):** the separate npm `publish` job uses GitHub-hosted `ubuntu-24.04`; npm's current trusted-publishing contract excludes self-hosted runners. Keep OIDC/provenance instead of substituting a stored token to force self-hosting. Build/test/scan use §8's preferred approved-image self-hosted profiles or reviewed hosted exceptions; optional uploads need their own isolated profile, not npm's provider justification. Every action is pinned by full SHA, with `persist-credentials: false`, setup-node `node-version: 26` (ships npm 11.20.0; trusted publishing needs npm ≥11.5.1 and Node ≥22.14.0) and `package-manager-cache: false`. Record the actual hosted image version and release-run/artifact identities (§5.5), and recheck provider support before activation; this amendment does not enable release.yml or authorize publication.
 - Unprivileged build/test/scan: install frozen dependencies with lifecycle scripts suppressed, build, run uncached full applicable checks on the tagged reviewed-main commit, verify `v` + package version and completion of all v0 work including **M7b and M7c activation**, pack, and scan the exact tarball/optional binaries with pinned Trivy. Bind uploaded artifacts to producing run/attempt/tag/SHA and digest. Release context explicitly marks PR-only checks (including a new PR-log entry) inapplicable and verifies reviewed-main provenance instead; it does not fabricate a PR approval.
 - Privileged publication: verify those artifact identities and digests, then directly `npm publish <verified-tarball> --ignore-scripts` through OIDC/provenance. André's tag is the final authorization; no second staged-publish approval was selected. Upload the same verified optional binaries without rebuilding. No `NPM_TOKEN` or `.npmrc` token. Exact Trivy archive/binary scanner coverage remains VERIFY in ticket 11; a scanner that did not cover an artifact is not a passing scan.
 - Sources: [Trusted publishing](https://docs.npmjs.com/trusted-publishers/), [`npm trust`](https://docs.npmjs.com/cli/v11/commands/npm-trust/), [Provenance](https://docs.npmjs.com/generating-provenance-statements/).
@@ -1019,10 +1118,12 @@ superman/
 
 **Current position:** design agreed; this Gate 1 branch adds protected bootstrap tooling/configs, SUP-005, protected-input/field enforcement, raw routing/replay fixtures, §5.4's overall coverage policy and the three-platform workflow. [Bootstrap evidence](../../.superman/ci/bootstrap-evidence.md) distinguishes local verification, unsupported capabilities and the remaining live/platform prerequisites; the previous hosted run exercised only the old two-job implementation. Neither the branch contents nor the earlier Amendment 4 complete Gate 1 or activate G12. Ticket 01 stays blocked until the following work and André's approval/merge are complete. M7c activates later through the explicit follow-ups below; it does not retroactively require a wiki before its scaffold exists.
 
+**Proposed CI amendment:** §8.4 adds unresolved execution-profile/inventory/authorization work, not passing evidence. Existing [coverage evidence](../../.superman/ci/coverage-evidence.md), platform failures, the unpublished/unapproved Archgate arm64 distribution and small/undersized-corpus limitations retain their original scope and blockers. The hosted three-platform routing and required-check bindings are untouched. Missing self-hosted details block that migration, not an otherwise fully evidenced, Gate 1-approved hosted exception. New receipt/isolation requirements must be implemented/proved for the chosen bootstrap profiles before admission; later cache-key requirements belong to tickets 21–24 before reuse activation.
+
 Earlier local verification used PATH Archgate **0.43.0** and rejected `--strict`; that is not gate evidence. Amendment 4 provisions the locked **0.61.0** through **pnpm 12.16.1** with lifecycle scripts suppressed and records fresh strict-check/fixture results in its PR evidence. No weaker-command fallback authorizes readiness.
 
 1. **Pre-wire raw enforcement in this spec-kind PR, before admitting ticket 01.** Install reviewed exact tool pins and effective compiler/test/quality configs, protect them and their referenced policy inputs/fields, implement SUP-005, and add bootstrap raw G1–G11 routing including G9 replay. Bootstrap verifier code lives under protected `.superman/ci/`, not in the first ticket it is meant to check. Before automation for a capability exists, use an explicit raw equivalent, not a fabricated `pass`. **Done:** fixtures demonstrate policy/suppression/replay failures, and the first ticket's CI will execute the applicable tools on its candidate before merge.
-2. **Prove platform and live identity/protection prerequisites.** Verify App/installation/repository scope using the supported endpoints, required workflow/job/App identities, strict public up-to-date approval protection and human-only tag creation. Provide the reviewed/checksummed Archgate arm64 self-build and execute platform fixtures; metadata alone is insufficient. **Done:** Gate 1 contains links/digests/run evidence for all three platforms and the actual live settings. Private lx's accepted limitations stay explicit rather than being reported as enforced protection.
+2. **Prove platform and live identity/protection prerequisites.** Resolve and approve §8's execution profiles (self-hosted or explicit hosted exceptions), prove isolation and execution-identity receipts, and separately obtain authority before any routing/infrastructure/hosted change. Verify App/installation/repository scope using the supported endpoints, required workflow/job/App identities, strict public up-to-date approval protection and human-only tag creation. Provide the reviewed/checksummed Archgate arm64 self-build and execute platform fixtures; metadata alone is insufficient. **Done:** Gate 1 contains links/digests/run evidence for all three platforms, chosen profiles and the actual live settings. Private lx's accepted limitations stay explicit rather than being reported as enforced protection.
 3. **Initialize, then enforce baselines.** The first-source ticket runs real duplication/mutation checks and records measured scopes, tool/config identities and survivors for André's review before merge. With no earlier code, report baseline initialization rather than claiming a comparison against invented numbers. Commit those exact approved measurements in the baseline follow-up before ticket 02 or another source ticket proceeds. **Done:** a later PR cannot change scope or numeric direction to evade the measured baseline.
 4. **Admit work only after approval.** After steps 1–2, André approves/merges Gate 1 and ticket 01 can move to `ready-for-agent`; step 3 gates subsequent source work. Until ticket 07 provides `merge-ready`, use the reviewed raw forge checklist from §9.2 and head-matched merge command. **Done:** required checks precede each merge and the approval is on its exact head; no post-merge follow-up is treated as retroactive enforcement.
 
@@ -1030,20 +1131,21 @@ Later ticket PRs implement code/tests without editing protected policy, except p
 
 | Follow-up | When and completion criterion |
 |---|---|
+| Runner routing/adoption | Before changing any route, resolve §8.4 and obtain explicit Gate 1 approval/activation authority. Bootstrap profile proof belongs to this Gate 1 prerequisite, not ticket 01; later follow-ups retain it. This document edit activates nothing. |
 | 01 baseline | After approved first measurement, before ticket 02; exact measured baseline recorded, not a new CI rollout |
 | 04 init | Controlled Lefthook/Node adapter, effective-config/lifecycle protection, AGENTS/CODEOWNERS; existing managers/global config are not replaced |
-| 06 gate-ci | Replace raw checks only after CLI parity; remove bootstrap code only after the same failure fixtures pass |
+| 06 gate-ci | Replace raw checks only after CLI parity; preserve §8 profiles/exceptions, check identities and three-platform uncached nightly/coverage; remove bootstrap code only after the same failure fixtures pass |
 | 08–10 skills | Canonical skills/manifests/catalogs/lock, with actual harness smoke evidence |
 | 22 remote cache | André configures R2/read privacy/keys and the separate restricted writer; no test/build job receives its authority |
-| 24 affected | After all v0 providers/cache/audit dependencies, merge safe fallback wiring first; run trusted main/nightly to produce matching safety state, then prove selection activation. No future-policy ledger is assumed before its main run; install GEN-002 with local ADR traceability |
+| 24 affected | After all v0 providers/cache/audit dependencies and approved runner/image/privileged-profile inventory, merge safe fallback wiring first; run trusted main/nightly to produce matching safety state, then prove selection activation. No future-policy ledger is assumed before its main run; install GEN-002 with local ADR traceability |
 | 27 vault | `spec/superman-v0-vault`: reviewed vault policy/scaffold, ≤25-line AGENTS update; G12 remains explicitly not installed |
 | 28 G12 | `spec/superman-v0-wiki-gate`: verified full parser/profile fixtures, effective policy/CI/required checks, valid initial PR log and blocking G12 on all PR kinds; complete before maintenance or release |
 | 29 ingest | `spec/superman-v0-wiki-skills`: catalog/lock plus ship→wiki-ingest handoff and draft-first PR identity; no duplicate skill tree |
-| 30 maintenance | `spec/superman-v0-wiki-maintenance`: reviewed isolated nightly runner; André supplies bot/model profile references before scheduling; no PR-job secrets or merge permission use |
+| 30 maintenance | `spec/superman-v0-wiki-maintenance`: reviewed disposable isolated nightly runner/image/access profile (§8); André supplies bot/model profile references before scheduling; no PR-job secrets or merge permission use |
 | 31 context | `spec/superman-v0-codegraph`: reviewed selected-harness MCP config and ignores, never CodeGraph installer or instruction edits |
 | 11 release | After 24, 27–32 and their activation follow-ups; separate verified-artifact publisher/upload jobs, MIT and confirmed npm authority |
 
-Next: verify the bootstrap changes and close the remaining live/platform prerequisites recorded in the evidence. No bootstrap result authorizes product implementation or any merge.
+Next: ask André for §8.4's sanitized runner/image inventory or review of the scoped hosted bootstrap exception, without accessing credentials; retain the existing bootstrap blockers. No bootstrap result authorizes product implementation or any merge.
 
 ## Testing Decisions
 
@@ -1151,7 +1253,7 @@ Next: verify the bootstrap changes and close the remaining live/platform prerequ
 | 03 | M4 | `superman doctor` refuses approver identities | 02 | none |
 | 04 | M5 | Controlled Lefthook pre-commit and byte-stable init | 02 | `spec/superman-v0-dogfood-init`: hook/config/pins/lifecycle settings, AGENTS block; safe local hooksPath only |
 | 05 | M6 | Path policy, traceability and test-first gates | 04 | none (CI switch waits for 06) |
-| 06 | M7 | Ratchets and the switch to `superman gate ci` | 05 | `.github/workflows/superman.yml` replaces `ci.yml`; `.superman/ci/` removed |
+| 06 | M7 | Ratchets and the switch to `superman gate ci` | 05 | `spec/superman-v0-gate-ci`: parity-proved replacement preserving §8 profiles/checks; retire only superseded bootstrap tooling, not evidence/writers |
 | 07 | M8 | `superman merge-ready` and `superman audit` | 03 | none |
 | 08 | M9 | Pinned skills, next and atomic shared claims | 03 | Catalog/lock/settings pin; runtime Markdown remains a declared input |
 | 09 | M10 | Overlay skills `ship` and `adr-rule` | 08, 07, 05 | `superman` catalog entry |
@@ -1169,7 +1271,7 @@ Next: verify the bootstrap changes and close the remaining live/platform prerequ
 | 21 | M7b | Gate cache: content-hash key, local and Actions tiers | 13 | Actions cache step lands with 24's follow-up |
 | 22 | M7b | Remote gate cache: read-only PRs, signed writes from `main` | 21 | `spec/superman-v0-remote-cache`: `affected.cache.remote` (url, public key) in `superman.config.json`, `superman-cache-write` Environment wiring; R2 bucket and keys are a manual André step |
 | 23 | M7b | Attributed incidents, PR incidence and fresh safety ledger | 13, 07, 22 | Trusted audit/writer identities and retention are configured with 24 |
-| 24 | M7b | Complete-provider activation, verified typechecks and separate writers | 14–20, 21, 22, 23 | Protected affected config/workflows, GEN-002/local ADR, live fresh-ledger and manual setup evidence |
+| 24 | M7b | Complete-provider activation, verified typechecks and separate writers | 14–20, 21, 22, 23 | Protected affected config/workflows, GEN-002/local ADR, §8 runner/image/access profiles, live fresh-ledger and manual setup evidence |
 | 25 | post-v0 | Go provider (`go list -deps -json`) | 12 | none |
 | 26 | post-v0 | Affected deploys (design only in v0) | 24 | deploy workflow, when built |
 | 27 | M7c | Vault/wiki scaffold and governed writes | 04, 05 | `spec/superman-v0-vault`: vault.json, scaffold, ≤25-line AGENTS; G12 not installed yet |
@@ -1197,6 +1299,7 @@ André confirmed the prior design through one-at-a-time OpenCode questions and a
 | Unfinished bootstrap, activation ordering and manual work | §17 and ticket dependencies |
 | Vault/wiki/OKF profile, promotion, G12 and maintenance | §5.8, §6.4–6.5; rationale ADR 0012 |
 | Optional session-scoped context and Lefthook wrapper | §5.9 and §5.6; rationale ADRs 0013 and 0003 |
+| Preferred CI execution, hosted exceptions/fallback and disposable trust boundaries (proposed 2026-10-31) | §8; execution receipts §5.5 and cache inputs §5.7; rationale ADR 0015 |
 
 Public checks found all exact npm pins present, Node 26 LTS from 2026-10-28, and the listed Trivy checksum matching its official release file. They did not execute those tools on the matrix or verify live repository/Cloudflare/npm authority. Sources: [Node schedule](https://raw.githubusercontent.com/nodejs/Release/main/schedule.json), [npm registry](https://registry.npmjs.org/), [Trivy checksum file](https://github.com/aquasecurity/trivy/releases/download/v0.76.1/trivy_0.76.1_checksums.txt), [npm package metadata](https://registry.npmjs.org/superman-ai). No Pocock file was modified; ticket 01 still performs the repo's Pocock setup.
 
@@ -1205,6 +1308,10 @@ Public checks found all exact npm pins present, Node 26 LTS from 2026-10-28, and
 Adds M7c **in v0**, stories 49–59, questions 24–36, tickets 27–32, ADRs 0012–0013 and SUP-009; raises SUP-004's explicit allowance to five names/470 lines and adopts Lefthook in M5. The observed gaps are ungoverned durable memories, wiki drift and duplicated/polyglot hook delivery—not a reason to rewrite Pocock skills. OKF is honestly pinned as v0.2 plus the timestamp amendment, not an unpublished v0.3. §5.8 owns the knowledge contract, §5.9 the context boundary and §5.6 the hook contract; the earlier agreed v0 contracts are retained.
 
 This spec PR updates only planning/rationale, CodeGraph data ignores and current bootstrap enforcement/CI fixtures for those boundaries. It does **not** ship vault contents, G12/parsers, overlay implementations, CodeGraph MCP or a hook installation. One requested agent-authored commit and fast-forward push append this amendment to PR #1; no force push, approval or merge. After bot credentials were unavailable, André explicitly authorized his existing `br4vesirrobin` login solely for this bootstrap publication. Record that actual actor in the evidence; it is **not** a passed bot preflight, merge authority or an exemption from the future identity contract.
+
+### Proposed Gate 1 CI amendment (2026-10-31)
+
+Prepared locally for existing PR #1 on `spec/superman-v0`, using domain-modeling to separate execution profiles, hosted-runner exceptions and explicit fallback from gate waivers. §8 is the policy home; §5.5/§5.7 bind execution evidence and modeled cache inputs; ADR 0015 records the trade-off. Affected tickets retain their statuses, blockers and implementation/activation split. Historical authorizations above apply only to their recorded operations: this request authorizes no credentials, routing/hosted changes, runner/image/asset provisioning or publication, commit/push, new PR, approval/merge or ticket 01 work. Other repositories' adoption is not asserted.
 
 ### VERIFY index
 
@@ -1221,6 +1328,7 @@ This spec PR updates only planning/rationale, CodeGraph data ignores and current
 | Lefthook exact pin/launcher/effective-config protection, no-stash direct parity and concurrent worktree behavior | Ticket 04 and reviewed init follow-up before hook adoption |
 | CodeGraph host config dialects, session lifecycle/opt-outs/platform behavior | Ticket 31 before enabling each harness; optional absence only warns |
 | Nightly agent runner/model and verified bot credential profile | André plus ticket 30 before scheduling wiki-lint; no credentials supplied by this spec |
+| Current complete runner groups/labels/access, approved immutable image/provenance, disposable isolation and scoped hosted exceptions/fallback authorization | André/authorized runner administrator and designated operator, §8.4; before route activation, with chosen bootstrap-profile evidence before ticket 01. Public source/job evidence supplies only a partial observed inventory, not approved Superman profiles |
 
 ### 15. Open questions
 

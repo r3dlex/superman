@@ -10,7 +10,7 @@
 
 **Kind:** behavior
 
-**Protected-path follow-up:** `spec/superman-v0-affected` installs protected config/workflows, check identities, privacy, retention and separate writers after manual R2/key/Environment setup. Its initial runs safely fall back to uncached full execution until a trusted main/nightly audit produces a ledger bound to the merged policy. Then prove actual selection activation; this complete reviewed activation is a release prerequisite, not a claim that a future-policy ledger existed before merge.
+**Protected-path follow-up:** `spec/superman-v0-affected` installs protected config/workflows, check identities, privacy, retention and separate writers after manual R2/key/Environment setup and §8.4's actual runner/group/label/image/access/isolation evidence and authorization. Partial public shared-fleet evidence supplies no verified Superman access, approved image or privileged profile; activation stays blocked until resolved, or a scoped hosted exception is approved. Its initial runs safely fall back to uncached full execution until a trusted main/nightly audit produces a ledger bound to the merged policy. That safety fallback is distinct from runner fallback. Then prove actual selection activation; this complete reviewed activation is a release prerequisite, not a claim that a future-policy ledger existed before merge.
 
 - [ ] `init` on a polyglot fixture (TS + Rust + Elixir) writes providers `["ts","rust","elixir"]`, and re-running it gives no diff (test-first).
 - [ ] The rendered workflow passes SUP-008; removing its `schedule:` makes SUP-008 fail; adding a raw `vitest run` step makes SUP-008 fail.
@@ -20,5 +20,7 @@
 - [ ] Verified compiler projects are scoped; unknown graph/argv falls back to full typechecking. Runtime Markdown inputs are not ignored.
 - [ ] Project-execution jobs lack writer/publisher authority. Separate main writers validate data provenance; PRs never receive secrets/write remote, and stale/missing safety evidence forces uncached full execution.
 - [ ] **(M1 amendment 4)** Preserve the controlled Lefthook adapter/static config and lifecycle suppression when regenerating CI/init. Later M7c follow-ups add fresh G12 and an isolated wiki-lint runner without handing agent write credentials to PR jobs/cache writers; do not erase those already-adopted settings on re-run.
+- [ ] Init/doctor/template fixtures prefer reviewed approved-image self-hosted execution but accept scoped hosted exceptions (§8/ADR 0015), report unresolved route/image/access facts as blocked and never invent selectors or claim another repository adopted the r3dlex intent. Reruns preserve approved routes; labels do not implement failover.
+- [ ] Every selected route/fallback preserves required native macOS arm64/Linux x64/Linux arm64 checks, unchanged gate applicability/coverage floors and uncached full nightly behavior. Receipt/cache wiring binds observed execution inputs; unavailable or skipped legs cannot be hidden by alternative jobs. Prove worker disposal and restricted writer trust boundaries with operator evidence before activation, not just fake-tool tests.
 
 Start with an adoption fixture using a non-default ADR directory and a signed-but-stale safety ledger; it must render traceable policy and keep optimization off.

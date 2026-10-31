@@ -125,6 +125,19 @@ test("the five reviewed overlay names fit their individual and total budgets", (
   assert.equal(result.status, 0, result.output);
 });
 
+test("prototype property names cannot add a sixth overlay skill", (t) => {
+  for (const name of ["constructor", "toString", "__proto__"]) {
+    const repo = fixture(t, "SUP-004", "skill-size", "0007-overlay-context-budget.md");
+    for (const allowed of ["ship", "adr-rule", "plan-critic", "wiki-ingest", "wiki-lint"])
+      repo.write(`skills/${allowed}/SKILL.md`, skill(allowed, 6));
+    repo.write(`skills/${name}/SKILL.md`, skill(name, 6));
+    const result = repo.check();
+    assert.equal(result.status, 1, `${name}\n${result.output}`);
+    assert.equal(JSON.parse(result.stdout).total, 1, result.output);
+    assert.match(result.output, /Unknown overlay skill/u);
+  }
+});
+
 test("changed-file checks still inventory unchanged overlay budgets", (t) => {
   const repo = fixture(t, "SUP-004", "skill-size", "0007-overlay-context-budget.md");
   repo.write("skills/wiki-ingest/SKILL.md", skill("wiki-ingest", 101));

@@ -16,6 +16,7 @@
 - [ ] A push after approval (head SHA differs from the review's `commit_id`) fails.
 - [ ] An empty set of check runs fails.
 - [ ] Fixtures reject stale base, unrelated merge SHA, wrong workflow/App producer, missing required job and mismatched run/artifact attempt, while a non-required drift failure does not become a blocker.
+- [ ] Under §5.5/§8, reject unapproved/mismatched runner profiles/images, forged environment-only identities, unauthorized hosted exceptions/fallback and a skipped platform hidden by an alternate-job success. Validate actual execution against protected policy and forge/operator evidence; labels alone are not isolation or image proof. Historical receipts remain historical, not retroactively upgraded admission evidence.
 - [ ] The printed command pins H only; public strict-up-to-date settings and private best-effort limits are represented accurately in evidence.
 - [ ] `audit` flags a fixture merge done by the App after approval and a direct push to `main`.
 - [ ] The first real ticket PR after this one is merged through `merge-ready`.

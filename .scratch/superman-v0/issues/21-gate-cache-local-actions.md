@@ -16,9 +16,11 @@
 - [ ] Changing any one key component (a dependency's file, a tool version, the gate argv, an allowlisted env var, the config section) misses the cache, each in its own test.
 - [ ] A failing gate writes nothing, and a later run re-runs it.
 - [ ] `gate nightly` re-runs a target that has a cached pass.
-- [ ] The key is byte-stable across macOS and Linux for the same inputs except the `os`/`arch` fields (golden test).
+- [ ] Canonical key serialization is byte-stable for identical declared inputs (golden test); different platforms/providers/images/host inputs retain their real differences through `executionIdentity` and `os`/`arch`, rather than claiming cross-platform equivalence.
 - [ ] Same version label with changed checker content, changed runtime Markdown/config, or changed base/comparison baseline misses the cache. Unknown input completeness disables reuse.
 - [ ] Architecture/policy, skill, trace, replay and Trivy fixtures execute even with planted pass entries; missing/stale safety state or quarantine defeats eligible entries too.
 - [ ] Linked worktrees with `.git` files resolve the intended cache location; main never imports a PR Actions namespace.
+- [ ] §5.7 execution-input fixtures change only the approved image digest/hosted image version, provider/profile policy, runner software or relevant host/kernel/libc/CPU/virtualization input and each must miss. An Actions prefix match cannot bypass complete-key/provenance validation across a hosted fallback; unknown inputs force uncached full checks/coverage, not a guessed key.
+- [ ] Identical modeled execution inputs on different disposable worker/run IDs can reuse an eligible pass with current safety permission; receipts still identify both attempts. Nightly reads neither gate nor coverage-result caches, and incomplete unchanged-coverage evidence retains §5.4's full uncached fallback.
 
 Start with an identical-version/changed-checker fixture that must not hit a prior pass.

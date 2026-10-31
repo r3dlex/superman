@@ -10,10 +10,11 @@
 
 **Kind:** behavior
 
-**Protected-path follow-up:** `spec/superman-v0-release` adds the reviewed separate-job workflow, MIT LICENSE/package metadata and final required release settings. No publishing or account modification is part of implementing this ticket without André's tag/setup authorization.
+**Protected-path follow-up:** `spec/superman-v0-release` adds the reviewed separate-job workflow, MIT LICENSE/package metadata and final required release settings. Resolve §8's execution profiles/identity/isolation evidence first; the npm publisher's provider-required hosted exception does not resolve missing build or upload profiles. No publishing or account modification is part of implementing this ticket without André's tag/setup authorization.
 
 - [ ] The workflow triggers only on `push` of `v*` tags; it has no `workflow_dispatch`, `pull_request` or `pull_request_target`.
 - [ ] Only the separate publisher has `id-token: write`; only a separate upload job has `contents: write`. Install/build/test/scan jobs have neither; every action is SHA-pinned with checkout credential persistence disabled.
+- [ ] The npm `publish` job stays GitHub-hosted `ubuntu-24.04`, documenting/rechecking npm's current exclusion of self-hosted OIDC publishers (§12.2/ADR 0015). Build/test/scan prefer approved-image self-hosted profiles or scoped hosted exceptions; neither inherits publish/upload authority. Missing capacity/support blocks publication rather than using a stored token or bypassing native three-platform verification.
 - [ ] No npm token secret or `.npmrc` token is referenced anywhere in the repo (test greps the workflows).
 - [ ] A version/tag mismatch fails before publish.
 - [ ] Incomplete v0/M7b/M7c activation (including blocking full-parser G12, wiki skills/nightly setup, context integration and own wiki), missing MIT source licensing, unknown npm authority or unreviewed-main provenance blocks the first usable release; the `0.0.0` placeholder does not satisfy it. Optional CodeGraph executable absence remains a warning, not a new runtime dependency.
@@ -21,5 +22,6 @@
 - [ ] André's one-time npmjs.org steps (§12.2) are listed in the PR and confirmed done before the first tag.
 - [ ] After André's first tag, `npx superman-ai doctor` runs from npm and the npm page shows provenance.
 - [ ] Artifact digest/run/tag substitution fails; privileged jobs publish/upload the verified bytes without rebuilding or running project/package hooks.
+- [ ] Release evidence binds producer and privileged-consumer profiles, runner/image identities (observed hosted image versions where applicable) and artifact provenance. Separate workers/trust boundaries are proved; publication consumes exact scanned bytes and never reuses a project-execution worker.
 
 Start with a release fixture that substitutes a tarball from another run; verification must reject it before any privileged action.

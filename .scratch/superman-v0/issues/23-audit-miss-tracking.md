@@ -18,5 +18,6 @@
 - [ ] One confirmed stale cached pass quarantines affected gate/input-model reuse until a reviewed fix; ordinary missing/invalid entries merely execute checks and do not enter correctness counts.
 - [ ] Missing, bad-signature, >48-hour, wrong-scope or older-than-latest-trusted-audit ledgers produce uncached full execution despite valid cached entries. An unverified remote “latest” pointer is insufficient.
 - [ ] Reviewed `missResetAt` and cache reset/fix affect separate histories; changing a hash alone, a future-dated reset or missing receipts does not silently erase incidents.
+- [ ] Audit preserves unavailable/failed routing attempts and records explicit authorized hosted fallback separately from selection misses or stale cached passes. Missing/mismatched execution-profile/runner/image evidence (§5.5/§8) is unknown/untrusted, never a passing platform or zero incidents; historical receipts are not rewritten to meet the new schema contract.
 
 Start with a correctly signed but obsolete “safe” ledger and a newer trusted audit; optimization must remain off.

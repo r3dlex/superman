@@ -1,7 +1,7 @@
 // Bootstrap process fixtures; no product runtime or third-party test dependency.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { type TestContext, test } from "node:test";
@@ -155,6 +155,25 @@ test("ticket PRs cannot add or replace the primary compiler pin", (t) => {
   const result = repo.check();
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /G4: Protected package field \/devDependencies\/tsrs/u);
+});
+
+test("ticket PRs cannot add, replace or remove package-level Knip policy", (t) => {
+  for (const [before, after] of [
+    [undefined, { ignore: ["src/unused.ts"] }],
+    [{ ignore: [] }, { ignore: ["src/unused.ts"] }],
+    [{ ignore: [] }, undefined],
+  ]) {
+    const repo = fixture(t, "ticket/demo-01");
+    const pkg = { name: "fixture", devDependencies: { lefthook: "2.2.2" } };
+    repo.write("package.json", JSON.stringify({ ...pkg, knip: before }));
+    repo.git("add", "--all");
+    repo.git("commit", "--quiet", "--allow-empty", "-m", "approved manifest policy");
+    repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+    repo.write("package.json", JSON.stringify({ ...pkg, knip: after }));
+    const result = repo.check();
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /G4: Protected package field \/knip/u);
+  }
 });
 
 test("compiler and quality configs are protected at the root and in nested projects", (t) => {
@@ -459,6 +478,58 @@ test("package-local import aliases are not mistaken for lockfile-frozen external
   assert.match(result.output, /G4: Cannot establish effective policy.*[Ll]ocal.*alias/u);
 });
 
+test("the reviewed pinned Vitest config helper remains supported without accepting unknown package policy", (t) => {
+  const repo = fixture(t, "ticket/demo-01");
+  repo.write(
+    "package.json",
+    JSON.stringify({ name: "fixture", devDependencies: { lefthook: "2.2.2", vitest: "5.0.5" } }),
+  );
+  repo.write("vitest.config.ts", readFileSync(new URL("../../vitest.config.ts", import.meta.url), "utf8"));
+  repo.write("pnpm-lock.yaml", readFileSync(new URL("../../pnpm-lock.yaml", import.meta.url), "utf8"));
+  repo.write(
+    ".superman/ci/bootstrap.json",
+    JSON.stringify({ tools: { vitest: "5.0.5" }, policyInputs: ["vitest.config.ts"] }),
+  );
+  repo.git("add", "--all");
+  repo.git("commit", "--quiet", "-m", "reviewed pinned Vitest helper");
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  repo.write("README.md", "# Unrelated ticket documentation\n");
+  const supported = repo.check();
+  assert.equal(supported.status, 0, supported.output);
+
+  repo.write("pnpm-lock.yaml", "unmodeled package resolution\n");
+  repo.git("add", "--all");
+  repo.git("commit", "--quiet", "-m", "different approved package profile");
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  repo.write("README.md", "# Another unrelated ticket change\n");
+  const unsupported = repo.check();
+  assert.equal(unsupported.status, 1, unsupported.output);
+  assert.match(unsupported.output, /G4: Cannot establish effective policy.*Package policy resolution/u);
+});
+
+test("package-based compiler policy needs reviewed resolution instead of a frozen-lockfile assumption", (t) => {
+  for (const dependency of ["link:./settings", "workspace:*", "file:./settings"]) {
+    const repo = fixture(t, "ticket/demo-01");
+    repo.write(
+      "package.json",
+      JSON.stringify({
+        name: "fixture",
+        devDependencies: { lefthook: "2.2.2", "policy-package": dependency },
+      }),
+    );
+    repo.write("tsconfig.json", '{"extends":"policy-package/strict.json"}\n');
+    repo.write("settings/package.json", '{"name":"policy-package","version":"1.0.0"}\n');
+    repo.write("settings/strict.json", '{"compilerOptions":{"strict":true}}\n');
+    repo.git("add", "--all");
+    repo.git("commit", "--quiet", "-m", "unmodeled local package policy");
+    repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+    repo.write("settings/strict.json", '{"compilerOptions":{"strict":false}}\n');
+    const result = repo.check();
+    assert.equal(result.status, 1, `${dependency}\n${result.output}`);
+    assert.match(result.output, /G4: Cannot establish effective policy.*Package policy resolution/u);
+  }
+});
+
 test("built-in package field protection rejects a JSON-looking symlink manifest", (t) => {
   const repo = fixture(t, "ticket/demo-01");
   const original = JSON.stringify({ name: "fixture", devDependencies: { lefthook: "2.2.2" } });
@@ -503,6 +574,24 @@ test("a static import immediately after a closing brace is protected policy", (t
   const result = repo.check();
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /G4: ticket PRs may not touch protected paths/u);
+});
+
+test("all JavaScript line terminators preserve static policy import protection", (t) => {
+  for (const separator of ["\r", "\u2028", "\u2029"]) {
+    const repo = fixture(t, "ticket/demo-01");
+    repo.write(
+      "vitest.config.ts",
+      `const prelude = 1${separator}import shared from "./settings/shared.json" with { type: "json" };\nexport default shared;\n`,
+    );
+    repo.write("settings/shared.json", '{"test":{"passWithNoTests":false}}\n');
+    repo.git("add", "--all");
+    repo.git("commit", "--quiet", "-m", "approved imported policy");
+    repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+    repo.write("settings/shared.json", '{"test":{"passWithNoTests":true}}\n');
+    const result = repo.check();
+    assert.equal(result.status, 1, `${JSON.stringify(separator)}\n${result.output}`);
+    assert.match(result.output, /G4: ticket PRs may not touch protected paths/u);
+  }
 });
 
 test("multiple static imports on one config line all participate in policy closure", (t) => {
@@ -682,6 +771,52 @@ test("aliased module loaders cannot hide governing inputs from policy discovery"
     const result = repo.check();
     assert.equal(result.status, 1, `${module}\n${result.output}`);
     assert.match(result.output, /G4: Cannot establish effective policy.*[Mm]odule/u);
+  }
+});
+
+test("indirect policy loaders require reviewed input modeling", (t) => {
+  for (const [file, config] of [
+    [
+      "vitest.config.ts",
+      'const load = process.getBuiltinModule("fs").readFileSync;\nexport default JSON.parse(load(new URL("./settings/test-policy.json", import.meta.url), "utf8"));\n',
+    ],
+    ["vitest.config.cjs", 'const load = require;\nmodule.exports = load("./settings/test-policy.json");\n'],
+  ]) {
+    const repo = fixture(t, "ticket/demo-01");
+    repo.write(file, config);
+    repo.write("settings/test-policy.json", '{"test":{"passWithNoTests":false}}\n');
+    repo.git("add", "--all");
+    repo.git("commit", "--quiet", "-m", "unmodeled indirect loader");
+    repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+    repo.write("settings/test-policy.json", '{"test":{"passWithNoTests":true}}\n');
+    const result = repo.check();
+    assert.equal(result.status, 1, `${file}\n${result.output}`);
+    assert.match(result.output, /G4: Cannot establish effective policy.*[Mm]odule-loader/u);
+  }
+});
+
+test("computed and escaped policy-loader capabilities fail closed", (t) => {
+  for (const [file, config] of [
+    [
+      "vitest.config.ts",
+      'const load = process["get" + "BuiltinModule"]("fs")["read" + "FileSync"];\nexport default JSON.parse(load(new URL("./settings/test-policy.json", import.meta.url), "utf8"));\n',
+    ],
+    ["vitest.config.cjs", 'const load = requ\\u0069re;\nmodule.exports = load("./settings/test-policy.json");\n'],
+    [
+      "vitest.config.cjs",
+      'const load = module.constructor._load;\nmodule.exports = load("./settings/test-policy.json");\n',
+    ],
+  ]) {
+    const repo = fixture(t, "ticket/demo-01");
+    repo.write(file, config);
+    repo.write("settings/test-policy.json", '{"test":{"passWithNoTests":false}}\n');
+    repo.git("add", "--all");
+    repo.git("commit", "--quiet", "-m", "unmodeled computed loader");
+    repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+    repo.write("settings/test-policy.json", '{"test":{"passWithNoTests":true}}\n');
+    const result = repo.check();
+    assert.equal(result.status, 1, `${config}\n${result.output}`);
+    assert.match(result.output, /G4: Cannot establish effective policy.*Module-loader/u);
   }
 });
 
