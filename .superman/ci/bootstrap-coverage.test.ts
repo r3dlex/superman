@@ -172,7 +172,7 @@ test("G11 refuses a tree without the reviewed dependency lock", (t) => {
   // Native pnpm's version probe provisions a missing lock. This version-only
   // command fake isolates the scanner prerequisite without changing caller inputs.
   const pnpm = join(repo.root, ".tools/pnpm");
-  rmSync(pnpm);
+  rmSync(pnpm, { force: true });
   writeFileSync(
     pnpm,
     `#!${process.execPath}\nif (process.argv.slice(2).join(" ") !== "--version") throw new Error("Unexpected pnpm execution");\nconsole.log("12.16.1");\n`,

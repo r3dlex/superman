@@ -1,7 +1,16 @@
 // Approved coverage-command process seam; real collectors, owned tiny repositories.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { type TestContext, test } from "node:test";
@@ -11,7 +20,9 @@ const source = resolve(import.meta.dirname, "../..");
 const isolated = fixtureEnvironment();
 
 function fixture(t: TestContext) {
-  const root = mkdtempSync(join(tmpdir(), "superman-coverage-fixture-"));
+  // The coverage command measures from realpathSync(process.cwd()); the fixture
+  // root must be canonical too, or a symlinked TMPDIR (macOS /var) mismatches.
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "superman-coverage-fixture-")));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const write = (file: string, text: string) => {
     mkdirSync(dirname(join(root, file)), { recursive: true });

@@ -71,7 +71,16 @@ jobs:
           const assets = JSON.parse(readFileSync('.superman/ci/tool-assets.json', 'utf8'));
           for (const tool of ['archgate', ...(platform === 'linux-x64' ? ['trivy'] : [])]) {
             const asset = assets[tool][platform];
-            if (!asset) throw new Error(`Gate 1 blocked: reviewed, published ${tool} ${platform} asset/checksum is missing`);
+            if (!asset) {
+              // Upstream archgate publishes no linux-arm64 asset. Spec 5.4's platform note
+              // and 15 Q9 route the reviewed self-build to a human-authorized superman
+              // release asset, so this leg fails closed until that asset is published
+              // and its checksum is registered here. It is not a waiver and not a bug.
+              if (tool === 'archgate' && platform === 'linux-arm64') throw new Error(
+                'Gate 1 blocked: archgate has no reviewed, published linux-arm64 asset/checksum; '
+                + 'this leg fails closed until a human-authorized superman release asset is registered');
+              throw new Error(`Gate 1 blocked: reviewed, published ${tool} ${platform} asset/checksum is missing`);
+            }
             if (!/^[a-f0-9]{64}$/.test(asset.sha256) || !asset.url.startsWith('https://github.com/')) throw new Error('Invalid tool asset identity');
             const response = await fetch(asset.url);
             if (!response.ok) throw new Error(`Asset download failed: ${response.status}`);
