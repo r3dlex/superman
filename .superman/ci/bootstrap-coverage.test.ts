@@ -1,16 +1,19 @@
 // Bootstrap rejection/applicability evidence through the approved raw process seam.
 import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
   lstatSync,
+  mkdtempSync,
   readFileSync,
   readlinkSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { delimiter, dirname, join } from "node:path";
 import { test } from "node:test";
 import { fixture, interceptPnpm } from "./raw-fixture.ts";
 
@@ -513,4 +516,46 @@ test("G9 refuses real base/candidate test-name drift even when assertion outcome
   assert.match(result.output, /base\/candidate test identities differ/u);
   assert.equal(result.receipt.behaviorReplay.baseOutcome.category, "assertion");
   assert.equal(result.receipt.behaviorReplay.candidateOutcome.status, "pass");
+});
+
+test("G11 lockfile and Trivy config rejections do not require a developer pnpm store", (t) => {
+  const home = mkdtempSync(join(tmpdir(), "superman-empty-home-"));
+  const bin = mkdtempSync(join(tmpdir(), "superman-pnpm-path-"));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  t.after(() => rmSync(bin, { recursive: true, force: true }));
+  const probe = spawnSync("pnpm", ["--version"], { encoding: "utf8" });
+  const stored = [
+    join(homedir(), ".local/share/pnpm/.tools/pnpm/12.16.1/node_modules/@pnpm/exe.darwin-arm64/pnpm"),
+    join(homedir(), ".local/share/pnpm/.tools/pnpm/12.16.1/node_modules/pnpm/bin/pnpm.mjs"),
+  ].find((path) => existsSync(path));
+  const pnpm =
+    probe.stdout?.trim() === "12.16.1" ? execFileSync("which", ["pnpm"], { encoding: "utf8" }).trim() : stored;
+  if (!pnpm) throw new Error("G11 store-independent fixture requires pnpm 12.16.1 on PATH");
+  symlinkSync(pnpm, join(bin, "pnpm"));
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--test",
+      "--test-reporter=tap",
+      "--test-name-pattern",
+      "G11 refuses a tree without the reviewed dependency lock|G11 rejects ignore files and each supported Trivy config extension",
+      join(import.meta.dirname, "bootstrap-coverage.test.ts"),
+    ],
+    {
+      cwd: join(import.meta.dirname, "../.."),
+      env: {
+        PATH: `${bin}${delimiter}${dirname(process.execPath)}${delimiter}/usr/bin:/bin`,
+        HOME: home,
+        TMPDIR: tmpdir(),
+        LANG: "en_US.UTF-8",
+      },
+      encoding: "utf8",
+      timeout: 60_000,
+    },
+  );
+  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+  assert.equal(result.status, 0, output);
+  assert.match(output, /ok \d+ - G11 refuses a tree without the reviewed dependency lock/u);
+  assert.match(output, /ok \d+ - G11 rejects ignore files and each supported Trivy config extension/u);
+  assert.doesNotMatch(output, /ENOENT/u);
 });

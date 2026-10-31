@@ -89,18 +89,24 @@ export function fixture(t: TestContext, branch = "ticket/demo-01", kind = "behav
   const baseSha = git("rev-parse", "HEAD").trim();
   git("switch", "--quiet", "-c", branch);
   symlinkSync(modules, join(root, "node_modules"), "dir");
-  const pnpmCli =
+  // A developer store is optional. CI puts the pinned pnpm on PATH; skipping the
+  // shim left .tools absent and G11 died on ENOENT instead of the gate refusal.
+  const preferred =
     process.env.SUPERMAN_TEST_PNPM ??
     join(homedir(), ".local/share/pnpm/.tools/pnpm/12.16.1/node_modules/pnpm/bin/pnpm.mjs");
-  if (existsSync(pnpmCli)) {
-    mkdirSync(join(root, ".tools"));
-    writeFileSync(
-      join(root, ".tools/pnpm-real"),
-      `#!${process.execPath}\nimport { spawnSync } from 'node:child_process';\nconst result = spawnSync(process.execPath, [${JSON.stringify(pnpmCli)}, ...process.argv.slice(2)], {env:process.env,stdio:'inherit',shell:false});\nif (result.error) throw result.error;\nprocess.exit(result.status ?? 1);\n`,
-      { mode: 0o755 },
-    );
-    symlinkSync(join(root, ".tools/pnpm-real"), join(root, ".tools/pnpm"));
-  }
+  const pnpmCli = existsSync(preferred)
+    ? preferred
+    : execFileSync("which", ["pnpm"], { env: isolated, encoding: "utf8", shell: false }).trim();
+  mkdirSync(join(root, ".tools"));
+  const launch = pnpmCli.endsWith(".mjs")
+    ? `spawnSync(process.execPath, [${JSON.stringify(pnpmCli)}, ...process.argv.slice(2)], {env:process.env,stdio:'inherit',shell:false})`
+    : `spawnSync(${JSON.stringify(pnpmCli)}, process.argv.slice(2), {env:process.env,stdio:'inherit',shell:false})`;
+  writeFileSync(
+    join(root, ".tools/pnpm-real"),
+    `#!${process.execPath}\nimport { spawnSync } from 'node:child_process';\nconst result = ${launch};\nif (result.error) throw result.error;\nprocess.exit(result.status ?? 1);\n`,
+    { mode: 0o755 },
+  );
+  symlinkSync(join(root, ".tools/pnpm-real"), join(root, ".tools/pnpm"));
   const receiptPath = join(root, ".git", "receipt.json");
   const runGate = (
     gate: string,

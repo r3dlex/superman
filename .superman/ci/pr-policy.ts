@@ -202,7 +202,7 @@ function effectivePolicy(base: string): { paths: Set<string>; findings: Finding[
               "Executable policy comments, slash expressions and templates require reviewed lexical modeling",
             );
           for (const match of text.matchAll(
-            /(?:^|[;\n])\s*(?:import\s+(?:[^;]*?\sfrom\s*)?|export\s+[^;]*?\sfrom\s*)["']([^"']+)["']|\b(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)/gu,
+            /(?:^|[;\n}])\s*(?:import\s+(?:[^;]*?\sfrom\s*)?|export\s+[^;]*?\sfrom\s*)["']([^"']+)["']|\b(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)/gu,
           ))
             refs.push(match[1] ?? match[2]);
           if (

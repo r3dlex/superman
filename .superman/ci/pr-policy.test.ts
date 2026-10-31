@@ -489,6 +489,22 @@ test("pnpm provisioning hooks and their static local helpers are protected polic
   assert.match(result.output, /G4: ticket PRs may not touch protected paths/u);
 });
 
+test("a static import immediately after a closing brace is protected policy", (t) => {
+  const repo = fixture(t, "ticket/demo-01");
+  repo.write(
+    "vitest.config.ts",
+    'function setup() {} import shared from "./policy.mts"; export default { ...shared, setup };\n',
+  );
+  repo.write("policy.mts", "export default { test: { exclude: [] } };\n");
+  repo.git("add", "--all");
+  repo.git("commit", "--quiet", "-m", "approved brace import");
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  repo.write("policy.mts", 'export default { test: { exclude: ["**/*"] } };\n');
+  const result = repo.check();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /G4: ticket PRs may not touch protected paths/u);
+});
+
 test("multiple static imports on one config line all participate in policy closure", (t) => {
   const repo = fixture(t, "ticket/demo-01");
   repo.write(
