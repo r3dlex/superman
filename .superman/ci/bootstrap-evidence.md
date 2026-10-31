@@ -428,6 +428,69 @@ Three routes were weighed against this repository's own constraints:
 
 The route the spec already resolved (§15 Q9, 2026-10-29) is the accepted one: build the reviewed self-build from the v0.61.0 tag, publish it as a **human-authorized superman release asset**, and register its sha256 in the reviewed policy, after which CI downloads and verifies it exactly like the darwin-arm64 and linux-x64 assets. Publication requires separate authority ("asset publication and hosted-setting changes require separate authority and are not part of this update"), so this leg stays red until that asset exists and is registered. The workflow's blocker message now names that requirement instead of reading as a missing file, so the red leg is unmistakably a documented block and not an accident to be "fixed" by weakening a gate.
 
+## G9's CI identity check compared a commit id the forge does not keep stable — 2026-10-31
+
+Runs **41185030855**, **41186621121**, **41187431036** and **41189460345** all failed the same way on the two x64/macOS legs: `G9: CI H/B/M identity mismatch`, thrown before any gate ran, while `bootstrap (ubuntu-24.04-arm)` failed at Gate 1 on the missing Linux-arm64 asset (above).
+
+### Root cause
+
+The CI branch of `.superman/ci/raw-gates.ts` required the `pull_request` payload's `merge_commit_sha` to be **byte-equal** to the commit the runner checked out. GitHub rebuilds `refs/pull/<n>/merge` *after* it serializes the `synchronize` payload, so the payload can name an **earlier** merge of the same base while the checkout is the current one. The gate was therefore comparing against a value the forge does not promise to keep stable, and every push failed it.
+
+The tested tree was never wrong. Each run checked out the merge of **its own** head into the recorded base `e9b7551fff4835a53dd716936e68ead7053502f1`, confirmed through the commits API:
+
+| Run | Head | Checked-out merge | Parents (base, head) |
+|---|---|---|---|
+| 41185030855 | `294ed4c94c63d2d0bfed351e9b47a07feb542404` | `805272d78e6657922cacc8db2ffb3e1343c167e6` | `e9b7551`, `294ed4c9` |
+| 41186621121 | `5044412e39898a44f3fec95708077f039424256b` | `a4110c3708cba76e5c7682e33759d029308a5b6b` | `e9b7551`, `5044412` |
+| 41187431036 | `cf5c103aa753af30c8ca5cf2b5afc758c2ab4a85` | `b0230c2322ae82290994bbeab5deaa1383c986f9` | `e9b7551`, `cf5c103` |
+| 41189460345 | `87af1b43d1b567929dac40ebe8d2f8e7a52fcbc2` | `da76c57528a63c91ea68b79cb3574a00a680317b` | `e9b7551`, `87af1b4` |
+
+`actions/checkout` fetched `+<merge-sha>:refs/remotes/pull/1/merge`, so the run's `GITHUB_SHA` and the checked-out tree were the same object; the parent-order check that already existed (`parents == [base, head]`) would have passed in every run. The failing term was the byte comparison against the payload's lagging pointer.
+
+### Correction
+
+A merge commit is identified by its **parent pair**, not by a byte-identical commit id. The CI branch now requires:
+
+- the recorded base (`pr.base.sha`) to equal the recorded base commit, the head ref to equal `HEAD_REF`, and the head to be a commit id — each mismatch now names its field and both values instead of one opaque string;
+- the run's `GITHUB_SHA` to equal the tested tree;
+- the tested tree to be exactly the recorded base × recorded head merge (`parents == [base, head]`);
+- the forge's recorded merge pointer to be a commit id, and — when the clone can resolve it — to integrate the recorded base. A pointer the clone cannot resolve is recorded rather than rejected, because a fresh clone does not carry the forge's earlier merge object;
+- the pointer to be recorded in the receipt as `eventMergeSha`, beside `testedMergeSha`.
+
+This is the model the spec and ADR 0001 already state: "CI proves the integration of that head with a recorded base, not that the head and test-merge SHA are identical" (spec §Solution, line 34) and "receipts bind the reviewed head, tested base and tested merge commit rather than claiming they are one SHA" (ADR 0001). The receipt keeps `mergeAuthority: "none"`. No threshold, floor, waiver or applicability rule changed, and no assertion was weakened: the pre-existing "wrong merge" case (a pointer that is not a merge of the recorded base) still fails, and a malformed pointer and a payload with no pointer are now covered as well.
+
+### Local reproduction
+
+`raw CI binds the merge by its parent pair when the forge pointer names an earlier merge` builds the race (the payload's `merge_commit_sha` is an earlier merge of the same base) and failed with the hosted message `G9: CI H/B/M identity mismatch` before the correction, and passes after it. The same scenario was then replayed against this repository with the real recorded base, the real head and GitHub-shaped merge commits: the pre-fix gate exits 1 with that message; the corrected gate exits 0 and records G1/G2/G3/G4/G10 pass, G5/G6/G7/G8/G9 not applicable and G11 reserved for the Linux-x64 leg.
+
+### The receipt never reached the artifact store
+
+The upload step passed `path: .superman-ci/`, and `actions/upload-artifact` excludes hidden paths unless `include-hidden-files: true` is set. The hosted log recorded `##[warning]No files were found with the provided path: .superman-ci/.`, so the receipt this evidence chain cites was never uploaded. The step now sets `include-hidden-files: true`; the pinned action v7.0.2 declares that input (default `false`).
+
+### Re-measurement of the corrected tree
+
+macOS-arm64 / Node **26.12.1**, pinned archgate **0.61.0** (darwin-arm64 asset, sha256 verified against `tool-assets.json`), at commit **`45efb48472eedfaf46e0d2035b57e20eec03744a`**: **364 passed / 0 failed / 0 skipped**, coverage verdict `pass`, and the default raw G1–G11 receipt exits 0 (G1/G2/G3/G4/G10 pass; G5/G6 have no product source; G7 inactive; G8/G9 spec-kind; G11 belongs to the required Linux-x64 leg).
+
+| Metric | Covered / total | Percentage |
+|---|---|---|
+| Lines | 1436 / 1494 | **96.11%** |
+| Statements | 1609 / 1687 | **95.37%** |
+| Branches | 1545 / 1660 | **93.07%** |
+| Functions | 191 / 199 | **95.97%** |
+
+The measured inventory gained the new `gitOptional` helper in `raw-gates.ts` (+22 lines, +24 statements, +17 branches, +1 function); its lines and function are fully covered and its branches are covered except the `catch` path that a resolvable pointer never takes. Every other metric moved by less than a tenth of a point and every metric stays above the 90% floor. No threshold, exclusion, floor or skip was added.
+
+| Artifact | SHA-256 |
+|---|---|
+| Coverage receipt | `af251d0bda8e6ab24b0ba4937355acd8583a4b827a6de7378ee8d22f7f259115` |
+| Coverage summary | `aa67fb47c707fd94ac2904ef0005f698e990fa0bb4cecbbe2d4dc4053bc782f7` |
+| Raw bootstrap receipt | `2efa444833df6c44183140c8a982e7e581dc29e9486b20f39da86f925e1630d1` |
+| Coverage inputs hash | `6fa48120c4f33b5f39009564d282ce4cb4245bd0573888026212d7ff7c7eb3a8` |
+
+### The Linux-arm64 candidate route is also red, for an upstream reason
+
+The human-authored `.github/workflows/archgate-linux-arm64-candidate.yml` builds archgate v0.61.0 from source on the arm64 runner, runs archgate's own test suite, and uploads the candidate tarball. Its runs **41194094579**, **41194199193**, **41194343772** and **41194479200** all failed, and the failure is upstream's, not this repository's: `bun run test` inside `archgate/cli` at tag `v0.61.0` reports **2931 pass / 49 skip / 7 fail** on the aarch64 runner, and all seven failures are archgate's own wall-clock performance budgets (`--version`/`--help` startup latency, exit-tail regression, `check` heavy-command budget, and a memory-pressure time budget). The step never reaches the compile, so no candidate asset exists to register. That route needs an upstream decision about archgate's timing-sensitive tests on arm64 hardware; it is not a change this repository can make, and it does not change the arm64 leg's fail-closed status.
+
 ## Remaining blockers and authority boundaries
 
 | Blocker | Next permitted action / responsible party |

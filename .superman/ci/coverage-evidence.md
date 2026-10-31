@@ -1,6 +1,6 @@
 # Overall coverage enforcement — 2026-10-31
 
-**Outcome:** corrected local verification passes **360/360 tests and all eight stages**. Overall coverage is **96.05% lines, 95.30% statements, 93.00% branches and 95.95% functions**, independently above the approved floor. Independent Standards and Spec rechecks have no remaining hard findings in scope. The 100% target is not yet reached. The changes are committed and pushed on `spec/superman-v0`; hosted enforcement of the corrected tree and Gate 1 readiness are not established. Spec §5.4 and ADR 0014 own the acceptance contract; this file records evidence, not new policy or authority.
+**Outcome:** corrected local verification passes **364/364 tests and all eight stages** (latest re-measurement, commit `45efb48`, 2026-10-31; the earlier snapshot was 360/360). Overall coverage is **96.11% lines, 95.37% statements, 93.07% branches and 95.97% functions**, independently above the approved floor. Independent Standards and Spec rechecks have no remaining hard findings in scope. The 100% target is not yet reached. The changes are committed and pushed on `spec/superman-v0`; hosted enforcement of the corrected tree and Gate 1 readiness are not established. Spec §5.4 and ADR 0014 own the acceptance contract; this file records evidence, not new policy or authority.
 
 ## Approved boundaries and tools
 
@@ -114,8 +114,30 @@ After the corrections, and after rebasing onto the upstream commits that landed 
 
 The coverage receipt records `requestedMode: incremental`, `execution: full`, `cachedFiles: 0`, the explicit inactive-ledger fallback, `mergeAuthority: none` and `evaluatedSha: 3f7f71738a56c891fb4b563c62ba89dcec5349b0`. All 17 inventoried source files are represented with zero skipped items.
 
+## Re-measurement after the G9 identity correction — 2026-10-31
+
+The CI identity check in `.superman/ci/raw-gates.ts` compared the `synchronize` payload's `merge_commit_sha` with the checked-out commit by byte equality, a value GitHub does not keep stable (it rebuilds `refs/pull/<n>/merge` after serializing the payload). The correction binds the merge by its parent pair instead; the reasoning, the hosted runs that proved the tested tree was always correct, and the receipt-upload repair are recorded in [bootstrap evidence](bootstrap-evidence.md). The coverage floor, the 100% target, the measured inventory and the enforcement code were not touched by that change.
+
+Re-measured on macOS-arm64 / Node **26.12.1** with the pinned archgate **0.61.0** (darwin-arm64 asset, sha256 verified against `tool-assets.json`) at commit **`45efb48472eedfaf46e0d2035b57e20eec03744a`**: **364 passed / 0 failed / 0 skipped**, verdict `pass`.
+
+| Metric | Covered / total | Percentage |
+|---|---|---|
+| Lines | 1436 / 1494 | **96.11%** |
+| Statements | 1609 / 1687 | **95.37%** |
+| Branches | 1545 / 1660 | **93.07%** |
+| Functions | 191 / 199 | **95.97%** |
+
+All four metrics have zero skipped items and stay above the 90% minimum in every metric. The inventory gained only the new `gitOptional` helper in `raw-gates.ts` (+22 lines, +24 statements, +17 branches, +1 function); its lines and function are fully covered and the remaining branch gap is the `catch` path a resolvable pointer never takes. The coverage receipt records `requestedMode: incremental`, `execution: full`, `cachedFiles: 0`, the explicit inactive-ledger fallback, `mergeAuthority: none` and `evaluatedSha: 45efb48472eedfaf46e0d2035b57e20eec03744a`.
+
+| Artifact | SHA-256 |
+|---|---|
+| Coverage receipt | `af251d0bda8e6ab24b0ba4937355acd8583a4b827a6de7378ee8d22f7f259115` |
+| Coverage summary | `aa67fb47c707fd94ac2904ef0005f698e990fa0bb4cecbbe2d4dc4053bc782f7` |
+| Raw bootstrap receipt | `2efa444833df6c44183140c8a982e7e581dc29e9486b20f39da86f925e1630d1` |
+| Coverage inputs hash | `6fa48120c4f33b5f39009564d282ce4cb4245bd0573888026212d7ff7c7eb3a8` |
+
 ## Remaining authority and hosted work
 
 Local coverage implementation and verification are complete and the corrections are committed and pushed on `spec/superman-v0`. Hosted PR coverage on the corrected head and actual scheduled execution remain unverified until the runs land; nightly evidence is not PR admission. The original approved arm64 redistribution/registered-asset, exact hosted three-platform and applicable small-corpus blockers remain, and ticket 01 is not admitted. Incremental coverage reuse stays off until its complete provenance/selection contract is verified in the later activation work.
 
-Next: collect the hosted results for the pushed head on the two x64/macOS legs; the `ubuntu-24.04-arm` leg remains blocked on the human-authorized published archgate asset described in [bootstrap evidence](bootstrap-evidence.md).
+Next: collect the hosted results for the pushed G9-corrected head on the two x64/macOS legs; the `ubuntu-24.04-arm` leg remains blocked on the human-authorized published archgate asset described in [bootstrap evidence](bootstrap-evidence.md), and the arm64 candidate build is itself red on upstream archgate's arm64 performance budgets.
