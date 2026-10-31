@@ -10,7 +10,10 @@
       "url": "https://github.com/archgate/cli/releases/download/v0.61.0/archgate-linux-x64.tar.gz",
       "sha256": "82037281f74617323715703db492d7284d75531cf8032bcf7af41148a9f416b3"
     },
-    "linux-arm64": null
+    "linux-arm64": {
+      "url": "https://github.com/r3dlex/superman/releases/download/archgate-v0.61.0-linux-arm64/archgate-linux-arm64.tar.gz",
+      "sha256": "a8b860aeb06df957e2128a4cb4ca4b1ce389c4390429bbffb4f7e6fe62674df1"
+    }
   },
   "trivy": {
     "version": "0.76.1",

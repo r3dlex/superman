@@ -489,13 +489,17 @@ The measured inventory gained the new `gitOptional` helper in `raw-gates.ts` (+2
 
 ### The Linux-arm64 candidate route is also red, for an upstream reason
 
-The human-authored `.github/workflows/archgate-linux-arm64-candidate.yml` builds archgate v0.61.0 from source on the arm64 runner, runs archgate's own test suite, and uploads the candidate tarball. Its runs **41194094579**, **41194199193**, **41194343772** and **41194479200** all failed, and the failure is upstream's, not this repository's: `bun run test` inside `archgate/cli` at tag `v0.61.0` reports **2931 pass / 49 skip / 7 fail** on the aarch64 runner, and all seven failures are archgate's own wall-clock performance budgets (`--version`/`--help` startup latency, exit-tail regression, `check` heavy-command budget, and a memory-pressure time budget). The step never reaches the compile, so no candidate asset exists to register. That route needs an upstream decision about archgate's timing-sensitive tests on arm64 hardware; it is not a change this repository can make, and it does not change the arm64 leg's fail-closed status.
+The human-authored `.github/workflows/archgate-linux-arm64-candidate.yml` builds archgate v0.61.0 from source on the arm64 runner, runs archgate's own test suite, and uploads the candidate tarball. Its runs **41194094579**, **41194199193**, **41194343772** and **41194479200** all failed, and the failure is upstream's, not this repository's: `bun run test` inside `archgate/cli` at tag `v0.61.0` reports **2931 pass / 49 skip / 7 fail** on the aarch64 runner, and all seven failures are archgate's own wall-clock performance budgets (`--version`/`--help` startup latency, exit-tail regression, `check` heavy-command budget, and a memory-pressure time budget). The step never reaches the compile, so that runner route produced no asset. CI still must not compile Archgate.
+
+### Linux-arm64 CI asset registered (2026-10-31)
+
+André authorized the local Colima build of archgate/cli `f65d99f56d02757cca94d53f6d717333770e0170` as the CI asset. The same suite passed there: 2945 pass, 42 skip, 0 fail. It is the prerelease [archgate-v0.61.0-linux-arm64](https://github.com/r3dlex/superman/releases/tag/archgate-v0.61.0-linux-arm64). `tool-assets.json` now pins that URL and archive sha256 `a8b860aeb06df957e2128a4cb4ca4b1ce389c4390429bbffb4f7e6fe62674df1`. The binary sha256 is `181ef65d8a0c73a9abb2279baf710e7ded18e05cfa04c37f033ce95aa6357708`. This is not the earlier unapproved `637d4179…` / `80c87fa1…` / `496d9c98…` candidate, and it is not a product of the failed runner builds above. Upstream still publishes no linux-arm64 asset. The paragraphs above record the earlier fail-closed state; they do not override this pin.
 
 ## Remaining blockers and authority boundaries
 
 | Blocker | Next permitted action / responsible party |
 |---|---|
-| No approved published Linux-arm64 Archgate asset | Resolve the conditional package's redistribution-evidence gaps, obtain human review/authorization of exact final bytes, publish, then register the verified release URL/checksum in reviewed policy |
+| Linux-arm64 Archgate CI asset registered; hosted leg not yet green on this pin | CI downloads `archgate-v0.61.0-linux-arm64` and checks archive sha256 `a8b860aeb06df957e2128a4cb4ca4b1ce389c4390429bbffb4f7e6fe62674df1`. Do not substitute the older unapproved hashes |
 | No full final-tree three-platform proof | After an authorized green commit/push, collect hosted checks/artifacts for the exact H/B/M on all three required jobs. Emulated-x64 timeouts are not native-x64 proof |
 | Active skill verifier and refactor-history verifier unsupported by the bootstrap | Those inputs fail closed; do not admit such work based on an inactive `n/a` or behavior-ticket proof |
 | Partial/undersized jscpd corpora or unmodeled dynamic/relocated scopes | These inputs block until reviewed policy modeling exists; no partial metric is reported as full-corpus success |
