@@ -21,7 +21,11 @@ jobs:
           curl -fsSL -o bun-linux-aarch64.zip https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-linux-aarch64.zip
           curl -fsSL -o SHASUMS256.txt https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/SHASUMS256.txt
           grep ' bun-linux-aarch64.zip$' SHASUMS256.txt | sha256sum -c
-          python3 -m zipfile -e bun-linux-aarch64.zip .
+          if ! command -v unzip >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y unzip
+          fi
+          unzip -q bun-linux-aarch64.zip
           install -m 755 bun-linux-aarch64/bun "$RUNNER_TEMP/bun"
           git clone --depth 1 --branch v0.61.0 https://github.com/archgate/cli.git archgate-src
           git -C archgate-src fetch --depth 1 origin f65d99f56d02757cca94d53f6d717333770e0170
