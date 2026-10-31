@@ -11,6 +11,7 @@ import {
   mkdtempSync,
   openSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -27,7 +28,9 @@ const entrypoint = join(import.meta.dirname, "archgate-linux-arm64-wizard.ts");
 const candidateHash = "b82d14bd3717287c78a2e1351107a49a925192cae59c0f844437eed8a0d6caef";
 
 function fixture(t: TestContext) {
-  const root = mkdtempSync(join(tmpdir(), "superman-wizard-fixture-"));
+  // Child tools record process.cwd(), which Node realpaths. macOS TMPDIR is
+  // /var/folders, a symlink to /private/var, so the fixture root must be canonical.
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "superman-wizard-fixture-")));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   for (const folder of ["bin", "home", "tmp", "work"]) mkdirSync(join(root, folder));
   // No ambient PATH: in particular no real gh, browser opener or archive program.
