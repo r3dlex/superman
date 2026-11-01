@@ -72,11 +72,7 @@ export function qualityGate(
   if (!before.length && !after.length) return { gate, status: "n/a", reason: "no TypeScript source" };
   let baseline: { jscpdPct: number; mutationScore: number; qualityInputsHash: string } | undefined;
   let proposed: { jscpdPct: number; mutationScore: number; qualityInputsHash: string } | undefined;
-  const validBaseline = (value: {
-    jscpdPct: number;
-    mutationScore: number;
-    qualityInputsHash: string;
-  }): boolean =>
+  const validBaseline = (value: { jscpdPct: number; mutationScore: number; qualityInputsHash: string }): boolean =>
     !!value &&
     Object.keys(value).every((key) => ["jscpdPct", "mutationScore", "qualityInputsHash"].includes(key)) &&
     [value.jscpdPct, value.mutationScore].every(

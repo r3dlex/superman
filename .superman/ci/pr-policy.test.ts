@@ -1291,10 +1291,7 @@ test("an unknown-extension Vitest loader cannot hide effective.json from G4", (t
     "settings/effective.json",
     '{"test":{"include":["test/**/*.test.ts"],"passWithNoTests":false,"name":"base-policy"}}\n',
   );
-  repo.write(
-    "test/sample.test.ts",
-    'import { expect, test } from "vitest"; test("runs", () => expect(1).toBe(1));\n',
-  );
+  repo.write("test/sample.test.ts", 'import { expect, test } from "vitest"; test("runs", () => expect(1).toBe(1));\n');
   repo.git("add", "--all");
   repo.git("commit", "--quiet", "-m", "approved vitest data-loader chain");
   repo.git("update-ref", "refs/remotes/origin/main", "HEAD");

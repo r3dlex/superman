@@ -194,7 +194,10 @@ test("runtime reached through an intermediate import cannot hide behind a test f
 
 test("a test-only helper remains excludable when no measured module imports it", (t) => {
   const repo = coveredBootstrap(t);
-  repo.write(".superman/ci/helper.test.ts", "export function helper() {\n  if (false) return 'hidden';\n  return 'helper';\n}\n");
+  repo.write(
+    ".superman/ci/helper.test.ts",
+    "export function helper() {\n  if (false) return 'hidden';\n  return 'helper';\n}\n",
+  );
   repo.write(
     ".superman/ci/subject.test.ts",
     'import assert from "node:assert/strict"; import { test } from "node:test"; import { sign } from "./subject.ts"; import { helper } from "./helper.test.ts"; test("both sides", () => { assert.equal(sign(1), "positive"); assert.equal(sign(0), "other"); assert.equal(helper(), "helper"); });\n',
