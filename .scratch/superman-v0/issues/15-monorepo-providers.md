@@ -21,5 +21,6 @@ Also expose configured complete-project typecheck argv only after verifying the 
 - [ ] Changing `nx.json`, `turbo.json` or `.moon/**` forces full.
 - [ ] A file outside every project root is passed on to the TS provider in a mixed fixture.
 - [ ] Recorded native graphs select the changed compiler project and all reverse dependents; a missing graph/argv fixture falls back to full typechecking without guessing from test targets.
+- [ ] For every supported tool dialect, conformance fixtures prove conservative required-test closure across project/global/non-import inputs. Missing/incomplete native graph or ownership/input evidence forces all required targets; a recorded affected-name list or successful tool exit alone cannot authorize narrowing. Critical acceptance remains outside these selectors (§5.4–5.7).
 
 Start by recording each supported tool's real graph output and version, then replay it through the shared interface.

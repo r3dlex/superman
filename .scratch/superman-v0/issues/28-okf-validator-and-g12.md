@@ -19,5 +19,6 @@
 - [ ] Every PR kind requires a newly prepared entry for its forge-verified PR number; old entries/fake future merge metadata do not satisfy it. Pre-commit needs no number; release/main contexts do not invent a new PR. No-promotion outcomes are legitimate.
 - [ ] Every run inventories/indexes/checks budgets; changed content plus inbound/fragment dependents is validated using base/head for renames/deletions. Unknown history/impact/policy forces full; code-only changes still check the current PR log. Nightly is uncached full, and no gate-result cache supplies G12.
 - [ ] Receipt records pins/profile/policy, clock, PR identity, actual scan/closure/fallback/warnings/failures. Full and affected fixtures produce equivalent failure outcomes; CLI exits 0/1/2 as declared.
+- [ ] General parser/profile/adversarial conformance executes through the actual Deno CLI under its reviewed launch/config/capability profile, with runtime/source/asset identities in evidence. Node-only imports are narrower evidence and cannot stand in for Deno execution. No JSR `@std`, vendored parser or replacement quality tool is introduced.
 
 Start with a valid nontrivial YAML alias/Markdown-reference page and an unchanged page whose target heading was renamed; the latter must fail even in affected mode.

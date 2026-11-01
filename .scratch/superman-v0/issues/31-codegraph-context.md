@@ -17,5 +17,6 @@
 - [ ] Doctor warns on missing/wrong executable/index/config/connection without installing, repairing or failing gates. Graph never participates in G12/change providers/cache/admission.
 - [ ] Session smoke demonstrates explicit startup/cleanup, no intentionally spawned shared daemon/watchdog/watch/telemetry/download; ignored index writes/transient workers are documented. Existing-daemon/cross-project limitations are exposed, never advertised as OS isolation.
 - [ ] Actual pinned MIT LICENSE and tarball notice omission are recorded; Superman redistributes no upstream bundle or unaudited third-party component. Platform runtime evidence remains separate from source inspection.
+- [ ] Deno migration applies to Superman's own wiring/diagnostics, not CodeGraph's independent external runtime or installation. Preserve separate provisioning/session evidence and warning-only absence; no npm product distribution, runtime dependency or implicit external-tool port is added.
 
 Start with a fake executable that records MCP argv/env, then existing edited instruction/config files which must remain untouched.

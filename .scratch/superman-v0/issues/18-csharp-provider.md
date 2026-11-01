@@ -17,5 +17,7 @@
 - [ ] A `Directory.Build.props` change in a subfolder affects every project below it; at the root it forces full.
 - [ ] Typecheck targets include every affected complete compiler project and reverse dependent, not only test projects. Unknown imported MSBuild/config inputs or missing argv produces full-check fallback.
 
-Start with a library-only project change whose dependent test project is distinct from its compiler scope.
 - [ ] The `dotnet test <project>` argument form under Microsoft.Testing.Platform vs VSTest is checked on a real SDK (VERIFY result recorded).
+- [ ] Imported MSBuild/conditional/generated graph inputs have conservative test-selection fixtures, not only compiler fixtures. Unresolved ownership/graph/input completeness forces all required targets; an over-approximated direct-reference list alone cannot establish a complete project graph. Critical acceptance remains outside narrowing (§5.7).
+
+Start with a library-only project change whose dependent test project is distinct from its compiler scope.

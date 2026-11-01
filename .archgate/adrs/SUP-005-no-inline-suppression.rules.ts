@@ -9,6 +9,8 @@ const BIOME = new RegExp(
   "iu",
 );
 const TRIVY = /(?:^|\s)trivy:ignore:[^\s:]+/u;
+// Include Rust's NEL whitespace before/after a block/JSDoc star prefix.
+const DENO = /^[\s\u0085]*(?:\*+[\s\u0085]*)?deno-coverage-ignore\b/u;
 
 function forbidden(ctx: RuleContext, file: string, line: number | number[]) {
   // Omit `file`: Archgate applies file suppressions after this rule.
@@ -288,11 +290,11 @@ function sourceComments(
   return comments;
 }
 
-function checkComments(ctx: RuleContext, file: string, comments: SourceComment[], trivy = false) {
+function checkComments(ctx: RuleContext, file: string, comments: SourceComment[], patterns: RegExp[] = [BIOME]) {
   for (const comment of comments) {
     const offset = comment.value
       .split(/\r\n?|[\n\u2028\u2029]/u)
-      .findIndex((line) => (trivy ? TRIVY : BIOME).test(line.trimStart().replace(/^\*+/u, "").trimStart()));
+      .findIndex((line) => patterns.some((pattern) => pattern.test(line.trimStart().replace(/^\*+/u, "").trimStart())));
     if (offset >= 0)
       forbidden(ctx, file, comment.possibleLines?.map((line) => line + offset) ?? comment.loc.start.line + offset);
   }
@@ -301,7 +303,8 @@ function checkComments(ctx: RuleContext, file: string, comments: SourceComment[]
 export default {
   rules: {
     "no-inline-suppression": {
-      description: "No effective inline gate suppressions; inert strings and examples remain permitted",
+      description:
+        "No inline gate suppressions or Deno coverage annotations; inert strings and examples remain permitted",
       async check(ctx) {
         for (const file of ctx.scopedFiles) {
           const text = await ctx.readFile(file);
@@ -316,7 +319,7 @@ export default {
             continue;
           }
           if (/\.(?:tf|tfvars|hcl)$/u.test(file)) {
-            checkComments(ctx, file, sourceComments(text, false, [], true), true);
+            checkComments(ctx, file, sourceComments(text, false, [], true), [TRIVY]);
             continue;
           }
           if (/(?:^|\/)(?:Dockerfile(?:\.[^/]*)?|[^/]+\.dockerfile)$/iu.test(file)) {
@@ -340,7 +343,7 @@ export default {
                 : [];
             })
             .sort((a, b) => b.length - a.length);
-          checkComments(ctx, file, sourceComments(text, true, regexes, false, /\.[jt]sx$/u.test(file)));
+          checkComments(ctx, file, sourceComments(text, true, regexes, false, /\.[jt]sx$/u.test(file)), [BIOME, DENO]);
         }
       },
     },

@@ -6,17 +6,18 @@ Status: accepted
 
 André decided on 2026-10-29 that `tsrs` is the primary type checker in CI and locally, including on self-hosted runners. `tsrs` is oxc-project's Rust port of TypeScript 7's checker (Apache-2.0). Its version names the TypeScript release it follows: `0.20.1-ts7.1.0-beta` tracks TypeScript `7.1.0-beta`. It is still a beta, so it gets these precautions:
 
-- Only `--noEmit`. tsrs never emits anything we ship. Bun builds the release binaries, and the build that produces `dist/` is separate from the type check.
+- Only `--noEmit`. tsrs never emits anything we ship. Under the 2026-11-01 Deno amendment (ADR 0016), `deno compile` replaces the prior optional Bun product build; source/assets delivery and compilation remain separate from primary typechecking. This does not change Archgate's external Bun build.
 - Exact pin. The devDependency is `tsrs@<exact version>`, like `archgate@0.61.0`. It changes only in a PR that passes full CI on all three OS legs.
 - Default mode only in gates. `--fast` and `TSRS_FAST=1` turn on a preset whose diagnostics and exit status may differ from the pinned TypeScript, so they are never used in CI or in any gate. A developer may use them in a local editor or a watch loop.
 - Drift watch. A scheduled, non-blocking job runs the official TypeScript `tsc --noEmit`, pinned exactly to the version tsrs names, and diffs its diagnostics against tsrs. Any difference fails that job and opens an issue.
 - Platform check. tsrs has to install and run on macOS arm64, linux x64 and linux arm64.
 - Scope amendment, 2026-10-30: v0 selects complete compiler projects/packages/apps and their reverse dependents using verified project references or native project graphs and explicit typecheck argv. Missing or ambiguous project/command/compiler-input evidence falls back to the configured whole-repository check. A file-import closure alone is not a safe compiler scope; the selection contract lives in spec §5.7.
+- Deno amendment, 2026-11-01: retain tsrs as primary and add required supplemental `deno check` over complete operational Deno entry graphs. Protect exact ambient declaration provenance, compiler/config/resolution inputs and explicit argv; prove positive and deliberately invalid fixtures with both checkers on all three native platforms before admission. Deno's bundled TypeScript is a distinct compatibility check, not the matching-`tsc` drift oracle or permission to change the tsrs pin. The integration is unimplemented/unverified (§17).
 
 ## Considered Options
 
 - **`tsc --noEmit` from TypeScript 7 as the gate.** This is the reference behaviour, and it stays the drift oracle and the fallback.
-- **`tsc` from TypeScript 5.x/6.x.** Rejected. It is slower and is not the TypeScript line tsrs follows.
+- **`tsc` from TypeScript 5.x/6.x as primary/reference checker.** Rejected: it is not the TypeScript line tsrs follows. A Deno-bundled compiler used for the separately required compatibility check does not supersede that decision.
 - **tsrs with `--fast` in CI.** Rejected. Its results can differ from the pinned TypeScript, and a gate must be deterministic.
 - **Whole-repository typechecking on every PR.** Replaced on 2026-10-30 by verified-project selection, with whole-repository fallback. A single-project repo still checks that whole project.
 

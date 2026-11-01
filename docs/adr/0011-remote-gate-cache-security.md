@@ -8,7 +8,9 @@ André retained local, Actions and remote gate-result caches in v0, with a conse
 
 ## Eligibility and trust
 
-Only fully input-modeled typecheck, test, knip, duplication, mutation and lint checks may reuse passes. Architecture/policy, skill integrity, traceability, behavior replay, forge admission and Trivy always execute afresh. Matching source hashes alone cannot model changed reviews, commit history or vulnerability databases. Keys include actual checker/tool identities as well as version strings, protected configuration, platform, allowed environment and complete source/runtime-asset inputs; missing input evidence means fresh execution.
+Only fully input-modeled typecheck, ordinary test, knip, full-corpus duplication, mutation and lint checks may reuse passes. Architecture/policy, owner-governed critical acceptance, skill integrity, traceability, behavior replay, forge admission, Trivy and G12 always execute afresh. The quality amendment keeps critical cases outside selection/reuse so an optimization cannot omit its own oracle. Matching source hashes alone cannot model changed tests/fixtures, reviews, commit history or vulnerability databases. Keys include actual checker/tool identities, protected configuration, platform, allowed environment and complete source/runtime-asset/comparison inputs; missing input evidence means fresh execution. Duplication reuse must cover the entire approved corpus, not a selected subset.
+
+The 2026-11-01 Deno amendment (ADR 0016) extends this model to actual operational/runtime and real Node test-tool hosts, source/compiled launch form, executable content, compiler declarations, effective permission/config/environment policy and assets; compiled evidence also binds verified denort/build/artifact identities. A Node-compatible version label cannot prove real Node execution or equivalence to Deno. No cross-runtime/form reuse is assumed. Unknown modeled inputs force uncached full checks, while missing required runtime/profile approval still blocks admission. Retained historical Node receipts are not upgraded. The remote built-in transport and later protected writers run on Deno; trust roles/credentials remain unchanged. Implementation belongs to tickets 21–24 before reuse activation, not this document.
 
 | Tier | Authority |
 |---|---|
@@ -22,7 +24,9 @@ Main selects every target and may reuse eligible valid passes. Nightly selects e
 
 André chose protected GitHub Environment credentials rather than an OIDC-validating Cloudflare Worker for v0. Cache-writing/signing authority is confined to separate main push/nightly writer jobs; jobs installing dependencies or executing project tests/builds do not receive it. Writers validate the producing run, commit and artifact identities before signing data and do not execute project hooks. Ed25519 signatures authenticate the producer, not freshness or completeness; the latest trusted audit and scope checks remain necessary.
 
-One confirmed stale cached pass quarantines the implicated entries and disables reuse for that gate/input model until a reviewed fix. Fresh gate execution continues. This is not a selection-miss percentage event, and an absent/invalid cache entry that simply causes execution is not an incident.
+One confirmed stale cached pass quarantines implicated entries and disables reuse for that gate/input model until a reviewed fix, relevant invalidation fixtures and fresh uncached full evidence. Fresh gate execution continues. A reset, changed hash or later green retry alone does not repair the model. Selection-miss quarantine is separate (ADR 0010); an absent/invalid cache entry that simply causes execution is not an incident.
+
+Execution inputs use the reviewed existing self-hosted environment and actual available image/native-host/tool identities (ADR 0015), not a new VM platform. Unknown stable inputs force fresh checks; missing required platform/tool/access approval still blocks the applicable role. Separate writer credentials and data-only validation remain required, but an Environment/job name alone does not prove isolation. The retained repository-checker/human-review limit (ADRs 0001/0017) is not replaced by a signature or claimed tamper-proof dynamic evidence.
 
 ## Considered Options
 

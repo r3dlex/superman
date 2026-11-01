@@ -244,6 +244,121 @@ test("SUP-005 rejects an Archgate next-line suppression comment", (t) => {
   assert.match(result.output, /Inline suppression is forbidden.*policy\.ts:1/u);
 });
 
+test("SUP-005 rejects a Deno file coverage suppression", (t) => {
+  const repo = fixture(t, "SUP-005", "no-inline-suppression", "0004-no-waivers.md");
+  repo.write("policy.ts", "// deno-coverage-ignore-file\nexport const value = 1;\n");
+  const result = repo.check();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /Inline suppression is forbidden.*policy\.ts:1/u);
+  assert.equal(JSON.parse(result.stdout).suppressed, 0, result.output);
+});
+
+test("SUP-005 rejects Deno next-line, inline and balanced range coverage annotations", (t) => {
+  for (const [file, text, lines] of [
+    ["policy.js", "//deno-coverage-ignore reason\nexport const value = 1;\n", [1]],
+    ["policy.cts", "module.exports = 1; // deno-coverage-ignore\n", [1]],
+    ["policy.mts", "// deno-coverage-ignore-start\nexport const value = 1;\n// deno-coverage-ignore-stop\n", [1, 3]],
+  ] as const) {
+    const repo = fixture(t, "SUP-005", "no-inline-suppression", "0004-no-waivers.md");
+    repo.write(file, text);
+    const result = repo.check();
+    assert.equal(result.status, 1, result.output);
+    for (const line of lines) assert.ok(result.output.includes(`${file}:${line}`), result.output);
+    assert.equal(JSON.parse(result.stdout).suppressed, 0, result.output);
+  }
+});
+
+test("SUP-005 rejects Deno annotations after native comment whitespace", (t) => {
+  for (const whitespace of ["\t", "\u0085", "\u00a0"]) {
+    const repo = fixture(t, "SUP-005", "no-inline-suppression", "0004-no-waivers.md");
+    repo.write("policy.ts", `//${whitespace}deno-coverage-ignore-file\nexport const value = 1;\n`);
+    const result = repo.check();
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /Inline suppression is forbidden.*policy\.ts:1/u);
+    assert.equal(JSON.parse(result.stdout).suppressed, 0, result.output);
+  }
+});
+
+test("SUP-005 rejects Deno annotations after combined JSDoc and native whitespace", (t) => {
+  for (const prefix of ["\u0085* ", "*\u0085", "\u0085**\u0085"]) {
+    const repo = fixture(t, "SUP-005", "no-inline-suppression", "0004-no-waivers.md");
+    repo.write("policy.ts", `/**\n ${prefix}deno-coverage-ignore-file\n */\nexport const value = 1;\n`);
+    const result = repo.check();
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /Inline suppression is forbidden.*policy\.ts:2/u);
+    assert.equal(JSON.parse(result.stdout).suppressed, 0, result.output);
+  }
+});
+
+test("SUP-005 rejects prevention-only Deno block, JSDoc and unsupported suffix forms", (t) => {
+  for (const [text, line] of [
+    ["/* deno-coverage-ignore-file */\nexport const value = 1;\n", 1],
+    ["/**\n * deno-coverage-ignore-next\n */\nexport const value = 1;\n", 2],
+    ["// deno-coverage-ignore-end\nexport const value = 1;\n", 1],
+    ["// deno-coverage-ignore: prevention policy, not native grammar\nexport const value = 1;\n", 1],
+  ] as const) {
+    const repo = fixture(t, "SUP-005", "no-inline-suppression", "0004-no-waivers.md");
+    repo.write("policy.ts", text);
+    const result = repo.check();
+    assert.equal(result.status, 1, result.output);
+    assert.ok(result.output.includes(`policy.ts:${line}`), result.output);
+  }
+});
+
+test("SUP-005 inspects Deno comments inside expressions without treating raw template or JSX text as comments", (t) => {
+  for (const [file, text] of [
+    [
+      "policy.ts",
+      [
+        "const text = `raw // deno-coverage-ignore-file ${(() => {",
+        "  // deno-coverage-ignore",
+        "  return 1;",
+        "})()}`;",
+        "",
+      ].join("\n"),
+    ],
+    [
+      "policy.tsx",
+      "const view = <div>don't panic // deno-coverage-ignore-file</div>;\n// deno-coverage-ignore\nexport const value = 1;\n",
+    ],
+    ["policy.jsx", "const view = <div>{(() => {\n  // deno-coverage-ignore\n  return 1;\n})()}</div>;\n"],
+  ]) {
+    const repo = fixture(t, "SUP-005", "no-inline-suppression", "0004-no-waivers.md");
+    repo.write(file, text);
+    const result = repo.check();
+    assert.equal(result.status, 1, result.output);
+    assert.ok(result.output.includes(`${file}:2`), result.output);
+    assert.equal(JSON.parse(result.stdout).results.length, 1, result.output);
+  }
+});
+
+test("SUP-005 preserves inert Deno examples and limits the namespace to JS and TS comments", (t) => {
+  const repo = fixture(t, "SUP-005", "no-inline-suppression", "0004-no-waivers.md");
+  repo.write(
+    ".superman/ci/generated.test.ts",
+    [
+      'const quoted = "// deno-coverage-ignore-file";',
+      "const single = '/* deno-coverage-ignore */';",
+      "const raw = `\n// deno-coverage-ignore-start\n// deno-coverage-ignore-stop\n`;",
+      String.raw`const pattern = /\/\* deno-coverage-ignore-file \*\//g;`,
+      "const view = `escaped \\` // deno-coverage-ignore` ;",
+      "// Documentation mentions deno-coverage-ignore, not an annotation.",
+      "// DENO-COVERAGE-IGNORE-FILE",
+      "// deno_coverage_ignore-file",
+      "// deno-coverage-ignoreful",
+      "",
+    ].join("\n"),
+  );
+  repo.write(
+    "notes.md",
+    "The `deno-coverage-ignore` name is documentation.\n```ts\n// deno-coverage-ignore-file\n```\n",
+  );
+  repo.write("config.jsonc", "// deno-coverage-ignore-file\n{}\n");
+  repo.write("main.tf", "// deno-coverage-ignore-file\nlocals {}\n");
+  const result = repo.check();
+  assert.equal(result.status, 0, result.output);
+});
+
 test("SUP-005 rejects a Biome suppression comment", (t) => {
   const repo = fixture(t, "SUP-005", "no-inline-suppression", "0004-no-waivers.md");
   repo.write("policy.ts", "// biome-ignore lint/suspicious/noDebugger: fixture reason\ndebugger;\n");

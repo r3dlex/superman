@@ -17,5 +17,7 @@
 - [ ] A file in a non-member path (e.g. `examples/` outside any package) is unclaimed and forces full unless ignored.
 - [ ] The same verified package graph supplies explicit complete-crate typecheck commands for affected crates/reverse dependents; feature/config/input ambiguity falls back to the configured full check, not an arbitrary Rust file list.
 
-Start with the recorded crate graph, adding complete-project typecheck targets alongside test targets.
 - [ ] On lx, `apps/sarif-core` changes select `cargo test -p sarif-core` (recorded at adoption).
+- [ ] Feature/build-script/external-input fixtures demonstrate the supported conservative test graph; missing graph/ownership/input evidence forces all required targets. Known ordinary crate cases may narrow only with that evidence; critical acceptance stays fresh outside the provider (§5.7).
+
+Start with the recorded crate graph, adding complete-project typecheck targets alongside test targets.

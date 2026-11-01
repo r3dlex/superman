@@ -16,5 +16,6 @@
 - [ ] `build-depends` spread over several lines, with version bounds and conditionals, is parsed into the right package names.
 - [ ] A `cabal.project` change forces full.
 - [ ] Verified package/compiler inputs and explicit argv supply whole-package typechecks for affected packages/reverse dependents; unresolved build conditions/inputs use full-check fallback.
+- [ ] Conditional/component/generated-input fixtures prove conservative required-test scope for the supported Cabal/Stack profile. Missing ownership/graph/input completeness forces all required targets rather than guessed package pruning; complete package-level precision remains v0's ceiling, and critical acceptance stays fresh outside narrowing (§5.7).
 
 Start with two package targets exposing distinct test and complete-package check commands.

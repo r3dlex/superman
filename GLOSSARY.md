@@ -82,6 +82,10 @@ _Avoid_: threshold (a ratchet moves), budget
 The evidence record of one gate run, including its inputs, outcomes and evaluated revisions. A PR integration receipt distinguishes the PR head, tested base and tested merge result.
 _Avoid_: report, log, attestation
 
+**Candidate artifact identity**:
+A named upstream release asset proposed for later review, not an accepted pin.
+_Avoid_: pin, bottle, latest
+
 **Red–green replay**:
 A comparison in which a behavior test fails against the approved-base implementation and passes against the proposed implementation. It demonstrates regression sensitivity, not the order in which changes were authored.
 _Avoid_: proof of TDD order, red-commit requirement

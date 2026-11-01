@@ -22,5 +22,7 @@
 - [ ] `superman affected --json` output equals the receipt's `affected` block for the same inputs.
 - [ ] A target can expose both test/typecheck argv with distinct result/cache identities; unavailable compiler graph/argv produces full-typecheck fallback, not guessed file arguments.
 - [ ] A declared CLI-process target is affected by any source change unless a narrower explicit dependency map applies; changing a packaged skill selects its declared consumers.
+- [ ] Deno runtime/channel/content, launch/config/lock/import-map/declaration/capability/env policy and compile/denort/build/asset inputs participate in ownership/global/force-full and receipt identities (§5.10). Profile/runtime changes cannot reuse an old selection model; unknown ownership broadens fully. Bootstrap/process targets retain declared non-import inputs, not just the Node test import graph.
+- [ ] Required-check narrowing follows §5.7's conservative supported-profile contract: missing ownership/graph/input evidence selects all required targets, not a heuristic subset. Fixtures distinguish selection from result reuse and complete G5/coverage scope. Owner-governed critical acceptance remains outside ordinary selection, including when the provider returns no ordinary tests; its policy/mapping inputs stay protected.
 
 Start with one test target and one complete compiler-project target in a fixture; neither consumer recomputes the diff.

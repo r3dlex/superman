@@ -420,6 +420,63 @@ test("SUP-005 recognizes Biome line, file, range, category and block-comment for
   }
 });
 
+test("SUP-005 rejects the Deno annotation namespace across supported JS and TS comments", async (t) => {
+  const check = inlineFixture(t);
+  for (const [extension, language] of [
+    ["ts", "typescript"],
+    ["mts", "typescript"],
+    ["cts", "typescript"],
+    ["tsx", "typescript"],
+    ["js", "javascript"],
+    ["mjs", "javascript"],
+    ["cjs", "javascript"],
+    ["jsx", "javascript"],
+  ] as const) {
+    const file = `policy.${extension}`;
+    assertSuppressions(
+      await check(file, "// deno-coverage-ignore-file\nconst value = 1;\n", { language, literals: [] }),
+      file,
+      [1],
+    );
+  }
+  for (const [source, lines] of [
+    ["//deno-coverage-ignore reason\nexport const value = 1;\n", [1]],
+    ["//\u0085deno-coverage-ignore-file\nconst value = 1;\n", [1]],
+    ["const value = 1; // deno-coverage-ignore\n", [1]],
+    ["// deno-coverage-ignore-start\nexport const value = 1;\n// deno-coverage-ignore-stop\n", [1, 3]],
+    ["/**\n * deno-coverage-ignore-next\n */", [2]],
+    ["/**\n \u0085* deno-coverage-ignore-file\n */", [2]],
+    ["/**\n *\u0085deno-coverage-ignore-file\n */", [2]],
+    ["/**\n \u0085**\u0085deno-coverage-ignore-file\n */", [2]],
+    ["/* deno-coverage-ignore-file */", [1]],
+    ["// deno-coverage-ignore-end", [1]],
+    ["// deno-coverage-ignore: prevention policy, not native grammar", [1]],
+  ] as const)
+    assertSuppressions(await check("policy.ts", source), "policy.ts", [...lines]);
+});
+
+test("SUP-005 preserves Deno literals, mentions and non-source comments", async (t) => {
+  const check = inlineFixture(t);
+  const pattern = String.raw`\/\* deno-coverage-ignore-file \*\/`;
+  const ast: AstFixture = { language: "typescript", literals: [{ regex: { pattern, flags: "g" } }] };
+  const source = [
+    'const quoted = "// deno-coverage-ignore-file";',
+    "const raw = `\n// deno-coverage-ignore-start\n// deno-coverage-ignore-stop\n`;",
+    `const pattern = /${pattern}/g;`,
+    "// Documentation mentions deno-coverage-ignore, not an annotation.",
+    "// DENO-COVERAGE-IGNORE-FILE",
+    "// deno_coverage_ignore-file",
+    "// deno-coverage-ignoreful",
+  ].join("\n");
+  assert.deepEqual(await check("policy.ts", source, ast), []);
+  for (const [file, text] of [
+    ["notes.md", "```ts\n// deno-coverage-ignore-file\n```\n"],
+    ["config.jsonc", "// deno-coverage-ignore-file\n{}\n"],
+    ["main.tf", "// deno-coverage-ignore-file\nlocals {}\n"],
+  ])
+    assert.deepEqual(await check(file, text), []);
+});
+
 test("SUP-005 permits non-directive mentions and malformed Biome or Trivy lookalikes", async (t) => {
   const check = inlineFixture(t);
   assert.deepEqual(

@@ -2,24 +2,26 @@
 Status: accepted
 ---
 
-# One npm package carries the CLI and the overlay plugin for every harness
+# One canonical release tree carries the CLI and each harness's overlay
 
-superman must install as a plugin in Claude Code, OpenAI Codex and OpenCode, and ship as the npm package `superman-ai` (André, 2026-10-29). It was renamed from `@r3dlex/superman` on the same day because the unscoped `superman` and `superman-cli` names are taken and André owns no `@r3dlex` npm scope. The CLI command stays `superman`. We publish one package whose root is also the plugin root: the overlay skills live once under `skills/<name>/SKILL.md`, and each harness gets only a thin manifest that points at that directory (`.claude-plugin/plugin.json` for Claude Code, a Codex manifest for Codex, and OpenCode's `skills` path list or skill-directory discovery for OpenCode). The same tree is listed in the repo's own catalogs, so a git install and an npm install see identical files and the lock's sha256 values match both. npm releases use trusted publishing (OIDC, no `NPM_TOKEN`) with provenance, from a workflow triggered only by a `v*` tag that André pushes.
+Superman must install into Claude Code, OpenAI Codex and OpenCode. **The 2026-11-01 interview-confirmed plan (ADR 0016) supersedes this ADR's original npm package/bin/OIDC route for v0**, not its one-tree/harness/security requirements. Required source/assets and three Deno-compiled release archives share one canonical overlay tree, with one copy per installed release under `skills/<name>/SKILL.md` and thin manifests (`.claude-plugin/plugin.json`, the verified Codex form, and OpenCode skill discovery/path configuration). Repo catalogs and extracted releases reference identical bytes and lock hashes. The command remains `superman`; only André's `v*` tag authorizes exact verified-artifact GitHub release uploads. No npm/npx/JSR channel or Node launcher is promised. Spec §12 owns the new contract; activation remains blocked under §17.
+
+Historically the npm name changed from `@r3dlex/superman` to `superman-ai` on 2026-10-29 because `superman`/`superman-cli` were taken and no `@r3dlex` scope was owned. The public placeholder and registry evidence are not removed, republished or upgraded into a usable CLI by this amendment.
 
 ## Considered Options
 
-- A separate package or repo per harness: rejected, it duplicates skill files and their hashes drift.
+- A separate package/release tree or repo per harness: rejected, it duplicates canonical skill files and their hashes drift.
 - Keeping the overlay under `plugin/` (the draft layout): workable for Claude Code and Codex's legacy manifest, but Codex's root `plugin.json` dialect hard-codes `./skills` (VERIFY), so a root `skills/` serves every format.
 - An OpenCode JS plugin: rejected for v0, because the current plugin API is the `@opencode/plugin` runtime dependency (ADR 0003) and v0 has no hooks to register.
-- A long-lived `NPM_TOKEN` secret: rejected, trusted publishing removes it.
+- A long-lived `NPM_TOKEN` secret was rejected for the historical npm route. That route and its OIDC setup are now outside v0; no registry credential or replacement stored publishing token is introduced.
 
 ## Consequences
 
-- The per-harness manifest shapes are partly VERIFY (spec §12.1); ticket 10 proves each with a packed-tarball install.
-- Public registry metadata checked on 2026-10-30 shows an MIT-licensed `superman-ai@0.0.0` placeholder published on 2026-10-29 and pointing at this repository. This proves existence, not André's account access; verify that access and configure trusted publishing before the first usable release.
-- `files` in `package.json` is an allowlist; the overlay skill files, manifests, `dist/` and `schema/` ship, while `.scratch/`, `.archgate/`, tests and CI do not.
-- André chose MIT and direct OIDC publication on his release tag on 2026-10-30. Staged publication plus a second npm approval was considered and declined; the tag is the final human release authorization.
-- Build/test/scan jobs have no publishing or cache-write authority. A separate publisher consumes the exact scanned tarball without project install/build/publish hooks; optional release-asset uploads are likewise separate. This keeps dependency hooks and tests away from credentials and OIDC publishing authority (spec §12.2).
-- The first usable v0 release waits for every v0 ticket, including M7b's complete provider/cache work and its reviewed activation follow-ups. A placeholder is not evidence that the usable CLI is shipped.
+- The per-harness manifest shapes remain partly VERIFY (spec §12.1); ticket 10 proves fixture-source-tree discovery/manifests, while 33 proves final extracted source/compiled-archive parity before release. Neither requires npm installation.
+- Public registry metadata checked on 2026-10-30 showed an MIT-licensed `superman-ai@0.0.0` placeholder pointing at this repository. This proves historical existence, not André's access. The earlier instruction to verify npm access/configure trusted publishing is **superseded for v0**, not a remaining release prerequisite or authority for account changes.
+- The release allowlist carries owned source/executable entrypoints, explicit launch policy, templates/schemas, canonical skills/manifests, README and MIT LICENSE, not `.scratch/`, `.archgate/`, tests, CI or development dependencies. Compiled embedded assets do not replace on-disk harness files.
+- MIT and André's tag as final human release authorization remain selected. The former direct OIDC/staged-npm alternatives are historical, not a v0 publisher prerequisite.
+- Build/test/scan jobs have no upload or cache-write authority. A separately restricted uploader verifies the exact source/binary artifacts, native/scan evidence, run/tag/SHA provenance and digests without project installs, rebuilds, tests or hooks (spec §12.2). The confirmed quality amendment restricts it to an operator-approved existing self-hosted environment (ADR 0015); no inherited npm-provider hosted exception or new VM project is authorized.
+- The first usable v0 release waits for all v0 work, including both Deno distribution forms, M7b/M7c and reviewed activation follow-ups. A placeholder is not evidence of usable distribution. Source and binary behavior, assets and complete source measurements remain unverified; no implementation or publication occurs in this design amendment.
 
 Sources: [public package metadata](https://registry.npmjs.org/superman-ai), [trusted publishing](https://docs.npmjs.com/trusted-publishers/), [staged publishing](https://docs.npmjs.com/staged-publishing/).
