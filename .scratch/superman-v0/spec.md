@@ -4,7 +4,7 @@
 
 Design agreed with André on 2026-10-30. Product implementation is blocked on the Gate 1 bootstrap checklist in §17; ticket 01 must pass the initial raw checks before merging. **(M1 amendment 4)** This amendment includes the approved document reconciliation plus SUP-004/SUP-009 and interim path-policy enforcement/fixtures. It does not implement M7c, install hooks or change credentials/hosted settings.
 
-**Proposed CI amendment (2026-10-31, existing PR #1):** §8 makes approved-image self-hosted execution the preferred r3dlex default, with explicit hosted-runner exceptions rather than exclusivity. This local amendment changes planning/rationale/tickets only; runner routing, bootstrap manifests, historical evidence and ticket status are unchanged. New execution-profile/receipt/cache requirements remain unimplemented and unapproved for activation.
+**Proposed CI amendment (2026-10-31, existing PR #1):** §8 makes approved-image self-hosted execution the preferred r3dlex default, with explicit hosted-runner exceptions rather than exclusivity. Required check names in `bootstrap.json` are unchanged. Both active workflows already select self-hosted label sets; those selectors are not approved images, isolation proof, exception authorization or fleet capacity. New execution-profile/receipt/cache requirements remain unimplemented and unapproved for activation.
 
 **Next action:** review this amendment and resolve §8.4's runner inventory/authorization gaps for the chosen routes, then complete §17's Gate 1 bootstrap work and obtain André's approval/merge before admitting ticket 01. An approved hosted-runner exception can satisfy the routing policy; self-hosted capacity is not an exclusive prerequisite. The first usable release includes all v0 tickets, including M7b, verified-project typechecking and **M7c**; Go and deploy execution (25–26) remain post-v0.
 
@@ -338,7 +338,7 @@ Normal TDD runs red locally, implements, runs green, then commits both together.
 - The nightly full run uses `--force` to avoid incremental blind spots.
 
 **Platform note:**
-- Archgate 0.61.0 has no upstream linux-arm64 asset. Preserve the resolved self-build decision: build from its reviewed tag, verify its own tests on arm64, publish a human-authorized release asset, and lock/check its sha256 before ticket 01. Until that evidence exists, the 3-platform bootstrap is blocked rather than declaring arm64 G1 passed or waived.
+- Archgate 0.61.0 has no upstream linux-arm64 asset. The resolved route is a human-authorized Superman prerelease, not an upstream release. `tool-assets.json` registers `archgate-v0.61.0-linux-arm64` at archive sha256 `a8b860aeb06df957e2128a4cb4ca4b1ce389c4390429bbffb4f7e6fe62674df1`. Publication authorization and that checksum are documented; source/build/test/redistribution acceptance for that exact archive is not closed. Until that acceptance exists, the 3-platform bootstrap is blocked rather than declaring arm64 G1 passed or waived.
 - **(M1 amendment)** tsrs publishes native packages for `darwin-arm64`, `linux-x64-gnu` and `linux-arm64-gnu` (npm metadata, 2026-10-29), so G2 runs on all three legs. Only linux x64 has been checked hands-on (VERIFY the other two in ticket 01's matrix; a missing platform is a revert trigger in ADR 0008).
 - **(M1 amendment)** G11 runs once, on the linux-x64 leg, because the scan result does not depend on the OS; the other legs report `n/a (enforced on linux-x64 leg)`. Trivy also ships Linux-ARM64 and macOS-ARM64 tarballs for local use.
 - **Change-aware scope.** §5.7 is authoritative: tests and verified-project typechecks are selected; G5's cross-scope clones and total percentage can be detected after merge, deliberately accepted by André. Full main selection may reuse allowlisted passes; nightly and an untrustworthy safety ledger force uncached full execution.
@@ -689,7 +689,7 @@ flowchart TD
 
 ### 8. CI templates
 
-**Current position — proposed Gate 1 CI amendment, 2026-10-31.** The local `.github/workflows/ci.yml` and `.superman/ci/bootstrap.json` still declare the three GitHub-hosted bootstrap legs. This amendment does not reroute them or authorize infrastructure/hosted changes. §8.1–8.4 is the proposed execution contract; §8.5 is a hosted-exception sketch, not an activated default. Meanings live in `GLOSSARY.md`; ADR 0015 records why.
+**Current position — proposed Gate 1 CI amendment, 2026-10-31, reconciled 2026-11-01.** Required check names stay `bootstrap (macos-15)`, `bootstrap (ubuntu-24.04)` and `bootstrap (ubuntu-24.04-arm)`. Those names are not `runs-on` routes. `.github/workflows/ci.yml` already selects `["self-hosted","macOS","ARM64","r3dlex-org"]`, `["self-hosted","Linux","X64","r3dlex-org"]` and `["self-hosted","Linux","ARM64","r3dlex-linux-arm64"]`. `.github/workflows/archgate-linux-arm64-candidate.yml` selects the same Linux-arm64 set. That selector change does not approve an image, prove isolation, authorize a hosted exception or establish fleet capacity. §8.1–8.4 is the proposed execution contract; §8.5 is a hosted-exception sketch, not an activated default. Meanings live in `GLOSSARY.md`; ADR 0015 records why.
 
 #### 8.1 Preferred default and bounded hosted-runner exceptions
 
@@ -730,13 +730,13 @@ The fallback policy introduces no `pull_request_target`, privileged PR-head `wor
 
 **Current workflow plus public runner-source/job evidence (2026-10-31):**
 
-| Required platform | Current hosted `runs-on` label | Required bootstrap check in `bootstrap.json` | Self-hosted group ID/name, exact labels and approved image identity |
+| Required platform | Required check name, not the route | Actual `runs-on` in `ci.yml` | Approved image, isolation and capacity |
 |---|---|---|---|
-| macOS arm64 (`darwin-arm64`) | `macos-15` | `bootstrap (macos-15)` | No verified Superman route/image from the checked source/job evidence |
-| Linux x64 (`linux-x64`) | `ubuntu-24.04` | `bootstrap (ubuntu-24.04)` | Example x64 labels are not proof of a native x64 worker; route/image unverified |
-| Linux arm64 (`linux-arm64`) | `ubuntu-24.04-arm` | `bootstrap (ubuntu-24.04-arm)` | Main/probe assignments identify workers below, group ID 1/name `default`; Superman access and approved image unverified |
+| macOS arm64 (`darwin-arm64`) | `bootstrap (macos-15)` | `["self-hosted","macOS","ARM64","r3dlex-org"]` | Unverified. The check suffix `macos-15` is not this route |
+| Linux x64 (`linux-x64`) | `bootstrap (ubuntu-24.04)` | `["self-hosted","Linux","X64","r3dlex-org"]` | Unverified. The check suffix `ubuntu-24.04` is not this route and is not proof of a native x64 worker |
+| Linux arm64 (`linux-arm64`) | `bootstrap (ubuntu-24.04-arm)` | `["self-hosted","Linux","ARM64","r3dlex-linux-arm64"]` | Unverified. The candidate workflow uses the same selector. Historical probe jobs used group ID 1 / name `default`; that is not an approved image |
 
-The source workflow is `.github/workflows/ci.yml`; the protected manifest binds all three jobs to `github-actions`, App **15368**. These hosted aliases do not identify their actual image builds; observed image versions still require run evidence. Public evidence now supplies a **partial observed inventory**, not complete current registration, a privileged-pool assignment or Superman authorization. No authenticated runner/settings inspection was performed; missing evidence does **not** mean the organization has no runners.
+The source workflow is `.github/workflows/ci.yml`; the protected manifest binds all three check names to `github-actions`, App **15368**. The check suffixes are not the `runs-on` selectors and do not identify image builds; observed image versions still require run evidence. Public evidence now supplies a **partial observed inventory**, not complete current registration, a privileged-pool assignment or Superman authorization. No authenticated runner/settings inspection was performed; missing evidence does **not** mean the organization has no runners.
 
 The identified project is [`r3dlex/github-runners-for-repo`](https://github.com/r3dlex/github-runners-for-repo), a GitHub Actions runner manager, not a GitLab runner/image catalog. At inspected `main` commit [`8e878b1`](https://github.com/r3dlex/github-runners-for-repo/tree/8e878b1de0b29d58f58887d9b702ce91901d7b70), the following public assignments are independently observable without credentials:
 
@@ -765,7 +765,7 @@ PR #33 at [`fa89cc3`](https://github.com/r3dlex/github-runners-for-repo/blob/fa8
 
 The pinned README also reports exhausted spending limits preventing hosted jobs for private organization repositories, with public repositories unaffected. Treat that as a source-reported operational limitation, not current billing/settings verification: confirm hosted-route availability before approving a private-repository fallback. This public Superman amendment changes no billing or other repository's posture.
 
-Historical Bun build-image and local Node Linux-arm64 toolchain digests in [bootstrap evidence](../../.superman/ci/bootstrap-evidence.md#local-linux-arm64-archgate-self-build-candidate) identify those recorded experiments only (see also “Stable policy/rule platform snapshot” and “Native evidence identity” there). They are not approved fleet images, registry publications, runner-group assignments or permission to reuse those local images. Preserve that evidence, including failures and the unpublished Archgate candidate.
+Historical Bun build-image and local Node Linux-arm64 toolchain digests in [bootstrap evidence](../../.superman/ci/bootstrap-evidence.md#local-linux-arm64-archgate-self-build-candidate) identify those recorded experiments only (see also “Stable policy/rule platform snapshot” and “Native evidence identity” there). They are not approved fleet images, registry publications, runner-group assignments or permission to reuse those local images. Preserve that evidence, including the failed runner builds and the unpublished conditional candidate (`496d9c98…`). That candidate is not the later registered replacement.
 
 | Missing fact/authorization | Responsible party and completion criterion |
 |---|---|
@@ -775,7 +775,7 @@ Historical Bun build-image and local Node Linux-arm64 toolchain digests in [boot
 | Hosted exception/fallback authority | André reviews the exact job/platform/event/ref scope, routes, reason and expiry/re-review conditions; the transitional bootstrap exception is proposed here, not pre-approved. Missing self-hosted inventory may be resolved by that scoped hosted exception, not by fabricating self-hosted values. |
 | Activation evidence and permission | The authorized implementer supplies profile/receipt/cache/fallback failure fixtures and fresh exact-source three-platform runs. André separately authorizes any runner/image provisioning/publication, routing or hosted-setting change. Existing live-setting evidence remains historical; reverify only with authority before activation/admission. |
 
-**Blocked now:** self-hosted migration, new fallback routing and privileged-profile activation have neither sufficient inventory nor live authorization. The existing hosted bootstrap stays unchanged and still needs §17 completion/approval; this is not ticket 01 admission. Collect the missing inventory or review a scoped hosted exception before proposing executable routing changes.
+**Blocked now:** the selectors above already execute as self-hosted label sets. That is not image approval, isolation proof, a hosted-exception grant or capacity evidence. Group IDs, complete registered labels, public-PR access and approved images remain unverified. Privileged-profile activation is unauthorized. Admission still needs §17 completion and André's approval. The hosted-exception sketch is not the route that is executing.
 
 #### 8.5 Template sketch (hosted exceptions only; not installed)
 
@@ -1118,7 +1118,7 @@ superman/
 
 **Current position:** design agreed; this Gate 1 branch adds protected bootstrap tooling/configs, SUP-005, protected-input/field enforcement, raw routing/replay fixtures, §5.4's overall coverage policy and the three-platform workflow. [Bootstrap evidence](../../.superman/ci/bootstrap-evidence.md) distinguishes local verification, unsupported capabilities and the remaining live/platform prerequisites; the previous hosted run exercised only the old two-job implementation. Neither the branch contents nor the earlier Amendment 4 complete Gate 1 or activate G12. Ticket 01 stays blocked until the following work and André's approval/merge are complete. M7c activates later through the explicit follow-ups below; it does not retroactively require a wiki before its scaffold exists.
 
-**Proposed CI amendment:** §8.4 adds unresolved execution-profile/inventory/authorization work, not passing evidence. Existing [coverage evidence](../../.superman/ci/coverage-evidence.md), platform failures, the unpublished/unapproved Archgate arm64 distribution and small/undersized-corpus limitations retain their original scope and blockers. The hosted three-platform routing and required-check bindings are untouched. Missing self-hosted details block that migration, not an otherwise fully evidenced, Gate 1-approved hosted exception. New receipt/isolation requirements must be implemented/proved for the chosen bootstrap profiles before admission; later cache-key requirements belong to tickets 21–24 before reuse activation.
+**Proposed CI amendment:** §8.4 adds unresolved execution-profile/inventory/authorization work, not passing evidence. Historical platform failures and small/undersized-corpus limitations retain their original scope. Required check names are unchanged. Both active workflows already select the self-hosted label sets in §8.4; that is not a hosted exception and does not approve images, isolation or capacity. The registered Archgate linux-arm64 replacement is published and checksum-registered; its source/build/test/redistribution acceptance is not closed (§5.4, bootstrap evidence). Missing profile proof still blocks admission. New receipt/isolation requirements must be implemented/proved for the chosen bootstrap profiles before admission; later cache-key requirements belong to tickets 21–24 before reuse activation.
 
 Earlier local verification used PATH Archgate **0.43.0** and rejected `--strict`; that is not gate evidence. Amendment 4 provisions the locked **0.61.0** through **pnpm 12.16.1** with lifecycle scripts suppressed and records fresh strict-check/fixture results in its PR evidence. No weaker-command fallback authorizes readiness.
 

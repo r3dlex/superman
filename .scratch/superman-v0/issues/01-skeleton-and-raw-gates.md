@@ -12,7 +12,7 @@
 
 **Protected-path follow-up:** `spec/superman-v0-baselines` commits the exact approved first measurements before ticket 02 or another source ticket proceeds. The initial matrix, configs, pin checks, protected-input/SUP-005 enforcement and raw G9 scripts belong to the earlier Gate 1 bootstrap, not this follow-up.
 
-**Proposed CI amendment:** spec §8/ADR 0015 do not admit this ticket or delegate runner setup to it. Chosen bootstrap profiles require evidenced isolation/runner/image identities and either approved-image self-hosted routes or scoped hosted-runner exceptions before admission (§17). §8.4's partial public runner names/job selectors do not prove current Superman access, complete registered labels or approved images; routing stays unchanged. The arm64 redistribution/registered-asset, fresh three-platform and applicable undersized-corpus blockers remain, with historical failures/evidence preserved.
+**Proposed CI amendment:** spec §8/ADR 0015 do not admit this ticket or delegate runner setup to it. Chosen bootstrap profiles require evidenced isolation/runner/image identities and either approved-image self-hosted routes or scoped hosted-runner exceptions before admission (§17). §8.4's partial public runner names do not prove current Superman access, complete registered labels or approved images. Required check names are unchanged; both active workflows already select the self-hosted label sets in §8.4, which is not image, isolation or capacity approval. The registered arm64 asset's source/build/redistribution acceptance, fresh three-platform evidence and applicable undersized-corpus blockers remain open, with historical failures preserved.
 
 ## CLI and build
 

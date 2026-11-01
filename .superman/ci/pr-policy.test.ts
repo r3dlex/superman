@@ -1283,6 +1283,57 @@ test("policy gaps: ticket work cannot rewrite its own body, another ticket or th
   }
 });
 
+test("an unknown-extension Vitest loader cannot hide effective.json from G4", (t) => {
+  const repo = fixture(t, "ticket/demo-01");
+  repo.write("vitest.config.cjs", 'module.exports = require("./settings/policy.data");\n');
+  repo.write("settings/policy.data", 'module.exports = require("./effective.json");\n');
+  repo.write(
+    "settings/effective.json",
+    '{"test":{"include":["test/**/*.test.ts"],"passWithNoTests":false,"name":"base-policy"}}\n',
+  );
+  repo.write(
+    "test/sample.test.ts",
+    'import { expect, test } from "vitest"; test("runs", () => expect(1).toBe(1));\n',
+  );
+  repo.git("add", "--all");
+  repo.git("commit", "--quiet", "-m", "approved vitest data-loader chain");
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  repo.write(
+    "settings/effective.json",
+    '{"test":{"include":["test/**/*.test.ts"],"passWithNoTests":true,"name":"changed-policy"}}\n',
+  );
+  const vitest = join(import.meta.dirname, "../../node_modules/vitest/vitest.mjs");
+  const loaded = spawnSync(process.execPath, [vitest, "run", "--config", "vitest.config.cjs", "--reporter=verbose"], {
+    cwd: repo.root,
+    encoding: "utf8",
+    shell: false,
+    timeout: 60_000,
+  });
+  assert.ifError(loaded.error);
+  assert.equal(loaded.status, 0, `${loaded.stdout}${loaded.stderr}`);
+  assert.match(`${loaded.stdout}${loaded.stderr}`, /changed-policy/u);
+  const result = repo.check();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /file=settings\/effective\.json::G4: ticket PRs may not touch protected paths/u);
+});
+
+test("an unchanged unknown-extension Vitest loader remains a supported policy control", (t) => {
+  const repo = fixture(t, "ticket/demo-01");
+  repo.write("vitest.config.cjs", 'module.exports = require("./settings/policy.data");\n');
+  repo.write("settings/policy.data", 'module.exports = require("./effective.json");\n');
+  repo.write(
+    "settings/effective.json",
+    '{"test":{"include":["test/**/*.test.ts"],"passWithNoTests":false,"name":"base-policy"}}\n',
+  );
+  repo.git("add", "--all");
+  repo.git("commit", "--quiet", "-m", "approved vitest data-loader chain");
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  repo.write("README.md", "# Unrelated ticket documentation\n");
+  const result = repo.check();
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /pr-policy: pass/u);
+});
+
 test("policy gaps: missing or unsupported branch kinds cannot receive a policy pass", (t) => {
   const repo = fixture(t, "feature/demo");
   repo.write("README.md", "# Unclassified candidate\n");

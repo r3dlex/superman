@@ -507,3 +507,20 @@ André authorized the local Colima build of archgate/cli `f65d99f56d02757cca94d5
 Tag protection is currently admin-role-based, not person-specific; retain that limitation when assessing human-only release authority. Ticket 01 stays blocked until §17 steps 1–2 and André's exact-head Gate 1 approval/merge. First-source baselines remain §17 step 3, not fabricated bootstrap data.
 
 The fixture corrections and this results-only evidence update are committed and pushed on `spec/superman-v0`. No product `src/`, ticket implementation/status change, approval, merge, asset publication, persistent credential rotation/storage or tag-rules change was performed. Hosted configuration writes were limited to the separately authorized installation repository restriction and main required-check/source/strictness update; the temporary verification token was minted and revoked without changing the key. Temporary fixture repositories and the separate prospective verification commit are not working-branch commits or publication authority.
+
+### Registered linux-arm64 replacement — independent check, 2026-11-01
+
+This checks the asset registered in `tool-assets.json`, not the older candidate hashes `637d4179…`, `80c87fa1…` or `496d9c98…`. Those remain historical. Publication authorization for the replacement is the recorded André Colima-build authorization in the 2026-10-31 registration section above; this check does not re-litigate that authorization as absent. It also does not accept redistribution or close the blocker.
+
+| Check | Result |
+|---|---|
+| Release | Prerelease [archgate-v0.61.0-linux-arm64](https://github.com/r3dlex/superman/releases/tag/archgate-v0.61.0-linux-arm64), author `br4vesirrobin`, created 2026-10-31T11:08:56Z, target `spec/superman-v0` |
+| Archive | Downloaded `archgate-linux-arm64.tar.gz`. SHA-256 `a8b860aeb06df957e2128a4cb4ca4b1ce389c4390429bbffb4f7e6fe62674df1`, matching `tool-assets.json` and the GitHub asset digest |
+| Member | One regular file, `archgate`, mode `0755`, size 97897256. SHA-256 `181ef65d8a0c73a9abb2279baf710e7ded18e05cfa04c37f033ce95aa6357708`, matching the registration note |
+| Named source | `archgate/cli` commit `f65d99f56d02757cca94d53f6d717333770e0170` exists and is `chore(release): 0.61.0 (#655)`, committed 2026-10-28T00:19:32Z. The archive does not contain that source tree |
+
+The archive contains no license, notice, checksum sidecar, test log or provenance file. A separate release asset `LICENSE.md` exists; its bytes were not treated as acceptance of the binary. The release note states build image `oven/bun:1.4.3@sha256:bf9d5b1f01be2de7cec5aa6e3977e8848f7ab9a307c6c3a8af7a50a27e609023` and suite `2945 pass, 42 skip, 0 fail` on `node:24.22.2-bookworm@sha256:704c5d1cfedaa1afc8ae31f6f6a412ee5fbf6e79438944d6c818b0c4f46f6f6b`. Those statements are release-note text. No hash-bound log or attestation for them was attached.
+
+PPB-1 through PPB-4 remain recorded against the different conditional archive `496d9c98…` / executable `637d4179…`, with `publish_ready: false`. They have no recorded disposition for binary `181ef65d…`. This check does not supply that disposition and does not claim legal acceptance.
+
+**Remaining gap:** hash-bound source/build/test evidence for archive `a8b860ae…` and binary `181ef65d…`, plus a human disposition of the redistribution questions for that binary. **Required action:** André, or a reviewer he designates, supplies or accepts those bound logs and disposes the redistribution questions before this blocker can close. Do not substitute the older candidate hashes or mark the asset accepted from checksum integrity alone.

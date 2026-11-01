@@ -141,6 +141,71 @@ test("the overall floor accepts an actual exact 90 percent measurement", (t) => 
   assert.equal(summary.lines.pct, 90);
 });
 
+test("renaming runtime bytes to a test filename cannot drop them from measurement", (t) => {
+  const bytes = "export function runtime(value: number) {\n  if (value > 0) return 'positive';\n  return 'other';\n}\n";
+  const measure = (name: string) => {
+    const repo = fixture(t);
+    repo.write(`.superman/ci/${name}`, bytes);
+    repo.write(
+      ".superman/ci/app.ts",
+      `import { runtime } from "./${name}";\nexport function use(value: number) { return runtime(value); }\n`,
+    );
+    repo.write(
+      ".superman/ci/app.test.ts",
+      'import assert from "node:assert/strict"; import { test } from "node:test"; import { use } from "./app.ts"; test("positive", () => assert.equal(use(1), "positive"));\n',
+    );
+    const result = repo.run();
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /Coverage below 90%/u);
+    assert.ok(result.directory);
+    const report = JSON.parse(readFileSync(join(result.directory, "coverage-final.json"), "utf8"));
+    assert.ok(report[join(repo.root, `.superman/ci/${name}`)], result.output);
+    return report;
+  };
+  measure("runtime.ts");
+  measure("runtime.test.ts");
+});
+
+test("runtime reached through an intermediate import cannot hide behind a test filename", (t) => {
+  const repo = fixture(t);
+  repo.write(
+    ".superman/ci/runtime.test.ts",
+    "export function runtime(value: number) {\n  if (value > 0) return 'positive';\n  return 'other';\n}\n",
+  );
+  repo.write(
+    ".superman/ci/mid.test.ts",
+    'import { runtime } from "./runtime.test.ts";\nexport function forward(value: number) { return runtime(value); }\n',
+  );
+  repo.write(
+    ".superman/ci/app.ts",
+    'import { forward } from "./mid.test.ts";\nexport function use(value: number) { return forward(value); }\n',
+  );
+  repo.write(
+    ".superman/ci/app.test.ts",
+    'import assert from "node:assert/strict"; import { test } from "node:test"; import { use } from "./app.ts"; test("positive", () => assert.equal(use(1), "positive"));\n',
+  );
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.ok(result.directory);
+  const report = JSON.parse(readFileSync(join(result.directory, "coverage-final.json"), "utf8"));
+  assert.ok(report[join(repo.root, ".superman/ci/runtime.test.ts")]);
+  assert.ok(report[join(repo.root, ".superman/ci/mid.test.ts")]);
+});
+
+test("a test-only helper remains excludable when no measured module imports it", (t) => {
+  const repo = coveredBootstrap(t);
+  repo.write(".superman/ci/helper.test.ts", "export function helper() {\n  if (false) return 'hidden';\n  return 'helper';\n}\n");
+  repo.write(
+    ".superman/ci/subject.test.ts",
+    'import assert from "node:assert/strict"; import { test } from "node:test"; import { sign } from "./subject.ts"; import { helper } from "./helper.test.ts"; test("both sides", () => { assert.equal(sign(1), "positive"); assert.equal(sign(0), "other"); assert.equal(helper(), "helper"); });\n',
+  );
+  const result = repo.run();
+  assert.equal(result.status, 0, result.output);
+  assert.ok(result.directory);
+  const report = JSON.parse(readFileSync(join(result.directory, "coverage-final.json"), "utf8"));
+  assert.deepEqual(Object.keys(report), [join(repo.root, ".superman/ci/subject.ts")]);
+});
+
 test("unexecuted source files count as uncovered rather than disappearing", (t) => {
   const repo = coveredBootstrap(t);
   repo.write(".superman/ci/unloaded.ts", "export function untested() {\n  return 'never imported';\n}\n");

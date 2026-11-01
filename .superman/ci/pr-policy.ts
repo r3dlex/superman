@@ -227,8 +227,15 @@ function effectivePolicy(base: string): { paths: Set<string>; findings: Finding[
         } else {
           // No hook configuration is installed at bootstrap. Refuse unknown include
           // syntax rather than claiming a complete TOML/YAML/remote resolver.
+          // Pinned Vitest's config bundler does follow a static require from an
+          // unknown extension (vitest.config.cjs → *.data → *.json), so those refs
+          // are part of the effective-policy closure.
           if (/\b(?:extends|include|configs?|remotes?)\s*[:=]/u.test(text))
             throw new Error("Hook include/remote closure requires reviewed activation");
+          for (const match of text.matchAll(
+            /(?:^|[;\r\n\u2028\u2029}])\s*(?:import\s+(?:[^;]*?\sfrom\s*)?|export\s+[^;]*?\sfrom\s*)["']([^"']+)["']|\b(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)/gu,
+          ))
+            refs.push(match[1] ?? match[2]);
         }
         for (const ref of refs) {
           if (ref.includes("\\")) throw new Error("Escaped policy identities require reviewed input modeling");

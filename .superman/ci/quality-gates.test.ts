@@ -5,8 +5,8 @@ import { join, resolve } from "node:path";
 import { type TestContext, test } from "node:test";
 import { fixture, interceptPnpm } from "./raw-fixture.ts";
 
-function qualityFixture(t: TestContext) {
-  const repo = fixture(t);
+function qualityFixture(t: TestContext, branch = "ticket/demo-01") {
+  const repo = fixture(t, branch);
   const root = resolve(import.meta.dirname, "../..");
   for (const file of [".jscpd.json", "stryker.config.json", "pnpm-lock.yaml", ".npmrc"])
     repo.write(file, readFileSync(join(root, file), "utf8"));
@@ -163,6 +163,184 @@ test("G6 measures first-source mutants with real pinned Stryker and leaves calle
   assert.equal(readFileSync(join(repo.root, "src/classify.ts"), "utf8"), source);
   assert.equal(repo.git("rev-parse", "HEAD").trim(), head);
   assert.equal(repo.git("status", "--porcelain"), "");
+});
+
+test("a spec-kind follow-up can commit the exact measured duplication baseline", (t) => {
+  const repo = qualityFixture(t);
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.write("src/clone-b.ts", repeatedSource());
+  repo.commit();
+  const measured = repo.runGate("G5");
+  assert.equal(measured.status, 0, measured.output);
+  const initial = measured.receipt.results[0];
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  repo.git("switch", "--quiet", "-c", "spec/baseline-init");
+  repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({
+      jscpdPct: initial.metrics.jscpdPct,
+      mutationScore: 0,
+      qualityInputsHash: initial.evidence.qualityInputsHash,
+    }),
+  );
+  repo.commit();
+  const followUp = repo.runGate("G5", [], { HEAD_REF: "spec/baseline-init" });
+  assert.equal(followUp.status, 0, followUp.output);
+  const outcome = followUp.receipt.results[0];
+  assert.match(outcome.reason, /verified first-baseline initialization/u);
+  assert.equal(outcome.metrics.jscpdPct, initial.metrics.jscpdPct);
+  assert.equal(outcome.evidence.baseline.jscpdPct, initial.metrics.jscpdPct);
+  assert.equal(outcome.evidence.baseline.qualityInputsHash, initial.evidence.qualityInputsHash);
+});
+
+function measuredDuplication(t: TestContext) {
+  const repo = qualityFixture(t);
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.write("src/clone-b.ts", repeatedSource());
+  repo.commit();
+  const measured = repo.runGate("G5");
+  assert.equal(measured.status, 0, measured.output);
+  const initial = measured.receipt.results[0];
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  return { repo, initial };
+}
+
+test("forged baseline metrics and hashes are rejected before they become the ratchet", (t) => {
+  const forgedHash = measuredDuplication(t);
+  forgedHash.repo.git("switch", "--quiet", "-c", "spec/forged-hash");
+  forgedHash.repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({
+      jscpdPct: forgedHash.initial.metrics.jscpdPct,
+      mutationScore: 0,
+      qualityInputsHash: "0".repeat(64),
+    }),
+  );
+  forgedHash.repo.commit();
+  const hash = forgedHash.repo.runGate("G5", [], { HEAD_REF: "spec/forged-hash" });
+  assert.equal(hash.status, 1, hash.output);
+  assert.match(hash.output, /forged qualityInputsHash/u);
+
+  const forgedMetric = measuredDuplication(t);
+  forgedMetric.repo.git("switch", "--quiet", "-c", "spec/forged-metric");
+  forgedMetric.repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({
+      jscpdPct: 0,
+      mutationScore: 0,
+      qualityInputsHash: forgedMetric.initial.evidence.qualityInputsHash,
+    }),
+  );
+  forgedMetric.repo.commit();
+  const metric = forgedMetric.repo.runGate("G5", [], { HEAD_REF: "spec/forged-metric" });
+  assert.equal(metric.status, 1, metric.output);
+  assert.match(metric.output, /forged baseline metric/u);
+});
+
+test("a first-baseline follow-up cannot change measurement inputs", (t) => {
+  const { repo, initial } = measuredDuplication(t);
+  repo.git("switch", "--quiet", "-c", "spec/changed-inputs");
+  const jscpd = JSON.parse(readFileSync(join(repo.root, ".jscpd.json"), "utf8"));
+  jscpd.minTokens = 40;
+  repo.write(".jscpd.json", JSON.stringify(jscpd));
+  repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({
+      jscpdPct: initial.metrics.jscpdPct,
+      mutationScore: 0,
+      qualityInputsHash: initial.evidence.qualityInputsHash,
+    }),
+  );
+  repo.commit();
+  const result = repo.runGate("G5", [], { HEAD_REF: "spec/changed-inputs" });
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /changed measurement inputs/u);
+});
+
+test("ordinary ticket work cannot initialize the baseline even with exact measured values", (t) => {
+  const { repo, initial } = measuredDuplication(t);
+  repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({
+      jscpdPct: initial.metrics.jscpdPct,
+      mutationScore: 0,
+      qualityInputsHash: initial.evidence.qualityInputsHash,
+    }),
+  );
+  repo.commit();
+  const result = repo.runGate("G5");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /Creating or deleting the ratchet file needs a spec-kind PR/u);
+});
+
+test("an initialized duplication ratchet still rejects a later regression", (t) => {
+  const { repo, initial } = measuredDuplication(t);
+  repo.git("switch", "--quiet", "-c", "spec/initialize-ratchet");
+  repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({
+      jscpdPct: initial.metrics.jscpdPct,
+      mutationScore: 0,
+      qualityInputsHash: initial.evidence.qualityInputsHash,
+    }),
+  );
+  repo.commit();
+  const initialized = repo.runGate("G5", [], { HEAD_REF: "spec/initialize-ratchet" });
+  assert.equal(initialized.status, 0, initialized.output);
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  repo.git("switch", "--quiet", "-C", "ticket/demo-01");
+  repo.write("src/clone-c.ts", repeatedSource());
+  repo.commit();
+  const regression = repo.runGate("G5");
+  assert.equal(regression.status, 1, regression.output);
+  assert.match(regression.output, /duplication regression/u);
+});
+
+test("a spec-kind follow-up can commit the exact measured mutation baseline and rejects a forged score", (t) => {
+  const source = "export function classify(value: number) { return value > 0 ? 'positive' : 'other'; }\n";
+  const testFile =
+    "import { test, expect } from 'vitest'; import { classify } from '../src/classify.ts'; test('boundary and both sides', () => { expect(classify(1)).toBe('positive'); expect(classify(0)).toBe('other'); expect(classify(-1)).toBe('other'); });\n";
+  const measure = () => {
+    const repo = qualityFixture(t);
+    repo.write("src/classify.ts", source);
+    repo.write("test/classify.test.ts", testFile);
+    repo.commit();
+    const measured = repo.runGate("G6");
+    assert.equal(measured.status, 0, measured.output);
+    const initial = measured.receipt.results[0];
+    repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+    return { repo, initial };
+  };
+  const exact = measure();
+  exact.repo.git("switch", "--quiet", "-c", "spec/mutation-baseline");
+  exact.repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({
+      jscpdPct: 0,
+      mutationScore: exact.initial.metrics.mutationScore,
+      qualityInputsHash: exact.initial.evidence.qualityInputsHash,
+    }),
+  );
+  exact.repo.commit();
+  const followUp = exact.repo.runGate("G6", [], { HEAD_REF: "spec/mutation-baseline" });
+  assert.equal(followUp.status, 0, followUp.output);
+  assert.match(followUp.receipt.results[0].reason, /verified first-baseline initialization/u);
+  assert.equal(followUp.receipt.results[0].metrics.mutationScore, exact.initial.metrics.mutationScore);
+
+  const forged = measure();
+  forged.repo.git("switch", "--quiet", "-c", "spec/forged-mutation");
+  forged.repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({
+      jscpdPct: 0,
+      mutationScore: 0,
+      qualityInputsHash: forged.initial.evidence.qualityInputsHash,
+    }),
+  );
+  forged.repo.commit();
+  const rejected = forged.repo.runGate("G6", [], { HEAD_REF: "spec/forged-mutation" });
+  assert.equal(rejected.status, 1, rejected.output);
+  assert.match(rejected.output, /forged baseline metric/u);
 });
 
 test("later source work is blocked until the measured baseline has been reviewed on base", (t) => {

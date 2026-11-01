@@ -14,7 +14,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createRequire, stripTypeScriptTypes } from "node:module";
-import { extname, isAbsolute, join, matchesGlob, relative, sep } from "node:path";
+import { dirname, extname, isAbsolute, join, matchesGlob, normalize, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { fixtureEnvironment } from "./fixture-env.ts";
 import { runOwned } from "./replay.ts";
@@ -106,6 +106,39 @@ async function main() {
   const product = files.filter(
     (file) => policy.product.some((glob: string) => matchesGlob(file, glob)) && !excluded(file),
   );
+  // A test filename is not a runtime exclusion. Follow static imports from measured
+  // modules, including through other excluded modules, and measure that closure.
+  const runtimeSpecifiers = (text: string) => {
+    const specs: string[] = [];
+    const stripped = text.replace(/\/\*[\s\S]*?\*\//gu, "").replace(/(^|[^:])\/\/.*$/gmu, "$1");
+    for (const match of stripped.matchAll(
+      /\b(?:import|export)\s+type\b[^;]*?\bfrom\s*["']([^"']+)["']|\bfrom\s*["']([^"']+)["']|\b(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)/gu,
+    )) {
+      if (match[1]) continue;
+      const spec = match[2] ?? match[3];
+      if (spec?.startsWith(".")) specs.push(spec);
+    }
+    return specs;
+  };
+  const seen = new Set([...sources, ...product]);
+  const queue = [...seen];
+  while (queue.length) {
+    const file = queue.pop();
+    if (!file || !lstatSync(file).isFile() || lstatSync(file).isSymbolicLink()) continue;
+    for (const spec of runtimeSpecifiers(readFileSync(file, "utf8"))) {
+      const base = normalize(join(dirname(file), spec));
+      const resolved = [base, `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.mjs`, `${base}.cjs`].find((path) =>
+        files.includes(path),
+      );
+      if (!resolved || seen.has(resolved)) continue;
+      seen.add(resolved);
+      queue.push(resolved);
+      if (!excluded(resolved)) continue;
+      if (policy.node.some((glob: string) => matchesGlob(resolved, glob))) sources.push(resolved);
+      else if (policy.product.some((glob: string) => matchesGlob(resolved, glob))) product.push(resolved);
+      else throw new Error(`Coverage scope does not model runtime-reachable excluded module: ${resolved}`);
+    }
+  }
   for (const file of files) {
     if (
       (/\.[cm]?[jt]sx?$/u.test(file) ||
@@ -199,10 +232,10 @@ async function main() {
           owned.startsWith(`..${sep}`) ||
           isAbsolute(owned) ||
           (owned.split(sep).includes("node_modules") && !files.includes(owned)) ||
-          excluded(owned) ||
-          owned === "vitest.config.ts" ||
           sources.includes(owned) ||
-          product.includes(owned)
+          product.includes(owned) ||
+          excluded(owned) ||
+          owned === "vitest.config.ts"
         )
           continue;
         throw new Error(`Coverage scope does not model repository runtime code: ${owned}`);

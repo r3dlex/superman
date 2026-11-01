@@ -71,23 +71,39 @@ export function qualityGate(
   }
   if (!before.length && !after.length) return { gate, status: "n/a", reason: "no TypeScript source" };
   let baseline: { jscpdPct: number; mutationScore: number; qualityInputsHash: string } | undefined;
+  let proposed: { jscpdPct: number; mutationScore: number; qualityInputsHash: string } | undefined;
+  const validBaseline = (value: {
+    jscpdPct: number;
+    mutationScore: number;
+    qualityInputsHash: string;
+  }): boolean =>
+    !!value &&
+    Object.keys(value).every((key) => ["jscpdPct", "mutationScore", "qualityInputsHash"].includes(key)) &&
+    [value.jscpdPct, value.mutationScore].every(
+      (metric) => typeof metric === "number" && Number.isFinite(metric) && metric >= 0 && metric <= 100,
+    ) &&
+    /^[a-f0-9]{64}$/u.test(value.qualityInputsHash);
   const baselineEntry = git("ls-tree", "-z", baseSha, "--", "superman.ratchet.json");
   if (before.length || baselineEntry) {
-    if (!/^100(?:644|755) blob /u.test(baselineEntry))
-      throw new Error(`${gate}: reviewed superman.ratchet.json is missing; first-source baseline follow-up required`);
-    try {
-      baseline = JSON.parse(git("show", `${baseSha}:superman.ratchet.json`));
-      if (
-        !baseline ||
-        Object.keys(baseline).some((key) => !["jscpdPct", "mutationScore", "qualityInputsHash"].includes(key)) ||
-        ![baseline.jscpdPct, baseline.mutationScore].every(
-          (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100,
-        ) ||
-        !/^[a-f0-9]{64}$/u.test(baseline.qualityInputsHash)
-      )
-        throw new Error("invalid baseline fields");
-    } catch {
-      throw new Error(`${gate}: invalid reviewed superman.ratchet.json; Gate 1 baseline refresh required`);
+    if (!/^100(?:644|755) blob /u.test(baselineEntry)) {
+      const candidateEntry = git("ls-tree", "-z", headSha, "--", "superman.ratchet.json");
+      if (!/^100(?:644|755) blob /u.test(candidateEntry))
+        throw new Error(`${gate}: reviewed superman.ratchet.json is missing; first-source baseline follow-up required`);
+      if (!/^spec\/[a-z0-9][a-z0-9-]*$/u.test(process.env.HEAD_REF ?? ""))
+        throw new Error(`${gate}: ordinary work cannot initialize the baseline; spec-kind follow-up required`);
+      try {
+        proposed = JSON.parse(git("show", `${headSha}:superman.ratchet.json`));
+        if (!proposed || !validBaseline(proposed)) throw new Error("invalid baseline fields");
+      } catch {
+        throw new Error(`${gate}: invalid reviewed superman.ratchet.json; Gate 1 baseline refresh required`);
+      }
+    } else {
+      try {
+        baseline = JSON.parse(git("show", `${baseSha}:superman.ratchet.json`));
+        if (!baseline || !validBaseline(baseline)) throw new Error("invalid baseline fields");
+      } catch {
+        throw new Error(`${gate}: invalid reviewed superman.ratchet.json; Gate 1 baseline refresh required`);
+      }
     }
   }
   const config = JSON.parse(git("show", `${baseSha}:.superman/ci/bootstrap.json`));
@@ -121,7 +137,11 @@ export function qualityGate(
   const identities = policies.map((path) => {
     const approved = git("ls-tree", "-z", baseSha, "--", path);
     if (!/^100(?:644|755) blob /u.test(approved) || approved !== git("ls-tree", "-z", headSha, "--", path))
-      throw new Error(`${gate}: quality policy changed or unavailable; Gate 1 baseline refresh required: ${path}`);
+      throw new Error(
+        proposed
+          ? `${gate}: changed measurement inputs; quality policy changed or unavailable: ${path}`
+          : `${gate}: quality policy changed or unavailable; Gate 1 baseline refresh required: ${path}`,
+      );
     // G4 owns general discovery. This narrower hash profile accepts only exact,
     // explicitly inventoried local includes, not a second optimistic resolver.
     const text = git("show", `${baseSha}:${path}`);
@@ -181,6 +201,16 @@ export function qualityGate(
     throw new Error(
       `${gate}: qualityInputsHash scope/tool/config mismatch (expected ${baseline.qualityInputsHash}, actual ${qualityInputsHash}); Gate 1 baseline refresh required`,
     );
+  if (proposed) {
+    if (proposed.qualityInputsHash !== qualityInputsHash)
+      throw new Error(
+        `${gate}: forged qualityInputsHash (recorded ${proposed.qualityInputsHash}, actual ${qualityInputsHash}); Gate 1 baseline refresh required`,
+      );
+    if (git("ls-tree", "-r", "-z", baseSha, "--", "src") !== git("ls-tree", "-r", "-z", headSha, "--", "src"))
+      throw new Error(
+        `${gate}: changed measurement inputs; the first-baseline follow-up must record the measured source unchanged`,
+      );
+  }
   if (gate === "G6" && baseline && !before.length) {
     throw new Error(
       "G6: retained mutation baseline has an empty base scope; Gate 1 scope review and baseline refresh required",
@@ -488,6 +518,20 @@ export function qualityGate(
           restored: true,
         };
       };
+      if (proposed) {
+        const { files, mutants, restored, ...metrics } = mutate(snapshot, after);
+        if (metrics.mutationScore !== proposed.mutationScore)
+          throw new Error(
+            `${gate}: forged baseline metric; recorded mutationScore ${proposed.mutationScore} does not match measured ${metrics.mutationScore}`,
+          );
+        return {
+          gate,
+          status: "pass",
+          reason: "verified first-baseline initialization",
+          metrics,
+          evidence: { baseSha, headSha, qualityInputsHash, files, mutants, restored, baseline: proposed, tools },
+        };
+      }
       if (!baseline) {
         const { files, mutants, restored, ...metrics } = mutate(snapshot, after);
         return {
@@ -699,6 +743,10 @@ export function qualityGate(
       lines: total.lines,
       tokens: total.tokens,
     };
+    if (proposed && total.percentage !== proposed.jscpdPct)
+      throw new Error(
+        `${gate}: forged baseline metric; recorded jscpdPct ${proposed.jscpdPct} does not match measured ${total.percentage}`,
+      );
     const threshold = candidateBaseline?.jscpdPct;
     if (threshold !== undefined && total.percentage > threshold)
       throw new Error(
@@ -707,9 +755,11 @@ export function qualityGate(
     return {
       gate,
       status: "pass",
-      reason: baseline
-        ? "full corpus satisfies reviewed duplication baseline"
-        : "measured initialization; no approved-base source comparison",
+      reason: proposed
+        ? "verified first-baseline initialization"
+        : baseline
+          ? "full corpus satisfies reviewed duplication baseline"
+          : "measured initialization; no approved-base source comparison",
       metrics,
       evidence: {
         baseSha,
@@ -717,7 +767,7 @@ export function qualityGate(
         qualityInputsHash,
         files: after,
         clones: report.duplicates,
-        ...(baseline ? { baseline } : {}),
+        ...(baseline || proposed ? { baseline: baseline ?? proposed } : {}),
         tools: { jscpd: { expected, declared, installed, executableVersion } },
       },
     };
