@@ -1331,6 +1331,45 @@ test("an unchanged unknown-extension Vitest loader remains a supported policy co
   assert.match(result.output, /pr-policy: pass/u);
 });
 
+test("unknown-extension executable policy gets the same loader validation as JavaScript", (t) => {
+  const vitest = join(import.meta.dirname, "../../node_modules/vitest/vitest.mjs");
+  for (const policyData of [
+    'const load = require;\nmodule.exports = load("./settings/effective.json");\n',
+    'const load = process.getBuiltinModule("fs").readFileSync;\nmodule.exports = JSON.parse(load("./settings/effective.json", "utf8"));\n',
+  ]) {
+    const repo = fixture(t, "ticket/demo-01");
+    repo.write("vitest.config.cjs", 'module.exports = require("./settings/policy.data");\n');
+    repo.write("settings/policy.data", policyData);
+    repo.write(
+      "settings/effective.json",
+      '{"test":{"include":["test/**/*.test.ts"],"passWithNoTests":false,"name":"base-policy"}}\n',
+    );
+    repo.write(
+      "test/sample.test.ts",
+      'import { expect, test } from "vitest"; test("runs", () => expect(1).toBe(1));\n',
+    );
+    repo.git("add", "--all");
+    repo.git("commit", "--quiet", "-m", "approved indirect data loader");
+    repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+    repo.write(
+      "settings/effective.json",
+      '{"test":{"include":["test/**/*.test.ts"],"passWithNoTests":true,"name":"changed-policy"}}\n',
+    );
+    const loaded = spawnSync(process.execPath, [vitest, "run", "--config", "vitest.config.cjs", "--reporter=verbose"], {
+      cwd: repo.root,
+      encoding: "utf8",
+      shell: false,
+      timeout: 60_000,
+    });
+    assert.ifError(loaded.error);
+    assert.equal(loaded.status, 0, `${policyData}\n${loaded.stdout}${loaded.stderr}`);
+    assert.match(`${loaded.stdout}${loaded.stderr}`, /changed-policy/u);
+    const result = repo.check();
+    assert.equal(result.status, 1, `${policyData}\n${result.output}`);
+    assert.match(result.output, /G4: Cannot establish effective policy.*[Mm]odule-loader/u);
+  }
+});
+
 test("policy gaps: missing or unsupported branch kinds cannot receive a policy pass", (t) => {
   const repo = fixture(t, "feature/demo");
   repo.write("README.md", "# Unclassified candidate\n");

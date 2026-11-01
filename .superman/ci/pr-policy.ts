@@ -145,6 +145,36 @@ function readJSONC(text: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+// JavaScript configs and unknown-extension files executed by pinned Vitest share
+// this check. Static includes stay supported; unmodeled loaders fail closed.
+function executablePolicyRefs(text: string): string[] {
+  if (
+    [...text.matchAll(/"(?:\\[\s\S]|[^"\\\r\n])*"|'(?:\\[\s\S]|[^'\\\r\n])*'|[/`]/gu)].some(
+      ([token]) => token === "/" || token === "`",
+    )
+  )
+    throw new Error("Executable policy comments, slash expressions and templates require reviewed lexical modeling");
+  const refs: string[] = [];
+  for (const match of text.matchAll(
+    /(?:^|[;\r\n\u2028\u2029}])\s*(?:import\s+(?:[^;]*?\sfrom\s*)?|export\s+[^;]*?\sfrom\s*)["']([^"']+)["']|\b(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)/gu,
+  ))
+    refs.push(match[1] ?? match[2]);
+  if (/\b(?:import|require)\s*\(\s*[^\s"']|\b(?:readFile(?:Sync)?|readdir(?:Sync)?|globSync)\s*\(/u.test(text))
+    throw new Error("Dynamic policy input loading is not modeled by the bootstrap");
+  const stripped = text
+    .replace(/"(?:\\[\s\S]|[^"\\\r\n])*"|'(?:\\[\s\S]|[^'\\\r\n])*'/gu, '""')
+    .replace(/\bmodule\s*\.\s*exports\b/gu, "");
+  if (
+    /\\|\b(?:process|globalThis|global|module|eval|Function|Reflect|Object|fetch|constructor|getBuiltinModule)\b|\brequire\b(?!\s*\(\s*""\s*\))|(?:[\w$)\]}]|[{,])\s*\[/u.test(
+      stripped,
+    )
+  )
+    throw new Error(
+      "Module-loader capabilities, computed access and escaped identifiers require reviewed input modeling",
+    );
+  return refs;
+}
+
 function effectivePolicy(base: string): { paths: Set<string>; findings: Finding[]; globs: string[] } {
   const paths = new Set<string>();
   const findings: Finding[] = [];
@@ -162,7 +192,7 @@ function effectivePolicy(base: string): { paths: Set<string>; findings: Finding[
         }),
     );
     const visited = new Set<string>();
-    const visit = (file: string): void => {
+    const visit = (file: string, fromExecutable = false): void => {
       if (visited.has(file)) return;
       visited.add(file);
       paths.add(file);
@@ -191,45 +221,13 @@ function effectivePolicy(base: string): { paths: Set<string>; findings: Finding[
               if (!ref || typeof ref.path !== "string") throw new Error("Invalid compiler reference");
               refs.push(ref.path.startsWith(".") ? ref.path : `./${ref.path}`);
             }
-        } else if (/\.[cm]?[jt]sx?$/u.test(file)) {
-          // Static config imports form a conservative closure. Dynamic file loading
-          // needs reviewed explicit modeling, never an optimistic ticket-time guess.
-          if (
-            [...text.matchAll(/"(?:\\[\s\S]|[^"\\\r\n])*"|'(?:\\[\s\S]|[^'\\\r\n])*'|[/`]/gu)].some(
-              ([token]) => token === "/" || token === "`",
-            )
-          )
-            throw new Error(
-              "Executable policy comments, slash expressions and templates require reviewed lexical modeling",
-            );
-          for (const match of text.matchAll(
-            /(?:^|[;\r\n\u2028\u2029}])\s*(?:import\s+(?:[^;]*?\sfrom\s*)?|export\s+[^;]*?\sfrom\s*)["']([^"']+)["']|\b(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)/gu,
-          ))
-            refs.push(match[1] ?? match[2]);
-          if (
-            /\b(?:import|require)\s*\(\s*[^\s"']|\b(?:readFile(?:Sync)?|readdir(?:Sync)?|globSync)\s*\(/u.test(text)
-          ) {
-            throw new Error("Dynamic policy input loading is not modeled by the bootstrap");
-          }
-          // Data literals/static includes are supported; ambient capabilities, reflection
-          // and computed access need reviewed modeling, not an expanding loader blacklist.
-          const executable = text
-            .replace(/"(?:\\[\s\S]|[^"\\\r\n])*"|'(?:\\[\s\S]|[^'\\\r\n])*'/gu, '""')
-            .replace(/\bmodule\s*\.\s*exports\b/gu, "");
-          if (
-            /\\|\b(?:process|globalThis|global|module|eval|Function|Reflect|Object|fetch|constructor|getBuiltinModule)\b|\brequire\b(?!\s*\(\s*""\s*\))|(?:[\w$)\]}]|[{,])\s*\[/u.test(
-              executable,
-            )
-          )
-            throw new Error(
-              "Module-loader capabilities, computed access and escaped identifiers require reviewed input modeling",
-            );
+        } else if (/\.[cm]?[jt]sx?$/u.test(file) || fromExecutable) {
+          // Static includes stay in the closure. Unknown-extension files reached
+          // from executable policy (vitest.config.cjs → *.data) use the same checks.
+          refs.push(...executablePolicyRefs(text));
         } else {
           // No hook configuration is installed at bootstrap. Refuse unknown include
           // syntax rather than claiming a complete TOML/YAML/remote resolver.
-          // Pinned Vitest's config bundler does follow a static require from an
-          // unknown extension (vitest.config.cjs → *.data → *.json), so those refs
-          // are part of the effective-policy closure.
           if (/\b(?:extends|include|configs?|remotes?)\s*[:=]/u.test(text))
             throw new Error("Hook include/remote closure requires reviewed activation");
           for (const match of text.matchAll(
@@ -283,7 +281,7 @@ function effectivePolicy(base: string): { paths: Set<string>; findings: Finding[
             `${relative}/index.ts`,
           ].find((path) => tree.has(path));
           if (!resolved) throw new Error(`Unresolved local policy input ${ref}`);
-          visit(resolved);
+          visit(resolved, /\.[cm]?[jt]sx?$/u.test(file) || (fromExecutable && !/\.jsonc?$/u.test(file)));
         }
       } catch (error) {
         findings.push({

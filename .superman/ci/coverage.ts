@@ -112,16 +112,40 @@ async function main() {
     const specs: string[] = [];
     const stripped = text.replace(/\/\*[\s\S]*?\*\//gu, "").replace(/(^|[^:])\/\/.*$/gmu, "$1");
     for (const match of stripped.matchAll(
-      /\b(?:import|export)\s+type\b[^;]*?\bfrom\s*["']([^"']+)["']|\bfrom\s*["']([^"']+)["']|\b(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)/gu,
+      /\b(?:import|export)\s+type\b[^;]*?\bfrom\s*["']([^"']+)["']|\bfrom\s*["']([^"']+)["']|\b(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)|(?:^|[;\r\n\u2028\u2029}])\s*import\s*["']([^"']+)["']/gu,
     )) {
       if (match[1]) continue;
-      const spec = match[2] ?? match[3];
+      const spec = match[2] ?? match[3] ?? match[4];
       if (spec?.startsWith(".")) specs.push(spec);
     }
     return specs;
   };
+  const attributeExcluded = (resolved: string) => {
+    if (sources.includes(resolved) || product.includes(resolved)) return;
+    if (policy.node.some((glob: string) => matchesGlob(resolved, glob))) sources.push(resolved);
+    else if (policy.product.some((glob: string) => matchesGlob(resolved, glob))) product.push(resolved);
+    else throw new Error(`Coverage scope does not model runtime-reachable excluded module: ${resolved}`);
+  };
   const seen = new Set([...sources, ...product]);
   const queue = [...seen];
+  // A child script is runtime even when its name looks like a test. Node resolves
+  // that argument from the repository root, not from the spawning file.
+  for (const file of files) {
+    if (!/\.[cm]?[jt]sx?$/u.test(file) || !lstatSync(file).isFile() || lstatSync(file).isSymbolicLink()) continue;
+    const stripped = readFileSync(file, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//gu, "")
+      .replace(/(^|[^:])\/\/.*$/gmu, "$1");
+    for (const match of stripped.matchAll(
+      /\b(?:execFileSync|spawnSync|execFile|spawn)\s*\([^;\n]*["']([^"'\\]*\.test\.ts)/gu,
+    )) {
+      const resolved = normalize(match[1]);
+      if (resolved.startsWith("../") || isAbsolute(resolved) || !files.includes(resolved) || seen.has(resolved))
+        continue;
+      seen.add(resolved);
+      queue.push(resolved);
+      attributeExcluded(resolved);
+    }
+  }
   while (queue.length) {
     const file = queue.pop();
     if (!file || !lstatSync(file).isFile() || lstatSync(file).isSymbolicLink()) continue;
@@ -134,9 +158,7 @@ async function main() {
       seen.add(resolved);
       queue.push(resolved);
       if (!excluded(resolved)) continue;
-      if (policy.node.some((glob: string) => matchesGlob(resolved, glob))) sources.push(resolved);
-      else if (policy.product.some((glob: string) => matchesGlob(resolved, glob))) product.push(resolved);
-      else throw new Error(`Coverage scope does not model runtime-reachable excluded module: ${resolved}`);
+      attributeExcluded(resolved);
     }
   }
   for (const file of files) {

@@ -192,6 +192,103 @@ test("runtime reached through an intermediate import cannot hide behind a test f
   assert.ok(report[join(repo.root, ".superman/ci/mid.test.ts")]);
 });
 
+test("a side-effect import cannot hide runtime behind a test filename", (t) => {
+  const hidden =
+    "export function runtime(value: number) {\n  if (value > 0) return 'positive';\n  return 'other';\n}\n";
+  const reached = fixture(t);
+  reached.write(".superman/ci/runtime.test.ts", hidden);
+  reached.write(
+    ".superman/ci/app.ts",
+    'import "./runtime.test.ts";\nexport function use(value: number) { return value > 0 ? "positive" : "other"; }\n',
+  );
+  reached.write(
+    ".superman/ci/app.test.ts",
+    'import assert from "node:assert/strict"; import { test } from "node:test"; import { use } from "./app.ts"; test("both sides", () => { assert.equal(use(1), "positive"); assert.equal(use(0), "other"); });\n',
+  );
+  const measured = reached.run();
+  assert.equal(measured.status, 1, measured.output);
+  assert.match(measured.output, /Coverage below 90%/u);
+  assert.ok(measured.directory);
+  const report = JSON.parse(readFileSync(join(measured.directory, "coverage-final.json"), "utf8"));
+  assert.ok(report[join(reached.root, ".superman/ci/runtime.test.ts")]);
+
+  const unmodeled = coveredBootstrap(t);
+  unmodeled.write("tools/runtime.test.ts", hidden);
+  unmodeled.write(
+    ".superman/ci/subject.ts",
+    'import "../../tools/runtime.test.ts";\nexport function sign(value: number) { return value > 0 ? "positive" : "other"; }\n',
+  );
+  const blocked = unmodeled.run();
+  assert.equal(blocked.status, 1, blocked.output);
+  assert.match(
+    blocked.output,
+    /Coverage scope does not model runtime-reachable excluded module: tools\/runtime\.test\.ts/u,
+  );
+  assert.equal(blocked.directory, undefined, "Unknown runtime ownership cannot publish manufactured coverage");
+});
+
+test("subprocess execution cannot hide runtime behind a test filename", (t) => {
+  const hidden =
+    "export function runtime(value: number) {\n  if (value > 0) return 'positive';\n  return 'other';\n}\nconsole.log(runtime(1));\n";
+  const reached = coveredBootstrap(t);
+  reached.write(".superman/ci/runtime.test.ts", hidden);
+  reached.write(
+    ".superman/ci/subject.test.ts",
+    'import assert from "node:assert/strict"; import { execFileSync } from "node:child_process"; import { test } from "node:test"; import { sign } from "./subject.ts"; test("both sides and subprocess", () => { assert.equal(sign(1), "positive"); assert.equal(sign(0), "other"); assert.equal(execFileSync(process.execPath, [".superman/ci/runtime.test.ts"], { encoding: "utf8", shell: false }).trim(), "positive"); });\n',
+  );
+  const measured = reached.run();
+  assert.equal(measured.status, 1, measured.output);
+  assert.match(measured.output, /Coverage below 90%/u);
+  assert.ok(measured.directory);
+  const report = JSON.parse(readFileSync(join(measured.directory, "coverage-final.json"), "utf8"));
+  assert.ok(report[join(reached.root, ".superman/ci/runtime.test.ts")]);
+
+  const unmodeled = coveredBootstrap(t);
+  unmodeled.write("tools/runtime.test.ts", hidden);
+  unmodeled.write(
+    ".superman/ci/subject.test.ts",
+    'import assert from "node:assert/strict"; import { execFileSync } from "node:child_process"; import { test } from "node:test"; import { sign } from "./subject.ts"; test("both sides and subprocess", () => { assert.equal(sign(1), "positive"); assert.equal(sign(0), "other"); assert.equal(execFileSync(process.execPath, ["tools/runtime.test.ts"], { encoding: "utf8", shell: false }).trim(), "positive"); });\n',
+  );
+  const blocked = unmodeled.run();
+  assert.equal(blocked.status, 1, blocked.output);
+  assert.match(
+    blocked.output,
+    /Coverage scope does not model runtime-reachable excluded module: tools\/runtime\.test\.ts/u,
+  );
+  assert.equal(blocked.directory, undefined, "Unknown runtime ownership cannot publish manufactured coverage");
+});
+
+test("an eval subprocess cannot hide runtime behind a test filename", (t) => {
+  const hidden =
+    "export function runtime(value: number) {\n  if (value > 0) return 'positive';\n  return 'other';\n}\nconsole.log(runtime(1));\n";
+  const reached = coveredBootstrap(t);
+  reached.write(".superman/ci/runtime.test.ts", hidden);
+  reached.write(
+    ".superman/ci/subject.test.ts",
+    `import assert from "node:assert/strict"; import { execFileSync } from "node:child_process"; import { test } from "node:test"; import { sign } from "./subject.ts"; test("both sides and eval subprocess", () => { assert.equal(sign(1), "positive"); assert.equal(sign(0), "other"); assert.equal(execFileSync(process.execPath, ["--input-type=commonjs", "--eval", ${JSON.stringify('require("./.superman/ci/runtime.test.ts")')}], { encoding: "utf8", shell: false }).trim(), "positive"); });\n`,
+  );
+  const measured = reached.run();
+  assert.equal(measured.status, 1, measured.output);
+  assert.match(measured.output, /Coverage below 90%/u);
+  assert.ok(measured.directory);
+  const report = JSON.parse(readFileSync(join(measured.directory, "coverage-final.json"), "utf8"));
+  assert.ok(report[join(reached.root, ".superman/ci/runtime.test.ts")]);
+
+  const unmodeled = coveredBootstrap(t);
+  unmodeled.write("tools/runtime.test.ts", hidden);
+  unmodeled.write(
+    ".superman/ci/subject.test.ts",
+    `import assert from "node:assert/strict"; import { execFileSync } from "node:child_process"; import { test } from "node:test"; import { sign } from "./subject.ts"; test("both sides and eval subprocess", () => { assert.equal(sign(1), "positive"); assert.equal(sign(0), "other"); assert.equal(execFileSync(process.execPath, ["--input-type=commonjs", "--eval", ${JSON.stringify('require("./tools/runtime.test.ts")')}], { encoding: "utf8", shell: false }).trim(), "positive"); });\n`,
+  );
+  const blocked = unmodeled.run();
+  assert.equal(blocked.status, 1, blocked.output);
+  assert.match(
+    blocked.output,
+    /Coverage scope does not model runtime-reachable excluded module: tools\/runtime\.test\.ts/u,
+  );
+  assert.equal(blocked.directory, undefined, "Unknown runtime ownership cannot publish manufactured coverage");
+});
+
 test("a test-only helper remains excludable when no measured module imports it", (t) => {
   const repo = coveredBootstrap(t);
   repo.write(
