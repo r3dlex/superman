@@ -2692,6 +2692,43 @@ That is the floor working as ADR 0014 intends: *"improve meaningful tests instea
 
 **The Deno candidate's own coverage moved, and why.** The Deno inventory's four metrics are carried, not met, and they bind at the merge-bound cutover. Round twelve measured them at **45.88 % lines, 45.92 % statements, 35.90 % branches, 52.66 % functions** on the arm64 and macOS legs, against the 46.96 / 47.03 / 35.94 / 51.52 the record carried before this slice. The Deno sibling's new lane paths are not covered by the Deno twin's own suites — the corpus lane has no Deno twin case yet — so the inventory fell by about a point. It is a carried obligation either way, and it is named here rather than left to be discovered at the cutover.
 
+### The first measurement in critical scope — the survivor treatment's input
+
+§5.4: *"First measurement within critical scope, including new critical files, requires André's survivor treatment before activation/merge, not silent weak initialization."* This is that measurement: the whole declared mutation scope, with the pinned Stryker 10.1.1 and Vitest 5.0.5, over the enforcement core at `5d9dd4b`.
+
+| | |
+| --- | --- |
+| The scope | the whole declared mutation scope — 12 files, the enforcement core |
+| The mutants | **8,881** |
+| Killed | 1,210 |
+| Survived | 1,125 |
+| No coverage | 6,541 |
+| **The mutation score** | **13.62 %** |
+| The wall time | 23 min 40 s at four workers |
+
+The critical mapping's own scope — `raw-gates.ts`, `direct-gates.ts`, `coverage.ts`, `quality.ts`, `pr-policy.ts`, `replay.ts` — is 7,458 mutants: 1,088 killed, 1,080 survived, 5,290 no coverage.
+
+| File | Mutants | Killed | Survived | No coverage |
+| --- | --- | --- | --- | --- |
+| `quality.ts` | 2,279 | 138 | 99 | 2,042 |
+| `pr-policy.ts` | 1,280 | 247 | 369 | 662 |
+| `coverage.ts` | 1,135 | 165 | 220 | 749 |
+| `direct-gates.ts` | 990 | 144 | 102 | 744 |
+| `raw-gates.ts` | 910 | 270 | 208 | 431 |
+| `replay.ts` | 864 | 124 | 82 | 657 |
+| `node-hosted-candidate-measurement-host.ts` | 696 | 0 | 0 | 696 |
+| `archgate-linux-arm64-wizard.ts` | 457 | 0 | 0 | 457 |
+| `raw-fixture.ts` | 169 | 117 | 33 | 19 |
+| `extract-zip.ts` | 84 | 0 | 0 | 84 |
+| `fixture-env.ts` | 16 | 4 | 12 | 0 |
+| `critical/fixture-context.ts` | 1 | 1 | 0 | 0 |
+
+**Why three quarters of the scope has no coverage, and why that is a measurement artefact rather than a verdict on the code.** The pinned Stryker runs Vitest, and Vitest's discovery in this repository is the declared critical cases — 36 tests in eight files. The suites that actually exercise the enforcement core are the `node:test` suites (561 tests), and the mutation runner cannot execute a `node:test` file at all. So a mutant is *covered* only if one of the eight critical cases reaches it: 6,541 of 8,881 mutants are not reached by any of them, and they are reported as no coverage rather than as a verdict. The mutation score of 13.62 % is therefore a statement about the runner's test discovery, not about the enforcement core's testedness — the coverage floor measures the same core at 96 % lines through the `node:test` suites.
+
+**The raw outcomes**, which §5.4 asks for by name, are in `.superman-ci/mutation-first-measurement/`: `mutation-report.json` is the pinned Stryker's own report and `critical-survivors.tsv` is every one of the critical scope's 6,370 unresolved mutants with its file, status, mutator, line and replacement. The nightly's receipt carries the same measurement in the continuous-integration run, where the workers fit the runner's memory.
+
+**What the treatment has to decide.** §5.4 allows two resolutions: *meaningful kills*, or *a separate reviewed Gate 1 measurement/equivalence decision with the exact argument and raw outcomes*. The raw outcomes are above. The measurement's own finding — that the mutation runner cannot see the suites that cover the core — is the argument an equivalence decision would have to make, and it is not André's to make by default.
+
 ### The CI's own cost, measured on the hosted runner
 
 Round eight's `bootstrap (ubuntu-24.04)` leg, from the hosted run's own step timings — the only measurement of the CI's cost that exists, because the leg had never reached its end:
