@@ -410,9 +410,11 @@ async function main() {
       attributeExcluded(resolved);
     }
   }
-  while (queue.length) {
-    const file = queue.pop();
-    if (!file || !lstatSync(file).isFile() || lstatSync(file).isSymbolicLink()) continue;
+  // The drain takes the next file from the queue in the loop's own header, so
+  // the queue is emptied by the loop itself: the drain's termination does not
+  // depend on what its body does.
+  for (let file = queue.pop(); file; file = queue.pop()) {
+    if (!lstatSync(file).isFile() || lstatSync(file).isSymbolicLink()) continue;
     for (const spec of runtimeSpecifiers(readFileSync(file, "utf8"))) {
       const base = normalize(join(dirname(file), spec));
       const resolved = [base, `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.mjs`, `${base}.cjs`].find((path) =>

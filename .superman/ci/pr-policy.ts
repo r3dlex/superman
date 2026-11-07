@@ -101,15 +101,22 @@ function gitOk(args: string[]): boolean {
 
 function globToRegExp(glob: string): RegExp {
   let out = "";
-  for (let i = 0; i < glob.length; i++) {
+  // The scan names the index it resumes at, and the loop's own header applies
+  // it: the index advances by at least one character per step. A scan that
+  // consumed a two-character marker therefore never reads that marker twice, a
+  // scan whose index ran backwards leaves the pattern instead of reading it
+  // again, and a scan whose body does nothing still advances.
+  let resume = 0;
+  for (let i = 0; i < glob.length; i = Math.max(i + 1, resume)) {
     const c = glob[i];
+    resume = i + 1;
     if (c === "*" && glob[i + 1] === "*") {
       if (glob[i + 2] === "/") {
         out += "(?:[\\s\\S]*/)?";
-        i += 2;
+        resume = i + 3;
       } else {
         out += "[\\s\\S]*";
-        i++;
+        resume = i + 2;
       }
     } else if (c === "*") {
       out += "[^/]*";
@@ -136,23 +143,36 @@ function readAt(rev: string, file: string): string | null {
 function readJSONC(text: string): Record<string, unknown> {
   let cleaned = "";
   let quoted = false;
-  for (let i = 0; i < text.length; i++) {
+  // The scan names the index it resumes at, and the loop's own header applies
+  // it: the index advances by at least one character per step. A scan that
+  // consumed an escaped character or a comment marker therefore never reads it
+  // twice, a scan whose index ran backwards leaves the text instead of reading
+  // it again, and a scan whose body does nothing still advances.
+  let resume = 0;
+  for (let i = 0; i < text.length; i = Math.max(i + 1, resume)) {
     const c = text[i];
+    resume = i + 1;
     if (quoted) {
       cleaned += c;
-      if (c === "\\") cleaned += text[++i] ?? "";
-      else if (c === '"') quoted = false;
+      if (c === "\\") {
+        cleaned += text[i + 1] ?? "";
+        resume = i + 2;
+      } else if (c === '"') {
+        quoted = false;
+      }
     } else if (c === '"') {
       quoted = true;
       cleaned += c;
     } else if (text.startsWith("//", i)) {
-      while (i < text.length && text[i] !== "\n") i++;
+      // A line comment runs to the end of its line, or to the end of the text.
+      const newline = text.indexOf("\n", i);
       cleaned += "\n";
+      resume = newline < 0 ? text.length : newline + 1;
     } else if (text.startsWith("/*", i)) {
       const end = text.indexOf("*/", i + 2);
       if (end < 0) throw new Error("Unterminated policy comment");
       cleaned += " ";
-      i = end + 1;
+      resume = end + 2;
     } else {
       if (c === "}" || c === "]") cleaned = cleaned.replace(/,\s*$/u, "");
       cleaned += c;

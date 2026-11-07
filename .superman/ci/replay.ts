@@ -15,7 +15,16 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, matchesGlob, relative, resolve, sep } from "node:path";
 
-export function runOwned(command: string, args: string[], options: SpawnSyncOptionsWithStringEncoding) {
+/**
+ * An owned child is always bounded: an unbounded child outlives the run that
+ * started it, and the run cannot finish while it is alive. The bound is part
+ * of the caller's contract, so every owned child is given one.
+ */
+export function runOwned(
+  command: string,
+  args: string[],
+  options: SpawnSyncOptionsWithStringEncoding & { timeout: number },
+) {
   // Node 26 forwards detached to native spawn, but its sync type omits it.
   // The timeout process fixture verifies this POSIX process-group boundary.
   const ownedOptions: SpawnSyncOptionsWithStringEncoding & { detached: boolean } = {
@@ -23,6 +32,9 @@ export function runOwned(command: string, args: string[], options: SpawnSyncOpti
     detached: true,
     killSignal: "SIGKILL",
   };
+  // The bound is applied to the owned options and not to the spawn call: the
+  // owned child stays bounded even when the options object is replaced.
+  ownedOptions.timeout = options.timeout;
   const result = spawnSync(command, args, ownedOptions);
   if (result.pid) {
     try {

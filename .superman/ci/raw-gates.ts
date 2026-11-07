@@ -238,7 +238,10 @@ function committedInputsMatch(sha: string): boolean {
 function safeReceipt(input: string): string {
   const requested = resolve(input);
   let parent = dirname(requested);
-  while (!existsSync(parent)) parent = dirname(parent);
+  // The walk stops at the nearest existing ancestor, and at the filesystem
+  // root at the latest: the root is its own parent, so the walk terminates
+  // whichever ancestor it is looking for.
+  while (!existsSync(parent) && dirname(parent) !== parent) parent = dirname(parent);
   const destination = existsSync(requested)
     ? realpathSync(requested)
     : resolve(realpathSync(parent), relative(parent, requested));
