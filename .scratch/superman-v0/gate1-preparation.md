@@ -2317,6 +2317,45 @@ The forge must then show, for the integration evidence: the **head H** (the prop
 
 **What still needs André's authority, in order:** (1) mint the installation token; (2) the commit, push and PR-body write under the App identity, with the exact commands above; (3) the runner and forge access the three native proof runs need; (4) the exact-head approval and the merge itself. Nothing here can be done from this session without those.
 
+#### Publication executed, and the first hosted result — 2026-11-07
+
+**Outcome:** the preparation is published to r3dlex/superman#1 under the App's identity, and the hosted CI produced its first result on the published head — **red, for one reason, with the cause identified and fixed under André's authorisation.** **This is not an acceptance of the merge:** nothing here accepts a hosted merge, a workflow's required-check set beyond the change reviewed below, or ticket 01.
+
+**The publication, as executed.** André authorised the packet on 2026-11-07.
+
+| | |
+| --- | --- |
+| Manifest | [`.scratch/superman-v0/gate1-publication-manifest.md`](gate1-publication-manifest.md) — 85 paths, digest `28e4c81b8fd0049c1c4b9a4c333c9944e36673a603bd1e87c238ab57767fc764`; every staged byte verified against it, **zero mismatches**; `.serena/` absent from the index |
+| Identity | the App's 1-hour installation token, minted from `~/.config/superman-agent/app.pem` (App **5526100**, installation **176536987**), scoped to `r3dlex/superman`, used through `GH_TOKEN` and the separate `GH_CONFIG_DIR`; **never in argv, never in a log, and discarded** — 0 token files remain |
+| Commit | `be4c188` — 85 files, 30,687 insertions, 410 deletions, authored by `r3dlex-superman-bot[bot] <r3dlex-superman-bot[bot]@users.noreply.github.com>` |
+| Push | `62c8495..be4c188  HEAD -> spec/superman-v0` |
+| PR #1 | open on `main`, mergeable, author **`app/r3dlex-superman-bot`**, description rewritten with the reviewed body (15,860 characters, from `## Summary`) |
+
+**The first hosted result: all three legs red, one cause.**
+
+```text
+bootstrap (macos-15)          fail  42s
+bootstrap (ubuntu-24.04)      fail  55s
+bootstrap (ubuntu-24.04-arm)  fail  44s
+
+Coverage Deno measurement receipt is absent: .superman-ci/coverage-deno-*/coverage-receipt.json
+```
+
+**This was not pre-existing.** The previous head `62c8495` was **green** on 2026-11-01. The published delta declares the Deno scope in `coverage.json`, so the Node collector now binds the Deno measurement from the Deno collector's receipt — and the published workflow **never ran the Deno collector**. The gate refused visibly rather than passing without the evidence: no false green, and the failure named its own cause.
+
+**The authorised fix.** André authorised the workflow change on 2026-11-07. Two files, both protected policy inputs, both changed in this spec-kind PR:
+
+| File | sha256 | Change |
+| --- | --- | --- |
+| `.superman/ci/tool-assets.json` | `beeff5450320905abc79e509a9139e179be7e659e1ac9138011176488742272e` | The pinned Deno **2.9.8** is registered for all three platforms, with the archive digest **and** the extracted executable's digest, on the identities row 12's operator request and the candidate template already carry. |
+| `.github/workflows/ci.yml` | `0aa4ce17a00452ec37425fa7ea70da3d1f25b254a1eef1d7f080aa0e26c60e69` | The checksum-locked install step installs the pinned Deno beside Archgate and Trivy, extracting a zip for Deno and a tarball for the others and verifying the executable's own digest; a new step runs the Deno collector **before** the coverage floor, tolerating the collector's truthful exit 1 and refusing a missing receipt. |
+
+The Deno collector's step tolerates exit 1 because the Deno surface's floor is unmet and the exit is truthful; the **binding is by receipt, not by exit status**, and the Node collector refuses a receipt it cannot attribute. Any other exit is a real failure.
+
+**Verification of the fix, locally.** The workflow parses; the protected-path policy check passes on the changed tree — `kind: spec (superman-v0)`, `G8 traceability: n/a (spec-kind)`, `changed files: 171`, **`pr-policy: pass`**. The manifest that froze the published bytes is **historical**: it froze `be4c188`'s tree, and this fix changes three paths — the two above and this record.
+
+**What remains.** The three legs must run green on the new head; the `deno-candidate` legs are a **separate** publication (the template's file name under `.github/workflows/` is André's call); the three native candidate proof runs and the live forge evidence are the operator lanes; and the exact-head approval and the merge are André's.
+
 ### Step 12 — exact-source replacement and transition proof
 
 #### Step 12 local half record — 2026-11-04

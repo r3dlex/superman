@@ -69,7 +69,7 @@ jobs:
           const platform = `${process.platform}-${process.arch}`;
           if (platform !== process.env.EXPECTED_PLATFORM) throw new Error(`Wrong runner platform: ${platform}`);
           const assets = JSON.parse(readFileSync('.superman/ci/tool-assets.json', 'utf8'));
-          for (const tool of ['archgate', ...(platform === 'linux-x64' ? ['trivy'] : [])]) {
+          for (const tool of ['archgate', 'deno', ...(platform === 'linux-x64' ? ['trivy'] : [])]) {
             const asset = assets[tool][platform];
             if (!asset) {
               // Upstream archgate publishes no linux-arm64 asset. A registered Superman
@@ -88,15 +88,36 @@ jobs:
             if (createHash('sha256').update(bytes).digest('hex') !== asset.sha256) throw new Error(`${tool} checksum mismatch`);
             const directory = join(process.env.RUNNER_TEMP, `superman-${tool}`);
             mkdirSync(directory, { recursive: true });
-            const archive = join(directory, 'asset.tar.gz');
+            // The Deno release archives are zips; the archgate and trivy
+            // assets are tarballs. Both are checksum-locked before extraction.
+            const zipped = asset.url.endsWith('.zip');
+            const archive = join(directory, zipped ? 'asset.zip' : 'asset.tar.gz');
             writeFileSync(archive, bytes);
-            execFileSync('tar', ['-xzf', archive, '-C', directory], { shell: false });
+            if (zipped) execFileSync('unzip', ['-o', '-q', archive, '-C', directory], { shell: false });
+            else execFileSync('tar', ['-xzf', archive, '-C', directory], { shell: false });
             const binary = join(directory, tool);
+            if (asset.binarySha256) {
+              const digest = createHash('sha256').update(readFileSync(binary)).digest('hex');
+              if (digest !== asset.binarySha256) throw new Error(`${tool} executable checksum mismatch: ${digest}`);
+            }
             console.log(execFileSync(binary, ['--version'], { encoding: 'utf8', shell: false }));
             appendFileSync(process.env.GITHUB_ENV, `${tool.toUpperCase()}_BIN=${binary}\n`);
+            if (tool === 'deno') appendFileSync(process.env.GITHUB_ENV, `SUPERMAN_DENO_BIN=${binary}\n`);
             appendFileSync(process.env.GITHUB_PATH, `${directory}\n`);
           }
           NODE
+      - name: Deno candidate surface measurement (the Node collector binds this receipt)
+        run: |
+          set -uo pipefail
+          deno run --no-prompt --no-config --no-lock --no-npm --no-remote \
+            --allow-read --allow-write --allow-env --allow-run .superman/deno-bootstrap/coverage.ts
+          status=$?
+          # The Deno surface's own floor is unmet, so the collector exits 1
+          # truthfully; the binding is by receipt, not by exit status. Any other
+          # exit is a real failure. A missing receipt is refused below, and the
+          # Node collector refuses a receipt it cannot bind.
+          if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then exit "$status"; fi
+          ls .superman-ci/coverage-deno-*/coverage-receipt.json
       - name: Overall coverage floor (90% each; 100% target), including bootstrap and rules
         env:
           COVERAGE_MODE: ${{ github.event_name == 'schedule' && 'nightly' || 'incremental' }}
