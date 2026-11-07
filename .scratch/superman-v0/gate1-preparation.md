@@ -2792,3 +2792,20 @@ The nightly's job timeout is 360 minutes — the platform's maximum for a hosted
 | 12 files — the declared scope | ~8,900 | ~27,000 | ~1.9–3.2 h ✓ |
 
 So the budget was never the constraint: the population was. The hosted rate is the 375 mutants/min measured on a ten-core machine, divided by the runner's per-core speed; the exact figure comes from the owner's run now in progress.
+
+### The CI is green on this head — round sixteen
+
+Round sixteen (`42373894057`, head `d9ea797`): all three legs pass — `bootstrap (ubuntu-24.04)`, `bootstrap (ubuntu-24.04-arm)` and `bootstrap (macos-15)`. The G6 leg is `n/a` inside the 74-second raw-gate run: the pull-request lane measures the declared pull-request scope, which is empty until the product source exists, and the declared critical cases execute fresh.
+
+| Step | Time |
+| --- | --- |
+| checkout, node setup, the policy preflight | ~1 s |
+| `pnpm install --frozen-lockfile` | 13 s |
+| the checksum-locked tool install (Archgate, Deno, Trivy) | 52 s |
+| the Deno candidate surface measurement | 63 s |
+| **the overall coverage floor** | **6 min 10 s** |
+| **the raw G1–G11 run, Trivy included** | **74 s** |
+| the artefact upload | 54 s |
+| **the whole run** | **10 min 40 s** |
+
+The budget André set — the whole CI in at most fifteen minutes — is met, and the long pole is the coverage collector, not the mutation gate.
