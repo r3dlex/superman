@@ -19,6 +19,13 @@ import { fixtureEnvironment } from "./fixture-env.ts";
 const entrypoint = join(import.meta.dirname, "raw-gates.ts");
 const modules = resolve(import.meta.dirname, "../../node_modules");
 const isolated = fixtureEnvironment();
+/**
+ * The bound a fixture's gate child runs under. It is below the suite's own
+ * timeout on purpose: a child that outlives the suite makes the suite time
+ * out, and a timeout is an ambiguous mutation outcome that the gate refuses.
+ */
+export const GATE_CHILD_TIMEOUT = 45_000;
+
 const pins = {
   archgate: "0.61.0",
   tsrs: "0.20.1-ts7.1.0-beta",
@@ -117,7 +124,7 @@ export function fixture(t: TestContext, branch = "ticket/demo-01", kind = "behav
     gate: string,
     args: string[] = [],
     extraEnv: Record<string, string | undefined> = {},
-    timeout = 600_000,
+    timeout = GATE_CHILD_TIMEOUT,
   ) => {
     const result = spawnSync(process.execPath, [entrypoint, "--gate", gate, "--receipt", receiptPath, ...args], {
       cwd: root,

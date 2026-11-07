@@ -5,11 +5,11 @@
 // "not found" although its binary is on disk.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { test } from "node:test";
-import { fixture } from "./raw-fixture.ts";
+import { fixture, GATE_CHILD_TIMEOUT } from "./raw-fixture.ts";
 
 /**
  * A host tree with one tool and no install state. pnpm decides a tree is out
@@ -44,4 +44,17 @@ test("a pnpm command in the fixture leaves the host's node_modules alone", (t) =
   assert.match(result.stdout, /faketool 1\.0\.0/u);
   // The host still holds the tool the fixture's command ran.
   assert.ok(existsSync(join(host, ".bin", "faketool")), "the host's node_modules was rewritten");
+});
+
+test("the fixture's gate child is bounded below the suite's own timeout", () => {
+  // A child that outlives the suite makes the suite time out, and a timeout
+  // is an ambiguous mutation outcome: the gate refuses a run that reports
+  // one, so the first measurement was refused with nineteen of them.
+  const config = readFileSync(join(resolve(import.meta.dirname, "../.."), "vitest.config.ts"), "utf8");
+  const declared = /testTimeout:\s*([\d_]+)/u.exec(config)?.[1]?.replaceAll("_", "");
+  assert.ok(declared, "the suite declares no testTimeout");
+  assert.ok(
+    GATE_CHILD_TIMEOUT < Number(declared),
+    `the fixture's child (${GATE_CHILD_TIMEOUT}ms) must be below the suite's timeout (${declared}ms)`,
+  );
 });
