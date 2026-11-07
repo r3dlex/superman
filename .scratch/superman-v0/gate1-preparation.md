@@ -2731,6 +2731,10 @@ The critical mapping's own scope — `raw-gates.ts`, `direct-gates.ts`, `coverag
 
 **What the treatment has to decide.** §5.4 allows two resolutions: *meaningful kills*, or *a separate reviewed Gate 1 measurement/equivalence decision with the exact argument and raw outcomes*. The raw outcomes are above. The measurement's own finding — that the mutation runner cannot see the suites that cover the core — is the argument an equivalence decision would have to make, and it is not André's to make by default.
 
+### The measurement's worker count is a declared input
+
+The pinned mutation runner defaults to one worker per CPU. On a ten-core machine that is nine workers, each running the test suite under the coverage instrumentation, and the full-corpus measurement was killed before it finished — not by its budget, but by the machine. The worker count is now **declared in the reviewed policy** (`quality.mutation.concurrency`) and passed to the runner, so the measurement fits the runner it runs on instead of assuming the runner is a large one. The scope, the tools and the worker count are now the three things a review reads to know what a measurement cost.
+
 ### The CI's own cost, measured on the hosted runner
 
 Round eight's `bootstrap (ubuntu-24.04)` leg, from the hosted run's own step timings — the only measurement of the CI's cost that exists, because the leg had never reached its end:
