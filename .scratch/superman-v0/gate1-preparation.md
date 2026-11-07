@@ -2809,3 +2809,26 @@ Round sixteen (`42373894057`, head `d9ea797`): all three legs pass — `bootstra
 | **the whole run** | **10 min 40 s** |
 
 The budget André set — the whole CI in at most fifteen minutes — is met, and the long pole is the coverage collector, not the mutation gate.
+
+### André's CI directive — incremental legs, a two-hour nightly
+
+André set the shape on 2026-11-07: the pull-request leg works incrementally and finishes inside fifteen minutes; only the nightly is the uncached full run, with two hours, broken up in steps that run the full coverage. The workflow carries both caps — `timeout-minutes` is 15 for a pull request and 120 for the schedule event.
+
+What the nightly's mutation measurement cost before this section's two changes: it measured the declared scope at the base revision and at the candidate, and then measured the declared critical modules at the base revision and at the candidate **again** — the critical modules sit inside the scope it had already measured. Four measurements where two suffice.
+
+| Nightly's mutation work | Mutant-runs | At the measured rate (223/min, three workers, this machine) | At a hosted runner's rate |
+| --- | --- | --- | --- |
+| the scope twice, the critical modules twice | 31,022 | 2 h 19 min | over four hours ✗ |
+| the scope twice, the critical modules reused | 17,822 | 1 h 20 min | ~70–80 min ✓ |
+
+The redundancy is gone: the nightly's critical comparison reads the scope's own two measurements. The pull-request leg measures the critical modules the *change* touches, so the leg is incremental. The declared worker count is four — the hosted runners have four vCPUs, and the measurement at nine workers was killed by this machine's memory before it finished.
+
+The hosted rate is an estimate: the nightly has never run, because `main` carries no source until this branch merges. The first nightly measures it.
+
+### The first measurement was refused, and why
+
+The owner's reviewed run measured the declared scope and the gate refused the result: **19 mutants hang the suite**, and a hang is an ambiguous outcome, not a kill — §5.4's conservative policy refuses a run whose outcomes include a timeout. The recorded outcomes: 8,911 mutants — 1,221 killed, 1,129 survived, 6,542 without coverage, 19 timeouts.
+
+Four of the hangs are a mutated loop counter that never terminates; the other fifteen are mutations that leave the suite waiting. The suite now bounds its own runtime (`vitest.config.ts`'s `testTimeout`), so a hanging mutant fails and is killed — which is what it is.
+
+The suite's own bound is `vitest.config.ts`'s `testTimeout`: a test that never finishes is a failure, not an open end, and the mutation runner counts a hang as an ambiguous outcome rather than a kill. The file carries no comment: an effective-policy file may not hold one — the policy's lexical model refuses a comment it cannot classify as inert, and the refusal reads `Cannot establish effective policy` (§4's rule). The rationale belongs here, not in the policy file.
