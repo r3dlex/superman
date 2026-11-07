@@ -2773,3 +2773,22 @@ The owner's reviewed full-corpus run (`node .superman/ci/raw-gates.ts --gate G6`
 | the owner's reviewed run (`--gate G6`) | the whole declared scope | the change at base and candidate | the first-measurement survivor treatment and the baseline record |
 
 André's decision on 2026-11-07 settles the pull-request leg: it **keeps** the mutation gate, at the declared narrowed scope. The earlier reading — that the pull-request leg carries only the fresh critical acceptance — would have left the declared pull-request scope unused and would have stopped the pull-request leg from blocking an introduced survivor at all.
+
+### The declared scope's exclusion reached nothing
+
+The declared mutation scope excludes the test files: `["src/**/*.ts", ".superman/ci/**/*.ts", "!**/*.test.ts"]`. Node's globstar does not match a hidden directory, so the exclusion pattern matches nothing under `.superman/` — it reaches the `src/` files and nothing else. The measurement therefore mutated **twelve implementation files and twenty test files**: 20,554 mutants instead of the 8,881 the scope declares, a population that measures the tests' own strength rather than the implementation's testedness, and more than twice the work the scope asks for.
+
+The coverage collector already knew this: it excludes test files by a suffix check and writes the limitation down. The mutation scope's application did not.
+
+The fix applies the same rule: a `!` pattern whose last segment is a `*.suffix` wildcard excludes that suffix wherever the file lives. The scope is now the twelve files the recorded measurement measured, and the gate's own measurement and the recorded one agree.
+
+### What the nightly's time budget follows from
+
+The nightly's job timeout is 360 minutes — the platform's maximum for a hosted runner, so it cannot be raised. The nightly's work is about three whole-scope measurements: the declared scope at the base revision and at the candidate, and the declared critical modules at both.
+
+| Population | Mutants per measurement | Whole nightly | At a hosted runner's rate |
+| --- | --- | --- | --- |
+| 32 files — the defect | 20,554 | ~62,000 | ~4–6 h — at or over the cap |
+| 12 files — the declared scope | ~8,900 | ~27,000 | ~1.9–3.2 h ✓ |
+
+So the budget was never the constraint: the population was. The hosted rate is the 375 mutants/min measured on a ten-core machine, divided by the runner's per-core speed; the exact figure comes from the owner's run now in progress.
