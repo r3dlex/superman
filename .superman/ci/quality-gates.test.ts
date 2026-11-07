@@ -272,6 +272,36 @@ test("the corpus lane measures the whole declared scope, not only the change", (
   assert.equal(metrics.comparison?.candidate.totalMutants > 0, true);
 });
 
+test("the declared scope excludes the test files it declares", (t) => {
+  // A "no test files" exclusion must reach the hidden directories: Node's
+  // globstar does not match one, so the exclusion reaches nothing under
+  // `.superman/` and the measurement mutates the tests it was written to
+  // exclude — twenty test files beside the twelve implementation files, and
+  // a population more than twice the one the scope declares.
+  const repo = qualityFixture(t);
+  const base = repo.git("rev-parse", "HEAD").trim();
+  const config = JSON.parse(readFileSync(join(repo.root, ".superman/ci/bootstrap.json"), "utf8"));
+  config.quality = { mutation: { scope: ["src/**/*.ts", ".superman/ci/**/*.ts", "!**/*.test.ts"] } };
+  repo.write(".superman/ci/bootstrap.json", JSON.stringify(config));
+  repo.write("src/classify.ts", "export function classify(value: number) { return value > 0 ? 'positive' : 'other'; }\n");
+  repo.write(
+    "test/classify.test.ts",
+    "import { test, expect } from 'vitest'; import { classify } from '../src/classify.ts'; test('boundary', () => { expect(typeof classify(1)).toBe('string'); });\n",
+  );
+  repo.write(".superman/ci/case.test.ts", "export const value = 1;\n");
+  const head = repo.commit();
+
+  const outcome = qualityGate("G6", repo.root, base, head, fixtureEnvironment(), {
+    scope: "full",
+    changedFiles: [],
+    mutation: "corpus",
+  });
+
+  assert.equal(outcome.status, "pass", JSON.stringify(outcome));
+  const evidence = outcome.evidence as { files: string[] };
+  assert.deepEqual(evidence.files, ["src/classify.ts"]);
+});
+
 test("a candidate that drops a reviewed measurement input is refused by name", (t) => {
   // The measured inputs are the candidate's own: a candidate that does not
   // carry one of them cannot be measured against the recorded identity, and

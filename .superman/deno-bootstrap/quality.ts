@@ -141,12 +141,21 @@ function assertCriticalCases(
 /**
  * The scope a declared pattern list covers. A `!` pattern removes what an
  * earlier pattern included; the order is the declaration's order.
+ *
+ * A `!` pattern whose last segment is a `*.suffix` wildcard excludes that
+ * suffix wherever the file lives. Node's globstar does not match a hidden
+ * directory, so a prefixed pattern reaches nothing under `.superman/` — and a
+ * declared "no test files" exclusion that reaches nothing measures the tests
+ * it was written to exclude. The coverage collector applies the same rule,
+ * and for the same reason.
  */
 function inScope(path: string, patterns: string[]): boolean {
   let included = false;
   for (const pattern of patterns) {
     if (pattern.startsWith("!")) {
-      if (matchesGlob(path, pattern.slice(1))) included = false;
+      const exclusion = pattern.slice(1);
+      const suffix = /\*\.[^/]+$/u.test(exclusion) ? exclusion.slice(exclusion.lastIndexOf("*.") + 1) : undefined;
+      if (suffix ? path.endsWith(suffix) : matchesGlob(path, exclusion)) included = false;
     } else if (matchesGlob(path, pattern)) included = true;
   }
   return included;
