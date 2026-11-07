@@ -2505,6 +2505,29 @@ deno       lines 46.96 % · statements 47.03 % · branches 35.94 % · functions 
 
 The `node` inventory's branch margin is **0.23 points** — the extractor's own branches took some of the previous 0.47 ✓ — and the floor still holds ✓.
 
+#### The seventh hosted run: a gate's own critical case could not pass in the gate's context — 2026-11-07
+
+**Outcome:** the head `0189695` ran the whole pipeline on every leg — the macOS leg 10 m 18 s, linux-x64 8 m 45 s, arm64 6 m 18 s — and failed on two assertions that no local run could reach. Both are fixed, and both now have a local loop.
+
+**Cause 1 — the G6 gate could never pass, because one of its own critical cases failed when the gate ran it.** The G6 gate runs its declared cases with `SUPERMAN_CRITICAL_CASE_CHILD=1` set, so that a case which runs the gates cannot run the declared cases again. The `duplication-and-mutation-evidence` critical case evaluates the G6 gate **in process**, so it inherited that guard: the nested gate skipped the declared cases, reached the ratchet branch instead, and refused with `G6: reviewed superman.ratchet.json is missing` rather than the `G6: declared critical case declared-case failed` the case asserts. The gate runs that case, so **the G6 gate could not pass on any runner.**
+
+The Node suite's equivalent test does not have this problem because it drives the gate **through the driver** — a fresh process, with no inherited guard. The critical case evaluates the gate in process, so it now does what the Node suite's test does in effect: it evaluates the gate as a fresh evaluation, with the guard cleared. The case's declared cases are plain files that never run the gates, so the recursion the guard prevents cannot occur in that fixture.
+
+**The loop**, which is fast and reproduces the runner's exact failure:
+
+```text
+$ pnpm exec vitest run … duplication-and-mutation-evidence.critical.test.ts
+  Test Files  1 passed (1)          # standalone
+$ SUPERMAN_CRITICAL_CASE_CHILD=1 pnpm exec vitest run … duplication-and-mutation-evidence.critical.test.ts
+  Test Files  1 failed (1)          # the runner's context
+```
+
+Both contexts pass now ✓.
+
+**Cause 2 — the Trivy delegation assertion could not hold on linux-x64.** `raw-routing.test.ts` asserted that the CI run's G11 is `n/a` with a `delegated` reason. G11 is delegated to the required linux-x64 CI leg, so on that leg the CI run **scans** and passes. The assertion now follows the platform's delegation ✓.
+
+**What this round is about.** Both failures were assertions that could not hold on two of the three platforms, and one of them was an assertion that could not hold in the *only* context that matters — the gate's. A test that asserts what the environment determines is a test that will fail somewhere, and the three legs are that somewhere. The discipline that finally made these visible was the same one the whole preparation rests on: **the evidence comes from the real thing, and the loop reproduces the symptom, not a theory of it.**
+
 ### Step 12 — exact-source replacement and transition proof
 
 #### Step 12 local half record — 2026-11-04

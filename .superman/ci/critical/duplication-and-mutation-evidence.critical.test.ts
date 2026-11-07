@@ -23,6 +23,22 @@ function bootstrap(quality: Record<string, unknown>): string {
   });
 }
 
+/**
+ * The environment this case's own gate evaluation runs under.
+ *
+ * The G6 gate runs its declared cases with a recursion guard set, so that a
+ * case which runs the gates cannot run the declared cases again. This case's
+ * declared cases are plain files that never run the gates, so the recursion
+ * the guard prevents cannot happen here — and the guard must not change
+ * which refusal this evaluation reaches. The gate is evaluated as a fresh
+ * evaluation would be.
+ */
+function fixtureGateEnvironment(): Record<string, string | undefined> {
+  const environment = fixtureEnvironment();
+  delete environment.SUPERMAN_CRITICAL_CASE_CHILD;
+  return environment;
+}
+
 /** A refusal and the failure kind the gate taxonomy gives it. */
 function refusal(run: () => unknown): { kind: string | undefined; message: string } {
   try {
@@ -60,7 +76,7 @@ describe("the reviewed measurement policy", () => {
     );
     const headSha = repo.commit();
 
-    expect(refusal(() => qualityGate("G6", repo.root, repo.baseSha, headSha, fixtureEnvironment()))).toEqual({
+    expect(refusal(() => qualityGate("G6", repo.root, repo.baseSha, headSha, fixtureGateEnvironment()))).toEqual({
       kind: "policy-refusal",
       message: "G6: the declared clone floors changed (60 tokens, 5 lines); Gate 1 baseline refresh required",
     });
@@ -79,7 +95,7 @@ describe("a declared critical case the candidate does not carry", () => {
     );
     const headSha = repo.commit();
 
-    expect(refusal(() => qualityGate("G6", repo.root, repo.baseSha, headSha, fixtureEnvironment()))).toEqual({
+    expect(refusal(() => qualityGate("G6", repo.root, repo.baseSha, headSha, fixtureGateEnvironment()))).toEqual({
       kind: "skipped-required-work",
       message: "G6: missing critical module .superman/ci/absent.ts",
     });
@@ -96,7 +112,7 @@ describe("a declared critical case the candidate does not carry", () => {
     );
     const headSha = repo.commit();
 
-    expect(refusal(() => qualityGate("G6", repo.root, repo.baseSha, headSha, fixtureEnvironment()))).toEqual({
+    expect(refusal(() => qualityGate("G6", repo.root, repo.baseSha, headSha, fixtureGateEnvironment()))).toEqual({
       kind: "skipped-required-work",
       message: "G6: missing critical case case/absent.test.ts",
     });
@@ -113,7 +129,7 @@ describe("a declared critical case the candidate does not carry", () => {
     );
     const headSha = repo.commit();
 
-    expect(refusal(() => qualityGate("G6", repo.root, repo.baseSha, headSha, fixtureEnvironment()))).toEqual({
+    expect(refusal(() => qualityGate("G6", repo.root, repo.baseSha, headSha, fixtureGateEnvironment()))).toEqual({
       kind: "policy-refusal",
       message: "G6: declared critical case declared-case must declare its runner as node-test or vitest",
     });
@@ -136,7 +152,7 @@ describe("a declared critical case is executed fresh", () => {
     );
     const headSha = repo.commit();
 
-    const outcome = refusal(() => qualityGate("G6", repo.root, repo.baseSha, headSha, fixtureEnvironment()));
+    const outcome = refusal(() => qualityGate("G6", repo.root, repo.baseSha, headSha, fixtureGateEnvironment()));
     expect(outcome.message).toContain(
       "G6: declared critical case declared-case failed (case/failing.test.ts, node-test): 1",
     );
@@ -155,7 +171,7 @@ describe("a declared critical case is executed fresh", () => {
     );
     const headSha = repo.commit();
 
-    expect(refusal(() => qualityGate("G6", repo.root, repo.baseSha, headSha, fixtureEnvironment()))).toEqual({
+    expect(refusal(() => qualityGate("G6", repo.root, repo.baseSha, headSha, fixtureGateEnvironment()))).toEqual({
       kind: "policy-refusal",
       message: "G6: reviewed superman.ratchet.json is missing; first-source baseline follow-up required",
     });

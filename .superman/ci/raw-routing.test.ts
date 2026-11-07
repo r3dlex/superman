@@ -532,11 +532,16 @@ test("the full local pre-PR run and the CI run share one tool profile and gate i
   assert.equal(remote.receipt.satisfiesFullBar, true);
   assert.deepEqual(local.receipt.scope, remote.receipt.scope);
   assert.deepEqual(local.receipt.profile, remote.receipt.profile);
-  assert.equal(remote.receipt.results.find((item: { gate: string }) => item.gate === "G11").status, "n/a");
-  assert.match(
-    String(remote.receipt.results.find((item: { gate: string }) => item.gate === "G11").reason),
-    /delegated/u,
-  );
+  // The Trivy scan is delegated to the required linux-x64 CI leg, so on that
+  // leg the CI run scans and on every other platform it is delegated. The
+  // delegation is the platform's, and the assertion follows it.
+  const g11 = remote.receipt.results.find((item: { gate: string }) => item.gate === "G11");
+  if (process.platform === "linux" && process.arch === "x64") {
+    assert.equal(g11.status, "pass");
+  } else {
+    assert.equal(g11.status, "n/a");
+    assert.match(String(g11.reason), /delegated/u);
+  }
 });
 
 test("a partial pre-commit result is labeled partial feedback and never satisfies the full bar", (t) => {
