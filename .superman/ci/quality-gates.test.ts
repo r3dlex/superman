@@ -272,6 +272,22 @@ test("the corpus lane measures the whole declared scope, not only the change", (
   assert.equal(metrics.comparison?.candidate.totalMutants > 0, true);
 });
 
+test("a candidate that drops a reviewed measurement input is refused by name", (t) => {
+  // The measured inputs are the candidate's own: a candidate that does not
+  // carry one of them cannot be measured against the recorded identity, and
+  // the refusal names the input rather than reporting a mismatch.
+  const repo = qualityFixture(t);
+  const base = repo.git("rev-parse", "HEAD").trim();
+  repo.git("rm", "--quiet", ".jscpd.json");
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.commit();
+  const candidate = repo.git("rev-parse", "HEAD").trim();
+  assert.throws(
+    () => qualityGate("G5", repo.root, base, candidate, fixtureEnvironment()),
+    /quality policy input is missing from the candidate: \.jscpd\.json/u,
+  );
+});
+
 test("a first-baseline follow-up cannot change measurement inputs", (t) => {
   const { repo, initial } = measuredDuplication(t);
   repo.git("switch", "--quiet", "-c", "spec/changed-inputs");
