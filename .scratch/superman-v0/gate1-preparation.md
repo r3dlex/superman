@@ -2454,6 +2454,34 @@ and the unit suite (`6 tests, 6 pass`) builds its own archives so it cannot drif
 
 **What this round costs and buys.** Two new files under `.superman/ci/`, one of them a test that runs in the coverage inventory ✓ so the helper is measured like any other enforcement-core code ✓. In exchange the workflow and the candidate template no longer depend on a tool the arm64 runner does not have ✓ — which is a *host prerequisite* the operator request already asks about ("the actual tools and software on each host") ✓, now removed rather than provisioned ✓.
 
+#### The fifth hosted run: the extracted binary was not executable — 2026-11-07
+
+**Outcome:** the head `4bf56cb` failed in the install step on all three legs, with one cause. It was **this round's own regression**, not an environmental difference: the previous round replaced `unzip` with the repository's own reader, and the reader wrote the extracted file with the default mode.
+
+```text
+Error: spawnSync /…/_work/_temp/superman-deno/deno EACCES
+```
+
+**The cause.** `unzip` preserved the archive's recorded permissions, so the extracted executable was executable ✓. The repository's reader writes the content and says nothing about the mode, so the file landed as `0644` — and executing it is `EACCES`. The previous round's `unzip` path had been passing *by accident*, on the archive's recorded mode, and the accident ended when the reader replaced it.
+
+**The loop**, which is the same mode in two lines:
+
+```text
+plain.bin mode: 644
+exec.bin  mode: 755
+executing the non-executable one: EACCES
+```
+
+**The fix** sets the executable bit where the fact lives — these are *tools*, and a tool must be executable — rather than trusting the archive to record it:
+
+```ts
+writeFileSync(join(directory, tool), zipContent(bytes, entry), { mode: 0o755 });
+```
+
+Both the bootstrap workflow and the candidate template set it ✓, so neither depends on what a particular archive happens to record ✓.
+
+**What this round is, in the record's own terms.** Five hosted rounds, five causes, and **four of them were environmental** — a workflow that never ran the collector, a shell flag that did not do what was meant, a missing host tool, a terminal's colour codes. The fifth was mine: a replacement that preserved the content and dropped the permissions. Each was invisible to the local suites, which passed throughout ✓✓✓✓✓, and each cost one round ✓. The hosted evidence is not a formality over a local result — it is the only thing that could see any of them ✓.
+
 ### Step 12 — exact-source replacement and transition proof
 
 #### Step 12 local half record — 2026-11-04

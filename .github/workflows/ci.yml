@@ -102,7 +102,9 @@ jobs:
               );
               const entry = zipEntry(bytes, tool);
               if (!entry) throw new Error(`${tool} is not in the downloaded archive`);
-              writeFileSync(join(directory, tool), zipContent(bytes, entry));
+              // These are executables, and the archive's own mode is not
+              // guaranteed to record that, so the executable bit is set here.
+              writeFileSync(join(directory, tool), zipContent(bytes, entry), { mode: 0o755 });
             } else execFileSync('tar', ['-xzf', archive, '-C', directory], { shell: false });
             const binary = join(directory, tool);
             if (asset.binarySha256) {
