@@ -571,10 +571,12 @@ test("the nightly stage refuses a pull-request event", (t) => {
     write(".superman/ci/bootstrap.json", `${JSON.stringify(bootstrap, null, 2)}\n`);
   });
   repo.git("switch", "--quiet", "main");
-  const result = repo.run(undefined, { HEAD_REF: "main", GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request" }, [
-    "--stage",
-    "nightly",
-  ]);
+  const binary = trivyFixture(repo, emptyTrivyReport);
+  const result = repo.run(
+    undefined,
+    { HEAD_REF: "main", GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request", TRIVY_BIN: binary },
+    ["--stage", "nightly"],
+  );
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /the nightly stage runs on the schedule event/u);
 });
