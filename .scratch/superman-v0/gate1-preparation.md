@@ -2889,3 +2889,28 @@ Stryker's mutant-run timeout is the suite's own timeout plus five seconds, and t
 The child is now bounded at forty-five seconds, below the suite's sixty: a hanging child fails first, the case fails, and a failing case kills the mutant it was measuring. A test holds the relationship.
 
 The remaining four are Stryker's *hit limit* — the dry run's hit count times a hundred — firing in milliseconds on a mutant that spins, so no child bound applies. They are the enforcement core's own unbounded loops, and each needs its termination made independent of the mutable state: the two index loops in `pr-policy.ts` (the glob-to-regex conversion and the JSONC reader) consume their input rather than index it; `coverage.ts`'s queue drain pops before it processes; `raw-gates.ts`'s parent walk stops at the filesystem root rather than at the first existing directory. Those four are real findings about the core, and the gate is doing its job.
+
+### The measurement after the harness fix — twenty-seven became five
+
+The owner's full-corpus run, measured again with the child bounded below the suite's own timeout:
+
+| | before | after |
+| --- | --- | --- |
+| Killed | 1,220 | 1,221 |
+| Survived | 1,129 | 1,143 |
+| Without coverage | 6,542 | 6,604 |
+| **Timeout** | **27** | **5** |
+| total mutants | 8,972 | 8,973 |
+
+Twenty-two of the twenty-seven were the harness: a hanging child outlived the suite, the suite timed out instead of failing, and a timeout is an outcome the policy refuses. Bounding the child below the suite's own timeout turns those into kills — a failing case kills the mutant it was measuring.
+
+The five that remain are:
+
+| Site | Mutant | Why it survives the bound |
+| --- | --- | --- |
+| `coverage.ts`'s queue drain | the emptied body | Stryker's hit limit fires in milliseconds on a mutant that spins |
+| `pr-policy.ts`'s two index loops | the reversed counter | the same |
+| `raw-gates.ts`'s parent walk | the mutated condition | the same |
+| `replay.ts`'s owned-process options | the emptied object | the mutation drops the child's timeout, so the orphan runs past the suite's own bound |
+
+The first four are the enforcement core's own unbounded loops: their termination is defeatable by a single mutation, and a child bound cannot reach them because the mutant spins faster than any bound. The fifth is the process-group cleanup the replay exists for: without it the child outlives the suite, which is the property the mutation is measuring.

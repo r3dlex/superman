@@ -1277,6 +1277,22 @@ test("both hosts' policy scan decide the same paths", () => {
   assert.deepEqual(findings(deno.stdout ?? ""), findings(node.stdout ?? ""));
 });
 
+test("the published candidate workflow installs pnpm into its own directory", () => {
+  // The hosted workflow and the candidate run on the same runners at the
+  // same time. Two installs into one directory collide, and one of them finds
+  // it half-installed and fails.
+  const candidate = readFileSync(join(repository, ".github/workflows/deno-candidate.yml"), "utf8");
+  const hosted = readFileSync(join(repository, ".github/workflows/ci.yml"), "utf8");
+  const candidateDirectory = /pnpm\/action-setup[\s\S]{0,400}?dest:\s*(\S+)/u.exec(candidate)?.[1];
+  assert.ok(candidateDirectory, "the candidate's install directory is not declared");
+  // The hosted workflow installs into the action's default directory.
+  assert.notEqual(candidateDirectory, "~/setup-pnpm");
+  assert.ok(
+    !/pnpm\/action-setup[\s\S]{0,400}?dest:/u.test(hosted),
+    "the hosted workflow declares an install directory",
+  );
+});
+
 test("the published candidate workflow tolerates the Deno collector's carried shortfall", () => {
   // The Deno surface's own coverage floor is unmet, so its collector exits 1
   // truthfully and the receipt carries the obligation. The hosted workflow
