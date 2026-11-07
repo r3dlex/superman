@@ -2871,3 +2871,21 @@ The declared concurrency is four (`coverage.json`'s `testConcurrency`), and both
 **The parity proof is same-tree.** Over one tree, the receipt's four metric totals and its inventories are *identical* at concurrency one and at concurrency four — a test runs both and compares the receipts. The two CI rounds' receipts are not identical, because the rounds ran different trees (the code grew by seven lines between them); their percentages are within a fraction of a point of each other on the node inventory — 95.73 → 95.95 lines, 94.99 → 95.13 statements, 96.69 → 96.03 functions, 90.15 → 90.06 branches — and the floor holds at concurrency four.
 
 **The artefact.** The published artefact was 744 MB, of which 741.7 MB was the per-process coverage dumps; the receipts, the merged reports and the summaries are 2.7 MB. Both routes now exclude the dumps and a test says so.
+
+### The failing legs, diagnosed
+
+**The candidate's three legs** — three separate defects, each found by running the two hosts side by side over the same tree:
+
+1. *The workflow file was rejected whole.* The job-level environment named `runner`, which is a step context, so GitHub created no job and the only report was that the workflow file had an issue. Bisected to that one line by publishing progressively larger parts of the file; the Deno directory is now declared by the step that installs it, and a test holds the rule that a published workflow names only the contexts its level has.
+2. *"spec-kind PRs may not change this path (no source code at Gate 1)" on `WORKFLOW.md`.* The Node original's allowed set names `WORKFLOW.md`; the Deno twin's did not. Two lists in two files, and the divergence was invisible until the candidate's own proof ran. Both scans now run over this tree in a test, so a divergence is a local failure.
+3. *"an explicit archgate path is required."* The candidate's tool-install step exported `ARCHGATE`; the gates read `ARCHGATE_BIN`. The hosted workflow has always used the suffix. A test holds it.
+
+**The `ubuntu-24.04` leg and the macOS candidate leg** — not our code: both failed inside `pnpm/action-setup`'s own self-installer, on the runners' own persistent state (`~/setup-pnpm` on the x64 runner, the npm cache on the macOS one). The repeated cancellations left that state half-installed; clearing it is an operator action.
+
+### The twenty-seven mutants, and the twenty-three that were the harness
+
+Stryker's mutant-run timeout is the suite's own timeout plus five seconds, and the fixture's gate child was bounded at ten minutes. A child that hung therefore outlived the suite: the suite timed out instead of failing, and a timeout is an ambiguous mutation outcome that §5.4's conservative policy refuses. Twenty-three of the twenty-seven were that.
+
+The child is now bounded at forty-five seconds, below the suite's sixty: a hanging child fails first, the case fails, and a failing case kills the mutant it was measuring. A test holds the relationship.
+
+The remaining four are Stryker's *hit limit* — the dry run's hit count times a hundred — firing in milliseconds on a mutant that spins, so no child bound applies. They are the enforcement core's own unbounded loops, and each needs its termination made independent of the mutable state: the two index loops in `pr-policy.ts` (the glob-to-regex conversion and the JSONC reader) consume their input rather than index it; `coverage.ts`'s queue drain pops before it processes; `raw-gates.ts`'s parent walk stops at the filesystem root rather than at the first existing directory. Those four are real findings about the core, and the gate is doing its job.
