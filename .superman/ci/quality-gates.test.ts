@@ -275,6 +275,45 @@ test("a first-baseline follow-up cannot change measurement inputs", (t) => {
   assert.match(result.output, /changed measurement inputs/u);
 });
 
+test("a first-baseline follow-up may change a measurement input when it records the candidate's own identity", (t) => {
+  // The Gate-1 baseline refresh is the one change a spec-kind pull request
+  // may make to the measurement inputs themselves. What it may not do is
+  // record the identity from before the change: the recorded identity must
+  // be the candidate's own measured one, and the gate names that identity
+  // when the recorded one is not it.
+  const { repo, initial } = measuredDuplication(t);
+  repo.git("switch", "--quiet", "-c", "spec/changed-input");
+  const tsconfig = JSON.parse(readFileSync(join(repo.root, "tsconfig.json"), "utf8"));
+  tsconfig.compilerOptions.noImplicitOverride = true;
+  repo.write("tsconfig.json", JSON.stringify(tsconfig));
+  repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({
+      jscpdPct: initial.metrics.jscpdPct,
+      mutationScore: 0,
+      qualityInputsHash: "0".repeat(64),
+    }),
+  );
+  repo.commit();
+  const refused = repo.runGate("G5", [], { HEAD_REF: "spec/changed-input" });
+  assert.equal(refused.status, 1, refused.output);
+  const identity = /actual ([a-f0-9]{64})/u.exec(refused.output)?.[1];
+  assert.ok(identity, refused.output);
+  assert.notEqual(identity, initial.evidence.qualityInputsHash);
+  repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({
+      jscpdPct: initial.metrics.jscpdPct,
+      mutationScore: 0,
+      qualityInputsHash: identity,
+    }),
+  );
+  repo.commit();
+  const accepted = repo.runGate("G5", [], { HEAD_REF: "spec/changed-input" });
+  assert.equal(accepted.status, 0, accepted.output);
+  assert.match(accepted.receipt.results[0].reason, /verified first-baseline initialization/u);
+});
+
 test("ordinary ticket work cannot initialize the baseline even with exact measured values", (t) => {
   const { repo, initial } = measuredDuplication(t);
   repo.write(
@@ -1305,7 +1344,7 @@ function stagedG5(repo: ReturnType<typeof fixture>, changedFiles: string[]) {
     approvedBase(repo),
     repo.git("rev-parse", "HEAD").trim(),
     stagedEnvironment(repo.root),
-    { scope: "staged", changedFiles },
+    { scope: "staged", changedFiles, mutation: "full" },
   );
 }
 
@@ -1369,7 +1408,7 @@ test("the staged scope refuses a gate that declares no staged form", (t) => {
         approvedBase(repo),
         repo.git("rev-parse", "HEAD").trim(),
         stagedEnvironment(repo.root),
-        { scope: "staged", changedFiles: [] },
+        { scope: "staged", changedFiles: [], mutation: "full" },
       ),
     /the staged scope declares no form of this gate/u,
   );
@@ -1385,7 +1424,7 @@ test("the staged scope refuses a changed-file list that is not a list of paths",
         approvedBase(repo),
         repo.git("rev-parse", "HEAD").trim(),
         stagedEnvironment(repo.root),
-        { scope: "staged", changedFiles: [42] as unknown as string[] },
+        { scope: "staged", changedFiles: [42] as unknown as string[], mutation: "full" },
       ),
     /the staged scope needs the changed file paths/u,
   );

@@ -28,6 +28,7 @@ import {
   type GateContext,
   GateFailure,
   type GateResult,
+  mutationLane,
   runProfile,
   type StageScope,
   stagePolicy,
@@ -277,53 +278,67 @@ try {
   if (values.receipt) {
     receiptPath = safeReceipt(values.receipt);
   }
-  receipt.baseSha = git("rev-parse", "--verify", "--end-of-options", `${values.base}^{commit}`);
+  const stage = values.stage ?? (process.env.GITHUB_ACTIONS === "true" ? "ci" : "pre-pr");
+  // The nightly compares main against the previous main; every other stage
+  // compares the head against the configured base.
+  receipt.baseSha =
+    stage === "nightly"
+      ? git("rev-parse", "--verify", "--end-of-options", "HEAD^1^{commit}")
+      : git("rev-parse", "--verify", "--end-of-options", `${values.base}^{commit}`);
   receipt.evaluatedSha = git("rev-parse", "--verify", "HEAD^{commit}");
   receipt.headSha = receipt.evaluatedSha;
   // A local run has no pull-request reference: it binds the local branch. The
   // staged scope needs it because a pre-commit run has no PR identity.
-  receipt.branch = process.env.HEAD_REF ?? gitOptional("symbolic-ref", "--quiet", "--short", "HEAD") ?? "";
+  receipt.branch = process.env.HEAD_REF || gitOptional("symbolic-ref", "--quiet", "--short", "HEAD") || "";
   if (process.env.GITHUB_ACTIONS === "true" || process.env.GITHUB_EVENT_PATH) {
-    if (process.env.GITHUB_EVENT_NAME !== "pull_request" || !process.env.GITHUB_EVENT_PATH)
-      throw new Error("G9: missing CI pull-request identity evidence");
-    const pr = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")).pull_request;
-    const mismatches: string[] = [];
-    if (!pr) mismatches.push("pull_request evidence missing");
-    else {
-      if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(pr.head?.sha ?? ""))
-        mismatches.push(`head.sha=${String(pr.head?.sha)} is not a commit id`);
-      if (pr.base?.sha !== receipt.baseSha)
-        mismatches.push(`base.sha=${String(pr.base?.sha)} != ${String(receipt.baseSha)}`);
-      if (pr.head?.ref !== receipt.branch)
-        mismatches.push(`head.ref=${String(pr.head?.ref)} != ${String(receipt.branch)}`);
-    }
-    if (process.env.GITHUB_SHA !== receipt.evaluatedSha)
-      mismatches.push(`GITHUB_SHA=${String(process.env.GITHUB_SHA)} != ${String(receipt.evaluatedSha)}`);
-    if (mismatches.length) throw new Error(`G9: CI H/B/M identity mismatch: ${mismatches.join("; ")}`);
-    const parents = git("rev-list", "--parents", "-n", "1", String(receipt.evaluatedSha)).split(" ").slice(1);
-    if (parents.length !== 2 || parents[0] !== receipt.baseSha || parents[1] !== pr.head.sha)
-      throw new Error("G9: tested merge is not the recorded base/head integration");
-    // The forge rebuilds refs/pull/<n>/merge after it serializes the synchronize
-    // payload, so the recorded merge pointer can still name an earlier merge of
-    // the same base while the tested tree is the current one. A merge commit is
-    // therefore identified by its parent pair, not by a byte-identical commit id
-    // (spec: CI proves the integration of that head with a recorded base).
-    const eventMergeSha = typeof pr.merge_commit_sha === "string" ? pr.merge_commit_sha : undefined;
-    if (eventMergeSha) {
-      if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(eventMergeSha))
-        throw new Error(`G9: CI H/B/M identity mismatch: merge_commit_sha=${eventMergeSha} is not a commit id`);
-      const recorded = gitOptional("rev-list", "--parents", "-n", "1", eventMergeSha);
-      if (recorded) {
-        const recordedParents = recorded.split(" ").slice(1);
-        if (recordedParents.length !== 2 || recordedParents[0] !== receipt.baseSha)
-          throw new Error(
-            `G9: CI H/B/M identity mismatch: merge_commit_sha=${eventMergeSha} does not integrate the recorded base ${String(receipt.baseSha)}`,
-          );
+    if (stage === "nightly") {
+      // The nightly runs on the schedule event, on main, against the previous
+      // main. It is not a pull request and has no pull-request identity.
+      if (process.env.GITHUB_ACTIONS === "true" && process.env.GITHUB_EVENT_NAME !== "schedule")
+        throw new Error("G9: the nightly stage runs on the schedule event");
+      if (receipt.branch !== "main") throw new Error(`G9: the nightly stage runs on main, not ${receipt.branch}`);
+    } else {
+      if (process.env.GITHUB_EVENT_NAME !== "pull_request" || !process.env.GITHUB_EVENT_PATH)
+        throw new Error("G9: missing CI pull-request identity evidence");
+      const pr = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")).pull_request;
+      const mismatches: string[] = [];
+      if (!pr) mismatches.push("pull_request evidence missing");
+      else {
+        if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(pr.head?.sha ?? ""))
+          mismatches.push(`head.sha=${String(pr.head?.sha)} is not a commit id`);
+        if (pr.base?.sha !== receipt.baseSha)
+          mismatches.push(`base.sha=${String(pr.base?.sha)} != ${String(receipt.baseSha)}`);
+        if (pr.head?.ref !== receipt.branch)
+          mismatches.push(`head.ref=${String(pr.head?.ref)} != ${String(receipt.branch)}`);
       }
+      if (process.env.GITHUB_SHA !== receipt.evaluatedSha)
+        mismatches.push(`GITHUB_SHA=${String(process.env.GITHUB_SHA)} != ${String(receipt.evaluatedSha)}`);
+      if (mismatches.length) throw new Error(`G9: CI H/B/M identity mismatch: ${mismatches.join("; ")}`);
+      const parents = git("rev-list", "--parents", "-n", "1", String(receipt.evaluatedSha)).split(" ").slice(1);
+      if (parents.length !== 2 || parents[0] !== receipt.baseSha || parents[1] !== pr.head.sha)
+        throw new Error("G9: tested merge is not the recorded base/head integration");
+      // The forge rebuilds refs/pull/<n>/merge after it serializes the synchronize
+      // payload, so the recorded merge pointer can still name an earlier merge of
+      // the same base while the tested tree is the current one. A merge commit is
+      // therefore identified by its parent pair, not by a byte-identical commit id
+      // (spec: CI proves the integration of that head with a recorded base).
+      const eventMergeSha = typeof pr.merge_commit_sha === "string" ? pr.merge_commit_sha : undefined;
+      if (eventMergeSha) {
+        if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(eventMergeSha))
+          throw new Error(`G9: CI H/B/M identity mismatch: merge_commit_sha=${eventMergeSha} is not a commit id`);
+        const recorded = gitOptional("rev-list", "--parents", "-n", "1", eventMergeSha);
+        if (recorded) {
+          const recordedParents = recorded.split(" ").slice(1);
+          if (recordedParents.length !== 2 || recordedParents[0] !== receipt.baseSha)
+            throw new Error(
+              `G9: CI H/B/M identity mismatch: merge_commit_sha=${eventMergeSha} does not integrate the recorded base ${String(receipt.baseSha)}`,
+            );
+        }
+      }
+      receipt.headSha = git("rev-parse", "--verify", `${pr.head.sha}^{commit}`);
+      receipt.testedMergeSha = receipt.evaluatedSha;
+      receipt.eventMergeSha = eventMergeSha ?? null;
     }
-    receipt.headSha = git("rev-parse", "--verify", `${pr.head.sha}^{commit}`);
-    receipt.testedMergeSha = receipt.evaluatedSha;
-    receipt.eventMergeSha = eventMergeSha ?? null;
   }
   const runG9 = (): GateResult => {
     const branch = String(receipt.branch);
@@ -362,8 +377,7 @@ try {
     }
   };
   const gates = ALL_GATES;
-  const stage = values.stage ?? (process.env.GITHUB_ACTIONS === "true" ? "ci" : "pre-pr");
-  if (!["pre-commit", "pre-pr", "ci"].includes(stage)) throw new Error("Unknown raw stage selector");
+  if (!["pre-commit", "pre-pr", "ci", "nightly"].includes(stage)) throw new Error("Unknown raw stage selector");
   receipt.stage = stage;
   const declared = stagePolicy(process.cwd(), stage);
   // The preconditions depend on the stage's scope, so they are resolved here
@@ -452,20 +466,23 @@ try {
     }
     try {
       const result =
-        gate === "G9"
-          ? context.scope === "staged"
-            ? runStagedG9(context)
-            : runG9()
-          : gate === "G8" && !context.branch.startsWith("ticket/")
-            ? { gate, status: "n/a", reason: "spec/chore kind (no ticket traceability)" }
-            : gate === "G4" || gate === "G8"
-              ? { gate, status: "pass", sharedCheck: "G4/G8 policy preflight" }
-              : gate === "G5" || gate === "G6"
-                ? qualityGate(gate, context.root, context.baseSha, context.headSha, context.env, {
-                    scope: context.scope,
-                    changedFiles: context.scope === "staged" ? stagedFiles() : [],
-                  })
-                : await directGate(gate, context);
+        gate === "G9" && context.branch === "main"
+          ? { gate, status: "n/a", reason: "nightly on main (no pull request to replay)" }
+          : gate === "G9"
+            ? context.scope === "staged"
+              ? runStagedG9(context)
+              : runG9()
+            : gate === "G8" && !context.branch.startsWith("ticket/")
+              ? { gate, status: "n/a", reason: "spec/chore kind (no ticket traceability)" }
+              : gate === "G4" || gate === "G8"
+                ? { gate, status: "pass", sharedCheck: "G4/G8 policy preflight" }
+                : gate === "G5" || gate === "G6"
+                  ? qualityGate(gate, context.root, context.baseSha, context.headSha, context.env, {
+                      scope: context.scope,
+                      changedFiles: context.scope === "staged" ? stagedFiles() : [],
+                      mutation: mutationLane(context.stage),
+                    })
+                  : await directGate(gate, context);
       results.push(result);
       console.log(`${gate}: ${result.status}`);
     } catch (error) {

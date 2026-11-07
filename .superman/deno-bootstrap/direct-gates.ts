@@ -434,6 +434,18 @@ export function stagePolicy(root: string, stage: string): StageDeclaration {
  * A stage declared full must declare the complete inventory, exactly once
  * each. A stage declared partial may not declare it.
  */
+/**
+ * Which declared mutation scope a run applies.
+ *
+ * The pull-request lane applies the narrowed scope, so a pull-request leg
+ * stays inside its minute; the nightly and the owner's full-corpus run apply
+ * the whole declared scope. The lane is the stage's, not the caller's.
+ */
+export function mutationLane(stage: string): "pull-request" | "full" | "corpus" {
+  if (stage === "nightly") return "corpus";
+  return stage === "scoped" ? "full" : "pull-request";
+}
+
 export function assertFullStage(stage: string, declaration: StageDeclaration): void {
   if (declaration.feedback !== "full") return;
   const missing = ALL_GATES.filter((gate) => !declaration.gates.includes(gate));

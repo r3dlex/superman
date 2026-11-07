@@ -117,6 +117,8 @@ The CLI does not exist yet. These are the real entry points in this repository, 
 | `<pinned deno> deno run --no-prompt --no-config --no-lock --no-npm --no-remote --allow-read --allow-write --allow-env --allow-run .superman/deno-bootstrap/coverage.ts` | The Deno candidate collector. Its receipt is what the Node collector binds; its floor is carried, not met. |
 | `<pinned archgate> check --strict --output json` | The rule engine for `.archgate/adrs/**`. |
 | `node --test .superman/ci/*.test.ts` | The bootstrap suites. |
+| `node .superman/ci/raw-gates.ts --gate G6` | The mutation measurement, on its own: the whole declared scope, the change compared at base and at candidate. It is the lane that carries the first-measurement survivor treatment. It is not part of the pull-request leg. |
+| `node .superman/ci/raw-gates.ts --stage nightly` | The uncached full run: the whole declared scope, measured whole, at the previous `main` and at `main`. The declared pull-request scope and the whole scope are two declared scopes, and each lane applies the one it declares. |
 
 The declared gate inventory per stage lives in `.superman/ci/bootstrap.json` under `stages` — read it there, not from this document. The pinned tool versions live in the same file under `tools`.
 
@@ -132,6 +134,8 @@ Each result is evidence for one question. Stating what it proves keeps the rest 
 | A red–green replay | Regression sensitivity: the behaviour test fails on the approved base and passes on the candidate. | The order in which the change was authored. |
 | A candidate measurement | The Deno surface's own numbers, attributed to the collector that produced them. | A substitute for the Node required result before approval and merge. |
 | A green gate | That gate's own deterministic check passed on the evaluated revision. | An approval. Only the [approver](GLOSSARY.md) merges, on the exact head. |
+| A pull-request G6 result | The declared pull-request mutation scope, compared at base and candidate, and the declared critical cases executed fresh outside affected selection and result caches. | The whole-scope measurement. That is the nightly's and the owner's, and the receipt names the scope it applied. |
+| A full-corpus G6 result | The measurement of the whole declared scope against the full-repository baseline, with the raw survivors. | A pull-request result. It is its own lane, and it is the one that carries the survivor treatment. |
 
 ## Where the authority lives
 

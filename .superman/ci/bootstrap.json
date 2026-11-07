@@ -43,6 +43,11 @@
       "feedback": "full",
       "scope": "full",
       "gates": ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11"]
+    },
+    "nightly": {
+      "feedback": "full",
+      "scope": "full",
+      "gates": ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11"]
     }
   },
   "quality": {
@@ -58,6 +63,7 @@
     },
     "mutation": {
       "scope": ["src/**/*.ts", ".superman/ci/**/*.ts", "!**/*.test.ts"],
+      "pullRequestScope": ["src/**/*.ts", "!**/*.test.ts"],
       "critical": [
         {
           "id": "policy-selection-and-result-completeness",

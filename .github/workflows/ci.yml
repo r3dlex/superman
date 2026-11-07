@@ -17,7 +17,7 @@ concurrency:
 
 env:
   ARCHGATE_TELEMETRY: "0"
-  HEAD_REF: ${{ github.head_ref }}
+  HEAD_REF: ${{ github.head_ref || 'main' }}
   BASE_REF: ${{ github.base_ref }}
   HEAD_SHA: ${{ github.event.pull_request.head.sha }}
   BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -30,7 +30,10 @@ jobs:
     # GitHub-hosted runner, so routing is a separate self-hosted label set.
     name: bootstrap (${{ matrix.os }})
     runs-on: ${{ fromJSON(matrix.runner) }}
-    timeout-minutes: 30
+    # The nightly runs the full-corpus mutation measurement, which the
+    # measured rate puts at about fifty minutes on a ten-core machine and
+    # hours on a hosted runner; the pull-request legs keep the minute.
+    timeout-minutes: ${{ github.event_name == 'schedule' && 360 || 30 }}
     strategy:
       fail-fast: false
       matrix:
@@ -138,8 +141,8 @@ jobs:
           COVERAGE_MODE: ${{ github.event_name == 'schedule' && 'nightly' || 'incremental' }}
         run: node .superman/ci/coverage.ts --mode "$COVERAGE_MODE"
       - name: Applicable raw G1–G11 (direct tools, no package scripts)
-        if: github.event_name == 'pull_request'
-        run: node .superman/ci/raw-gates.ts --receipt .superman-ci/bootstrap.json
+        if: github.event_name == 'pull_request' || github.event_name == 'schedule'
+        run: node .superman/ci/raw-gates.ts --stage ${{ github.event_name == 'schedule' && 'nightly' || 'ci' }} --receipt .superman-ci/bootstrap.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

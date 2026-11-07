@@ -617,6 +617,11 @@ function main(): number {
         findings.push({ file: f, message: "G4: chore/wiki-* PRs may only change wiki and candidate content" });
     }
     notes.push("kind: chore/wiki", "G8 traceability: n/a (chore)", "G9 test-first: n/a (knowledge-only chore)");
+  } else if (headRef === "main") {
+    // The nightly runs on main, after the merge. There is no pull request and
+    // no pull-request kind: the path policy is decided by the merge that
+    // produced main, not by this run.
+    notes.push("kind: main (nightly)", "G4 protected paths: n/a (post-merge run on main)");
   } else {
     findings.push({
       message: `Unknown PR kind for branch "${headRef}"; use spec/<slug>, ticket/<slug>-<nn>, chore/skills-<name> or chore/wiki-<name>`,

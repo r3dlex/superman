@@ -38,7 +38,15 @@ type QualityResult = {
 export type QualityScope = {
   scope: StageScope;
   changedFiles: string[];
+  /**
+   * Which declared mutation scope the run applies: the pull-request lane
+   * applies the narrowed scope, the full-corpus lane the whole one.
+   */
+  mutation: MutationLane;
 };
+
+/** The two lanes the mutation scope is declared for. */
+export type MutationLane = "pull-request" | "full" | "corpus";
 
 function knownKeys(value: unknown, required: string[], optional: string[] = []): boolean {
   return (
@@ -711,7 +719,7 @@ export async function qualityGate(
   baseSha: string,
   headSha: string,
   env: ProcessEnv,
-  scope: QualityScope = { scope: "full", changedFiles: [] },
+  scope: QualityScope = { scope: "full", changedFiles: [], mutation: "full" },
 ): Promise<QualityResult> {
   if (!["G5", "G6"].includes(gate)) throw new GateFailure("policy-refusal", `Unsupported quality gate ${gate}`);
   if (scope.scope === "staged") {
@@ -742,7 +750,13 @@ export async function qualityGate(
   const corpus = declaredDuplication.corpus ?? "src/**/*.ts";
   const minTokens = declaredDuplication.minTokens ?? 50;
   const minLines = declaredDuplication.minLines ?? 5;
-  const mutationScope = declaredMutation.scope ?? ["src/**/*.ts", "!src/**/*.test.ts"];
+  // The declared mutation scope is two scopes: the pull-request lane applies
+  // the narrowed one, so a pull-request leg stays inside its minute, and the
+  // full-corpus lane applies the whole one. The narrowed scope is declared,
+  // not derived: an undeclared scope is not a smaller one.
+  const lane = scope.mutation;
+  const mutationScope = (lane === "pull-request" ? declaredMutation.pullRequestScope : declaredMutation.scope) ??
+    declaredMutation.scope ?? ["src/**/*.ts", "!src/**/*.test.ts"];
   if (minTokens !== 50 || minLines !== 5)
     throw new GateFailure(
       "policy-refusal",
@@ -777,7 +791,10 @@ export async function qualityGate(
     return {
       gate,
       status: "n/a",
-      reason: "no TypeScript source",
+      reason:
+        gate === "G6" && criticalCases.length
+          ? "no TypeScript source in the applied mutation scope; the declared critical cases executed fresh"
+          : "no TypeScript source",
       ...(criticalCases.length ? { evidence: { criticalCases } } : {}),
     };
   }
@@ -852,18 +869,30 @@ export async function qualityGate(
       ...config.policyInputs,
     ]),
   ].sort();
+  // A measurement input's identity is the blob its revision records. The
+  // identity is content-addressed, so two revisions that agree on a file
+  // agree on its identity, and two that differ do not.
+  const identityOf = (sha: string, path: string): string | undefined => {
+    const blob = git("ls-tree", "-z", sha, "--", path);
+    return /^100(?:644|755) blob /u.test(blob) ? blob : undefined;
+  };
   const identities = policies.map((path) => {
-    const approved = git("ls-tree", "-z", baseSha, "--", path);
-    if (!/^100(?:644|755) blob /u.test(approved) || approved !== git("ls-tree", "-z", headSha, "--", path))
+    // The measurement inputs are the candidate's, and the reviewed baseline
+    // records their identity. Comparing the approved base's bytes with the
+    // candidate's instead would refuse the one change the Gate-1 baseline
+    // refresh is allowed to make — the change of the measured inputs
+    // themselves — and the hash against the recorded baseline carries the
+    // protection a later PR needs: a candidate whose inputs moved does not
+    // match the recorded hash, so it is refused.
+    const approved = identityOf(headSha, path);
+    if (!approved)
       throw new GateFailure(
         "policy-refusal",
-        proposed
-          ? `${gate}: changed measurement inputs; quality policy changed or unavailable: ${path}`
-          : `${gate}: quality policy changed or unavailable; Gate 1 baseline refresh required: ${path}`,
+        `${gate}: quality policy input is missing from the candidate: ${path}; Gate 1 baseline refresh required`,
       );
     // G4 owns general discovery. This narrower hash profile accepts only exact,
     // explicitly inventoried local includes, not a second optimistic resolver.
-    const text = git("show", `${baseSha}:${path}`);
+    const text = git("show", `${headSha}:${path}`);
     const refs: string[] = [];
     try {
       if (/\.jsonc?$/u.test(path)) {
@@ -898,35 +927,68 @@ export async function qualityGate(
         `${gate}: unmodeled quality policy input in ${path}; declare exact includes and refresh the baseline at Gate 1`,
       );
     }
-    return [path, approved];
+    return [path, approved] as [string, string];
   });
-  const qualityInputsHash = createHash("sha256")
-    .update(
-      JSON.stringify({
-        schema: "superman.bootstrap-quality/1",
-        tools: config.tools,
-        policies: identities,
-        scopes: { duplication: duplicationPatterns, mutation: mutationPatterns },
-        execution: { duplication: "jscpd explicit full corpus", mutation: "stryker inPlace force explicit files" },
-        critical: declaredMutation.critical ?? [],
-        checker: createHash("sha256").update(readFileSync(self)).digest("hex"),
-        snapshotRunner: createHash("sha256")
-          .update(readFileSync(join(here, "replay.ts")))
-          .digest("hex"),
-      }),
-    )
-    .digest("hex");
+  // The measured identity of the inputs: the tools, the policy inputs, the
+  // scopes, the checker and the runner that produce the numbers. Only the
+  // policy inputs differ between the candidate and the approved base, so the
+  // same identity over the base's inputs is the identity the base measured.
+  const measuredIdentity = (policyIdentities: [string, string][]): string =>
+    createHash("sha256")
+      .update(
+        JSON.stringify({
+          schema: "superman.bootstrap-quality/3",
+          tools: config.tools,
+          policies: policyIdentities,
+          // The declared scopes, not the applied one: the identity of the
+          // measurement inputs is the same in both lanes, so a baseline
+          // recorded in one is the baseline the other compares against.
+          scopes: {
+            duplication: duplicationPatterns,
+            mutation: declaredMutation.scope ?? ["src/**/*.ts", "!src/**/*.test.ts"],
+            pullRequest: declaredMutation.pullRequestScope ??
+              declaredMutation.scope ?? ["src/**/*.ts", "!src/**/*.test.ts"],
+          },
+          execution: { duplication: "jscpd explicit full corpus", mutation: "stryker inPlace force explicit files" },
+          critical: declaredMutation.critical ?? [],
+          checker: createHash("sha256").update(readFileSync(self)).digest("hex"),
+          snapshotRunner: createHash("sha256")
+            .update(readFileSync(join(here, "replay.ts")))
+            .digest("hex"),
+        }),
+      )
+      .digest("hex");
+  const qualityInputsHash = measuredIdentity(identities);
   if (baseline && baseline.qualityInputsHash !== qualityInputsHash)
     throw new GateFailure(
       "policy-refusal",
-      `${gate}: qualityInputsHash scope/tool/config mismatch (expected ${baseline.qualityInputsHash}, actual ${qualityInputsHash}); Gate 1 baseline refresh required`,
+      `${gate}: changed measurement inputs; qualityInputsHash scope/tool/config mismatch (expected ${baseline.qualityInputsHash}, actual ${qualityInputsHash}); Gate 1 baseline refresh required`,
     );
   if (proposed) {
-    if (proposed.qualityInputsHash !== qualityInputsHash)
+    if (proposed.qualityInputsHash !== qualityInputsHash) {
+      // Two different failures share this branch. A recorded identity that is
+      // the approved base's own says the candidate moved the measurement
+      // inputs and recorded the identity from before the move; an identity
+      // that matches nothing is forged. They are named apart, because only
+      // one of them is a lie, and because the first-baseline follow-up is the
+      // one path that may change the measurement inputs at all.
+      const baseIdentities: [string, string][] = [];
+      for (const path of policies) {
+        const blob = identityOf(baseSha, path);
+        if (!blob) break;
+        baseIdentities.push([path, blob]);
+      }
+      const baseIdentity = baseIdentities.length === policies.length ? measuredIdentity(baseIdentities) : undefined;
+      if (baseIdentity === proposed.qualityInputsHash)
+        throw new GateFailure(
+          "policy-refusal",
+          `${gate}: changed measurement inputs; the recorded qualityInputsHash is the approved base's identity (${proposed.qualityInputsHash}) and the candidate's measured identity is ${qualityInputsHash}; the first-baseline follow-up must record the candidate's own measured identity`,
+        );
       throw new GateFailure(
         "policy-refusal",
         `${gate}: forged qualityInputsHash (recorded ${proposed.qualityInputsHash}, actual ${qualityInputsHash}); Gate 1 baseline refresh required`,
       );
+    }
     // The first-baseline follow-up must record the measured scope unchanged.
     // The scope is the declared one, not a hard-coded path.
     if (JSON.stringify(before) !== JSON.stringify(after))
@@ -1276,7 +1338,11 @@ export async function qualityGate(
           .split("\0")
           .filter((path) => path && inScope(path, mutationPatterns)),
       );
-      const existing = after.filter((file) => before.includes(file) && changed.has(file));
+      // The nightly's corpus lane measures the whole declared scope, not only
+      // the change: it is the uncached full run against the full-repository
+      // baseline. Every other lane measures the change alone, at base and at
+      // candidate.
+      const existing = after.filter((file) => before.includes(file) && (lane === "corpus" || changed.has(file)));
       const added = after.filter((file) => !before.includes(file));
       const removed = before.filter((file) => !after.includes(file));
       if (removed.length && added.length)
