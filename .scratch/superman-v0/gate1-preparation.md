@@ -2914,3 +2914,12 @@ The five that remain are:
 | `replay.ts`'s owned-process options | the emptied object | the mutation drops the child's timeout, so the orphan runs past the suite's own bound |
 
 The first four are the enforcement core's own unbounded loops: their termination is defeatable by a single mutation, and a child bound cannot reach them because the mutant spins faster than any bound. The fifth is the process-group cleanup the replay exists for: without it the child outlives the suite, which is the property the mutation is measuring.
+
+### Both workflows green on `0f5912b`
+
+| Workflow | Round | Legs |
+| --- | --- | --- |
+| `ci` | `42392884850` | `bootstrap (macos-15)`, `bootstrap (ubuntu-24.04)`, `bootstrap (ubuntu-24.04-arm)` — all pass |
+| `deno-candidate.yml` (published) | `42392884848` | `deno-candidate (macos-15)`, `deno-candidate (ubuntu-24.04)`, `deno-candidate (ubuntu-24.04-arm)` — all pass |
+
+The published candidate workflow's three native legs now run the Deno candidate's own proof under the reviewed permission profile. Getting there took five defects, each with a test that fails without its fix: the workflow file named a step-only context at job level (GitHub rejected the file whole), the Deno twin's allowed paths did not match the Node original's, the tool paths were exported without the suffix the gates read, the proof aborted on the Deno collector's carried coverage shortfall, and the candidate installed pnpm into the same directory as the hosted workflow on the same runner at the same time.
