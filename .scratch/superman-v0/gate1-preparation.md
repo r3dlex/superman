@@ -2832,3 +2832,42 @@ The owner's reviewed run measured the declared scope and the gate refused the re
 Four of the hangs are a mutated loop counter that never terminates; the other fifteen are mutations that leave the suite waiting. The suite now bounds its own runtime (`vitest.config.ts`'s `testTimeout`), so a hanging mutant fails and is killed — which is what it is.
 
 The suite's own bound is `vitest.config.ts`'s `testTimeout`: a test that never finishes is a failure, not an open end, and the mutation runner counts a hang as an ambiguous outcome rather than a kill. The file carries no comment: an effective-policy file may not hold one — the policy's lexical model refuses a comment it cannot classify as inert, and the refusal reads `Cannot establish effective policy` (§4's rule). The rationale belongs here, not in the policy file.
+
+### The CI's cost, measured on the hosted runners (round seventeen)
+
+| Step | ubuntu-24.04 | macos-15 |
+| --- | --- | --- |
+| the raw G1–G11 run | 74 s | 72 s |
+| **G11 — the Trivy scan, on the linux-x64 leg** | **58.5 s** | delegated |
+| G1–G10 together | ~16 s | ~16 s |
+| the overall coverage floor | 370 s | 356 s |
+| the artefact upload | 54 s | 47 s |
+| the whole leg | 10 min 40 s | 10 min 31 s |
+
+Trivy is 58.5 of the 74 seconds of the raw-gates step — 79 % of it, and the largest single item in the leg. The split between the scan and the database download is not observable from the log: the gate captures Trivy's own output, and the leg's timings are per step, not per gate. A probe would need a Trivy binary (this machine has none) and the database download needs the network.
+
+The artefact is 744 MB raw, of which 741.7 MB is the per-process coverage dumps under `v8/` — the receipts, the merged reports and the summaries are 2.7 MB. No receipt names a dump.
+
+### A decision note for the persistent caches — André's call
+
+**The three questions.**
+
+1. **The tool archives** (Archgate 75 MB, Deno, Trivy). A persistent cache on the *persistent* runners, keyed by the asset's sha256 from `.superman/ci/tool-assets.json`, holding the downloaded archive and the extracted binary. The cache changes where the bytes come from, not which bytes: the archive's digest is still verified against the reviewed one, and a tampered or mismatched cache entry is refused and re-downloaded. Within ADR 0015 (approved exact-pinned artifacts provisioned in owned job directories) and outside ADR 0011 (which governs reusing *passes*, not fetching tools). The arm64 leg runs in a container, so it would need a mounted volume — an operator change, not a workflow change.
+2. **The pnpm store.** A persistent store with the frozen lockfile and `--ignore-scripts` unchanged. The store's contents are content-addressed and verified against the lockfile's integrity hashes, so a stale or tampered entry is rejected by pnpm itself; the install itself still runs and still resolves the lockfile. Within ADR 0015's frozen-dependency clause.
+3. **The Trivy database.** A persisted `TRIVY_CACHE_DIR` — the one Trivy variable the gate already lets through (`direct-gates.ts`: "only the cache directory survives"). The scan always executes; what a cache holds is the database, and Trivy compares its cached database against the registry on every scan and re-downloads when a newer one exists. That check is Trivy's own, so the gate's freshness is not the workflow's to weaken. This is the one of the three whose answer depends on Trivy's behaviour rather than on a digest we already hold, and it is therefore the one to probe before deciding.
+
+**What is not in question:** the pull-request leg's fifteen-minute cap and the nightly's two-hour cap are the constraints; the caches are how the legs get inside them.
+
+### The coverage collectors' parallelism, measured
+
+The declared concurrency is four (`coverage.json`'s `testConcurrency`), and both collectors read it from that one file.
+
+| The coverage step | concurrency 1 (round seventeen) | concurrency 4 (round eighteen) |
+| --- | --- | --- |
+| `bootstrap (ubuntu-24.04)` | 370 s | **192 s** |
+| `bootstrap (macos-15)` | 356 s | **218 s** |
+| `bootstrap (ubuntu-24.04-arm)` | ~190 s | **145 s** |
+
+**The parity proof is same-tree.** Over one tree, the receipt's four metric totals and its inventories are *identical* at concurrency one and at concurrency four — a test runs both and compares the receipts. The two CI rounds' receipts are not identical, because the rounds ran different trees (the code grew by seven lines between them); their percentages are within a fraction of a point of each other on the node inventory — 95.73 → 95.95 lines, 94.99 → 95.13 statements, 96.69 → 96.03 functions, 90.15 → 90.06 branches — and the floor holds at concurrency four.
+
+**The artefact.** The published artefact was 744 MB, of which 741.7 MB was the per-process coverage dumps; the receipts, the merged reports and the summaries are 2.7 MB. Both routes now exclude the dumps and a test says so.

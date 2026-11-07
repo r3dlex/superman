@@ -146,7 +146,7 @@ The merge below is still André's, on the exact head.
 
 ## Remaining blockers
 
-- **The three native candidate proof runs.** `bootstrap (macos-15)`, `bootstrap (ubuntu-24.04)` and `bootstrap (ubuntu-24.04-arm)` — the arm64 leg on the separate `r3dlex-linux-arm64` runner group. No native result exists for this head.
+- **The three native candidate proof runs — green on this head.** `bootstrap (macos-15)`, `bootstrap (ubuntu-24.04)` and `bootstrap (ubuntu-24.04-arm)` — the arm64 leg on the separate `r3dlex-linux-arm64` runner group — all pass on `88c3524` (round seventeen, `42377908385`). The live forge evidence below is what is still outstanding.
 - **Live forge evidence.** The expected workflow/job/App identities, the artifacts, and the run/attempt and H/B/M relationships, verified against the forge rather than assumed.
 - **The publication itself**, including the file name the workflow template takes under `.github/workflows/`. Nothing is published by this PR.
 - **The Deno candidate's coverage floor.** lines 46.96 %, statements 47.03 %, branches 35.94 %, functions 51.52 % — carried to the merge-bound cutover, where the Deno root becomes the required evaluator.
