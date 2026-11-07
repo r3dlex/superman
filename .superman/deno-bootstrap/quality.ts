@@ -46,7 +46,7 @@ export type QualityScope = {
 };
 
 /** The two lanes the mutation scope is declared for. */
-export type MutationLane = "pull-request" | "full" | "corpus";
+type MutationLane = "pull-request" | "full" | "corpus";
 
 function knownKeys(value: unknown, required: string[], optional: string[] = []): boolean {
   return (
