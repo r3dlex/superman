@@ -104,6 +104,8 @@ jobs:
             denort_sha256: bab7bc2f98ff656f335712f064b97bdedfa243d4a59ada40bd30b48e268db01b
             deno_version: 2.9.8
     env:
-      DENO_ARCHIVE_URL: https://github.com/denoland/deno/releases/download/v2.9.8/${{ matrix.deno_archive }}
+      DENO_DIR: ${{ runner.temp }}/superman-deno
+      DENO_ARCHIVE_SHA256: ${{ matrix.deno_archive_sha256 }}
+      DENO_BINARY_SHA256: ${{ matrix.deno_sha256 }}
     steps:
       - run: echo probe
