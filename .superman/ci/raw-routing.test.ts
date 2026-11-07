@@ -103,6 +103,18 @@ function fixture(
  * A complete Knip model: one declared entry, one project member reachable
  * from it, and files the model explicitly ignores.
  */
+/**
+ * The terminal's colour escapes, removed.
+ *
+ * A test runner that writes to a terminal colours its output, so the same
+ * failure text arrives with escape codes between the words on a runner and
+ * without them in a captured pipe. The text is the claim; the colour is the
+ * terminal's.
+ */
+function stripAnsi(text: string): string {
+  return text.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "gu"), "");
+}
+
 function completeKnipModel({ write }: { write: (file: string, content: string) => void }) {
   write(
     "knip.json",
@@ -644,7 +656,7 @@ test("a staged G9 fails and reports the tool's own failure when the staged test 
   assert.deepEqual(outcome.stagedTests, ["test/value.test.ts"]);
   assert.match(outcome.checked, /staged test files were run against the staged content/u);
   assert.match(outcome.reason, /vitest run .* failed/u);
-  assert.match(result.output, /AssertionError: expected 1 to be 2/u);
+  assert.match(stripAnsi(result.output), /AssertionError: expected 1 to be 2/u);
   assert.equal(result.receipt.verdict, "fail");
 });
 

@@ -2482,6 +2482,29 @@ Both the bootstrap workflow and the candidate template set it ✓, so neither de
 
 **What this round is, in the record's own terms.** Five hosted rounds, five causes, and **four of them were environmental** — a workflow that never ran the collector, a shell flag that did not do what was meant, a missing host tool, a terminal's colour codes. The fifth was mine: a replacement that preserved the content and dropped the permissions. Each was invisible to the local suites, which passed throughout ✓✓✓✓✓, and each cost one round ✓. The hosted evidence is not a formality over a local result — it is the only thing that could see any of them ✓.
 
+#### The sixth hosted run: two platform-dependent assertions — 2026-11-07
+
+**Outcome:** the head `80664c1` got past the install step and the Deno measurement on every leg — the macOS leg ran **9 m 30 s** against 43 s before — and then failed on one test per host. Both causes were our own assertions, and both are fixed.
+
+**Cause 1 — the colour assertion, in the copy I did not fix.** The previous round made the staged-G9 parity assertion read the tool's text rather than the terminal's colour — in the **Deno** suite. The **Node** suite's copy at `.superman/ci/raw-routing.test.ts:647` asserted the same literal text and was still live. It is fixed now, with the same `stripAnsi` helper ✓.
+
+**Cause 2 — a digest pinned to one platform.** `.superman/deno-bootstrap/tests/transition.test.ts` asserted the Deno executable's digest against a hardcoded **darwin-arm64** value, so on the Linux legs it compared `368bca08…` (linux-x64) with `d1e99265…` (darwin-arm64) and failed ✓. The test's own name says it binds *the local* result ✓ — the expected value now comes from `tool-assets.json`'s entry for the running platform ✓, which also checks that the platform's digest is **registered** ✓.
+
+Two related assertions were pinned to the same platform's bytes and are now platform-neutral: the Archgate identity is asserted as the **pinned version the binary reports** ✓ — its executable digest is registered per platform only as an *archive* digest ✓ — and the "the unpinned Archgate is not the reviewed one" assertion compares **versions** ✓ for the same reason ✓.
+
+**What this round says about the assertions themselves.** Both failures were assertions that *could not* hold on two of the three platforms, and one of them was a literal-text match against output whose shape depends on the terminal. A test that asserts a value the environment does not determine is a test that will fail somewhere ✓ — and the runner is where "somewhere" is ✓.
+
+**The coverage re-measurement, with the extractor now in the inventory** — 20 files ✓:
+
+```text
+node       lines 2690/2802 (96.00 %) · statements 3010/3160 (95.25 %)
+           branches 2420/2682 (90.23 %) · functions 407/420 (96.90 %)   → verdict "pass"
+candidate  lines 94.77 % · statements 88.76 % · branches 78.50 % · functions 94.87 %   → carried
+deno       lines 46.96 % · statements 47.03 % · branches 35.94 % · functions 51.52 %   → carried
+```
+
+The `node` inventory's branch margin is **0.23 points** — the extractor's own branches took some of the previous 0.47 ✓ — and the floor still holds ✓.
+
 ### Step 12 — exact-source replacement and transition proof
 
 #### Step 12 local half record — 2026-11-04

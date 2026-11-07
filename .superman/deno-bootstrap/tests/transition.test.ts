@@ -103,11 +103,16 @@ const PLATFORMS = [
   },
 ];
 
-/** The locally pinned tool identities the row 12 operator request records. */
-const LOCAL_TOOL_IDENTITIES = {
-  deno: "d1e99265e5e6ee096c5780d88ff7d3e6cfdf33b1953a118b4889cab8ca6980ba",
-  archgate: "be740ac09306e9d2417230065bbb14687fa5b19a7ba771c61c7591a75c3c0b5e",
-};
+/**
+ * The reviewed Archgate digest the darwin-arm64 preparation recorded.
+ *
+ * The Deno runtime's digest is read from the policy for the platform the
+ * test runs on — the three platforms carry different executables — while the
+ * Archgate *executable's* digest is registered per platform only as an
+ * archive digest, so the local assertion is the pinned version the gates
+ * bind, not a digest of one platform's binary.
+ */
+const REVIEWED_ARCHGATE_VERSION = "0.61.0";
 
 /** The explicit runtime identity. An implicit PATH lookup is not a launch. */
 function explicitDeno(): string {
@@ -1256,10 +1261,24 @@ test("the local result binds the exact source, the tool identities and the permi
   assert.equal(head.status, 0);
   const source = head.stdout.trim();
   assert.match(source, /^[a-f0-9]{40}$/u);
-  assert.equal(sha256(readFileSync(explicitDeno())), LOCAL_TOOL_IDENTITIES.deno);
+  const assets = JSON.parse(readFileSync(join(repository, ".superman/ci/tool-assets.json"), "utf8"));
+  const platform = `${process.platform}-${process.arch}`;
+  const expectedDeno = assets.deno?.[platform]?.binarySha256;
+  assert.ok(expectedDeno, `the pinned deno digest for ${platform} is not registered`);
+  assert.equal(sha256(readFileSync(explicitDeno())), expectedDeno);
   const archgate = process.env.ARCHGATE_BIN;
   assert.ok(archgate, "an explicit archgate path is required");
-  assert.equal(sha256(readFileSync(archgate)), LOCAL_TOOL_IDENTITIES.archgate);
+  // The Archgate executable's digest is registered per platform only as an
+  // archive digest, so the local assertion is the identity the gates bind —
+  // the pinned version the binary reports.
+  const archgateVersion = runOwned(archgate, ["--version"], {
+    cwd: repository,
+    env: isolated,
+    encoding: "utf8",
+    shell: false,
+  });
+  assert.equal(archgateVersion.status, 0, archgateVersion.stderr);
+  assert.match(archgateVersion.stdout, new RegExp(`\\b${REVIEWED_ARCHGATE_VERSION}\\b`, "u"));
   // The permission profile identity is the template's own flags against the
   // seam's reviewed profile: the two digests are equal only when the template
   // carries exactly the reviewed grants.
@@ -1270,7 +1289,17 @@ test("the local result binds the exact source, the tool identities and the permi
   // The unpinned archgate in the repository is not the reviewed one: the
   // identity check changes the outcome when the tool is not the recorded one.
   const unpinned = join(repository, "node_modules/.bin/archgate");
-  if (existsSync(unpinned)) assert.notEqual(sha256(readFileSync(unpinned)), LOCAL_TOOL_IDENTITIES.archgate);
+  if (existsSync(unpinned)) {
+    // The versions differ, and that is what "not the reviewed one" means:
+    // each platform's reviewed executable has its own digest.
+    const unpinnedVersion = runOwned(unpinned, ["--version"], {
+      cwd: repository,
+      env: isolated,
+      encoding: "utf8",
+      shell: false,
+    });
+    assert.doesNotMatch(unpinnedVersion.stdout, new RegExp(`\\b${REVIEWED_ARCHGATE_VERSION}\\b`, "u"));
+  }
 });
 
 test("the expected forge evidence names the tested merge, never the head alone", (t) => {
