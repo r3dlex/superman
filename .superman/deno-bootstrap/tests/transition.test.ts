@@ -724,6 +724,40 @@ function toolIdentityFindings(job: WorkflowJob): string[] {
 }
 
 /**
+ * The contexts a level may name. GitHub rejects a workflow that names a
+ * context its level does not have, and it rejects the whole file: the run
+ * never starts, no job is created, and the only report is that the
+ * workflow file has an issue.
+ */
+const LEVEL_CONTEXTS: Record<string, string[]> = {
+  workflow: ["github", "inputs", "vars", "secrets"],
+  job: ["github", "inputs", "vars", "secrets", "needs", "strategy", "matrix"],
+  step: [
+    "github",
+    "inputs",
+    "vars",
+    "secrets",
+    "needs",
+    "strategy",
+    "matrix",
+    "runner",
+    "env",
+    "job",
+    "steps",
+  ],
+};
+
+function contextFindings(entries: Record<string, string>, level: string): string[] {
+  const allowed = LEVEL_CONTEXTS[level] ?? [];
+  const findings: string[] = [];
+  for (const [key, value] of Object.entries(entries))
+    for (const match of value.matchAll(/\$\{\{\s*([A-Za-z_][A-Za-z0-9_]*)/gu))
+      if (!allowed.includes(match[1]))
+        findings.push(`the ${level} environment ${key} names ${match[1]}, which that level does not have`);
+  return findings;
+}
+
+/**
  * The raw per-process coverage dumps are not evidence: the receipt, the
  * merged report and the summary are. An artifact that carries the dumps
  * carries hundreds of megabytes that no receipt names and no reviewer
@@ -1199,6 +1233,23 @@ test("the candidate route binds the recorded tool identities", () => {
   const findings = toolIdentityFindings(parseWorkflow(swapped).jobs[0]);
   assert.equal(findings.length, 1);
   assert.match(findings[0], /deno_sha256/u);
+});
+
+test("a published workflow names only the contexts its level has", () => {
+  // The published candidate workflow is GitHub's own parser's input, and the
+  // runner context is a step context: a job-level environment that names it
+  // is rejected whole, and the run never starts.
+  for (const source of [
+    readFileSync(join(repository, ".github/workflows/deno-candidate.yml"), "utf8"),
+    readTemplate().source,
+  ]) {
+    const policy = parseWorkflow(source);
+    assert.deepEqual(contextFindings(policy.env, "workflow"), []);
+    for (const job of policy.jobs) {
+      assert.deepEqual(contextFindings(job.env, "job"), []);
+      for (const step of job.steps) assert.deepEqual(contextFindings(step.env, "step"), []);
+    }
+  }
 });
 
 test("neither route uploads the raw coverage dumps", () => {
