@@ -105,7 +105,5 @@ jobs:
             deno_version: 2.9.8
     env:
       DENO_DIR: ${{ runner.temp }}/superman-deno
-      DENO_ARCHIVE_SHA256: ${{ matrix.deno_archive_sha256 }}
-      DENO_BINARY_SHA256: ${{ matrix.deno_sha256 }}
     steps:
       - run: echo probe
