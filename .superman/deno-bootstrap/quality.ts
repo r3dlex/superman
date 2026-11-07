@@ -204,14 +204,16 @@ function hermeticEnvironment(temporary: string, env: ProcessEnv): ProcessEnv {
  * Both scopes run their tools through this one seam, so neither can measure
  * with a different environment or a different command shape.
  */
-function qualityRunner(gate: string, runnerEnv: ProcessEnv) {
+function qualityRunner(gate: string, runnerEnv: ProcessEnv, toolTimeout = 120_000) {
   return async (args: string[], cwd: string): Promise<string> => {
     const result = await runOwned("pnpm", ["exec", ...args], {
       cwd,
       env: runnerEnv,
       encoding: "utf8",
       shell: false,
-      timeout: args.includes("--version") ? 10_000 : 120_000,
+      // The pull-request scope is measured inside two minutes; the corpus
+      // lane is the uncached full run and is given the hours it needs.
+      timeout: args.includes("--version") ? 10_000 : toolTimeout,
       maxBuffer: 32 * 1024 * 1024,
     });
     if (result.error || result.signal || result.status !== 0)
@@ -1049,7 +1051,12 @@ export async function qualityGate(
         ? { jscpd: "jscpd/run-jscpd.js" }
         : { stryker: "@stryker-mutator/core/bin/stryker.js", vitest: "vitest/vitest.mjs", tsc: "typescript/bin/tsc" };
     const snapshot = ownedSnapshot(root, temporary, "candidate", headSha, gitEnv, binaries);
-    const runner = qualityRunner(gate, runnerEnv);
+    // The whole scope is measured when there is no baseline to compare
+    // against and when the corpus lane measures it whole; both are the
+    // uncached full run, and both are given the hours they need. The
+    // pull-request lane measures the change alone, inside two minutes.
+    const wholeScope = lane === "corpus" || !baseline;
+    const runner = qualityRunner(gate, runnerEnv, wholeScope ? 14_400_000 : 120_000);
     const execute = (args: string[], cwd = snapshot): Promise<string> => runner(args, cwd);
     if (gate === "G6") {
       const tools: Record<string, unknown> = {};
