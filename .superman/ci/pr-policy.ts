@@ -40,13 +40,31 @@ const PROTECTED = [
   "**/stryker.config.*",
   "**/knip.json",
   "**/.jscpd.json",
+  // The Deno configuration and resolution inputs are effective inputs: they
+  // carry the import map, the lock, the type inputs and the task argv the
+  // Deno runtime graph resolves, so they change only in a spec-kind PR.
+  "**/deno.json",
+  "**/deno.jsonc",
+  "**/deno.lock",
+  "**/import_map.json",
   ".claude-plugin/**",
   ".codex-plugin/**",
   ".agents/plugins/**",
 ];
 // Spec-kind (Gate 1) PRs: specs, decisions, rules, glossary, config, CI and the
 // rest of the protected list, plus the npm setup files. Never source code.
-const SPEC_EXTRA = ["GLOSSARY.md", "CONTEXT.md", "README.md", "package.json", "pnpm-lock.yaml", ".gitignore"];
+// WORKFLOW.md is the root's operational map: which command answers which
+// question, and what each result proves. It is a Gate 1 document, reviewed
+// with the other root documents.
+const SPEC_EXTRA = [
+  "GLOSSARY.md",
+  "CONTEXT.md",
+  "README.md",
+  "WORKFLOW.md",
+  "package.json",
+  "pnpm-lock.yaml",
+  ".gitignore",
+];
 const CHORE_SKILLS = [
   "superman.lock.json",
   "skills/**",

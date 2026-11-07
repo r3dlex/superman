@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, matchesGlob, relative, resolve } from "node:path";
+import { dirname, join, matchesGlob, relative, resolve, sep } from "node:path";
 
 export function runOwned(command: string, args: string[], options: SpawnSyncOptionsWithStringEncoding) {
   // Node 26 forwards detached to native spawn, but its sync type omits it.
@@ -28,10 +28,33 @@ export function runOwned(command: string, args: string[], options: SpawnSyncOpti
     try {
       process.kill(-result.pid, "SIGKILL");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+      // The group kill is a best-effort sweep of a group the child owned. The
+      // child and its descendants run as this user, so ESRCH means the group
+      // is already gone and EPERM means the id now names a group this user
+      // does not own — the recycled-id case, where nothing of ours survives.
+      // Neither is actionable, and neither may turn a successful tool run
+      // into a failed gate.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ESRCH" && code !== "EPERM") throw error;
     }
   }
   return result;
+}
+
+/**
+ * The tool environment a snapshot runs under: the repository's installed
+ * modules and the named binaries, linked into the snapshot. Both snapshot
+ * forms use it, so a scan never resolves a tool the other form would not.
+ */
+function linkTools(root: string, path: string, binaries: Record<string, string>): void {
+  const modules = join(path, "node_modules");
+  mkdirSync(modules);
+  for (const item of readdirSync(join(root, "node_modules"))) {
+    if (!item.startsWith(".")) symlinkSync(realpathSync(join(root, "node_modules", item)), join(modules, item), "dir");
+  }
+  mkdirSync(join(modules, ".bin"));
+  for (const [command, file] of Object.entries(binaries))
+    symlinkSync(realpathSync(join(root, "node_modules", file)), join(modules, ".bin", command));
 }
 
 export function ownedSnapshot(
@@ -55,14 +78,35 @@ export function ownedSnapshot(
   git("-C", path, "read-tree", sha);
   git("-C", path, "checkout-index", "--all");
   git("-C", path, "update-ref", "--no-deref", "HEAD", sha);
-  const modules = join(path, "node_modules");
-  mkdirSync(modules);
-  for (const item of readdirSync(join(root, "node_modules"))) {
-    if (!item.startsWith(".")) symlinkSync(realpathSync(join(root, "node_modules", item)), join(modules, item), "dir");
-  }
-  mkdirSync(join(modules, ".bin"));
-  for (const [command, file] of Object.entries(binaries))
-    symlinkSync(realpathSync(join(root, "node_modules", file)), join(modules, ".bin", command));
+  linkTools(root, path, binaries);
+  return path;
+}
+
+/**
+ * The staged scope's snapshot: the index's own content, materialised outside
+ * the repository. `git checkout-index` writes the index's blobs into the
+ * prefix directory and touches neither the index nor the object store, so the
+ * repository is left exactly as the caller staged it.
+ */
+export function ownedIndexSnapshot(
+  root: string,
+  temporary: string,
+  name: string,
+  env: NodeJS.ProcessEnv,
+  binaries: Record<string, string> = { vitest: "vitest/vitest.mjs", tsrs: "tsrs/bin/tsrs" },
+): string {
+  const path = join(temporary, name);
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-c", "core.hooksPath=/dev/null", "-c", "init.templateDir=", ...args], {
+      cwd: root,
+      env,
+      encoding: "utf8",
+      shell: false,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  mkdirSync(path, { recursive: true });
+  git("checkout-index", "--all", `--prefix=${path}${sep}`);
+  linkTools(root, path, binaries);
   return path;
 }
 

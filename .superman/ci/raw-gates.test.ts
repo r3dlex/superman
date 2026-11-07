@@ -11,7 +11,8 @@ test("spec-kind G9 is explicitly inapplicable and records evaluated revisions", 
   const candidateSha = repo.commit();
   const result = repo.run();
   assert.equal(result.status, 0, result.output);
-  assert.equal(result.receipt.verdict, "pass");
+  assert.equal(result.receipt.verdict, "partial-feedback");
+  assert.equal(result.receipt.satisfiesFullBar, false);
   assert.equal(result.receipt.baseSha, repo.baseSha);
   assert.equal(result.receipt.evaluatedSha, candidateSha);
   assert.deepEqual(result.receipt.results, [{ gate: "G9", status: "n/a", reason: "spec-kind" }]);

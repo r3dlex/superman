@@ -28,8 +28,95 @@
     "files": ["test/**/*.test.ts", "src/**/*.test.ts"],
     "support": ["test/**"]
   },
+  "stages": {
+    "pre-commit": {
+      "feedback": "partial",
+      "scope": "staged",
+      "gates": ["G1", "G2", "G3", "G4", "G5", "G9", "G10"]
+    },
+    "pre-pr": {
+      "feedback": "full",
+      "scope": "full",
+      "gates": ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11"]
+    },
+    "ci": {
+      "feedback": "full",
+      "scope": "full",
+      "gates": ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11"]
+    }
+  },
+  "quality": {
+    "advisories": {
+      "cognitiveComplexity": 15,
+      "functionLines": 50,
+      "parameters": 4
+    },
+    "duplication": {
+      "corpus": "src/**/*.ts",
+      "minTokens": 50,
+      "minLines": 5
+    },
+    "mutation": {
+      "scope": ["src/**/*.ts", ".superman/ci/**/*.ts", "!**/*.test.ts"],
+      "critical": [
+        {
+          "id": "policy-selection-and-result-completeness",
+          "module": ".superman/ci/raw-gates.ts",
+          "case": ".superman/ci/critical/policy-selection-and-result-completeness.critical.test.ts",
+          "runner": "vitest"
+        },
+        {
+          "id": "hbm-artifact-identity-and-receipt-safety",
+          "module": ".superman/ci/raw-gates.ts",
+          "case": ".superman/ci/critical/hbm-artifact-identity-and-receipt-safety.critical.test.ts",
+          "runner": "vitest"
+        },
+        {
+          "id": "policy-preflight-and-tool-routing",
+          "module": ".superman/ci/direct-gates.ts",
+          "case": ".superman/ci/critical/policy-preflight-and-tool-routing.critical.test.ts",
+          "runner": "vitest"
+        },
+        {
+          "id": "coverage-inventory-and-floor-safety",
+          "module": ".superman/ci/coverage.ts",
+          "case": ".superman/ci/critical/coverage-inventory-and-floor-safety.critical.test.ts",
+          "runner": "vitest"
+        },
+        {
+          "id": "duplication-and-mutation-evidence",
+          "module": ".superman/ci/quality.ts",
+          "case": ".superman/ci/critical/duplication-and-mutation-evidence.critical.test.ts",
+          "runner": "vitest"
+        },
+        {
+          "id": "protected-path-and-traceability-policy",
+          "module": ".superman/ci/pr-policy.ts",
+          "case": ".superman/ci/critical/protected-path-and-traceability-policy.critical.test.ts",
+          "runner": "vitest"
+        },
+        {
+          "id": "approval-and-credential-boundaries",
+          "module": ".superman/ci/raw-gates.ts",
+          "case": ".superman/ci/critical/approval-and-credential-boundaries.critical.test.ts",
+          "runner": "vitest"
+        },
+        {
+          "id": "path-and-process-safety",
+          "module": ".superman/ci/replay.ts",
+          "case": ".superman/ci/critical/path-and-process-safety.critical.test.ts",
+          "runner": "vitest"
+        }
+      ]
+    }
+  },
   "requiredChecks": [
-    { "workflow": ".github/workflows/ci.yml", "job": "bootstrap (macos-15)", "app": "github-actions", "appId": 15368 },
+    {
+      "workflow": ".github/workflows/ci.yml",
+      "job": "bootstrap (macos-15)",
+      "app": "github-actions",
+      "appId": 15368
+    },
     {
       "workflow": ".github/workflows/ci.yml",
       "job": "bootstrap (ubuntu-24.04)",

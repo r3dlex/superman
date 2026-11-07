@@ -3,7 +3,7 @@ id: SUP-003
 title: No shell or Python files, and hooks run on Node
 domain: superman
 rules: true
-files: ["**/*.sh", "**/*.py", ".superman/hooks/*"]
+files: ["**/*.sh", "**/*.py", ".superman/hooks/*", ".superman/deno-bootstrap/**", ".scratch/superman-v0/deno-*.ts"]
 ---
 
 Source: docs/adr/0003-zero-runtime-deps-typescript-only.md
@@ -41,6 +41,8 @@ The repository tracks no `*.sh` or `*.py` file, and every file in `.superman/hoo
 ## Compliance and Enforcement
 
 Rule `no-sh-py-files` reports every scoped `.sh`/`.py` file; rule `node-hooks` checks hook shebangs. Both are active from M1 and pass today because no such file exists; `node-hooks` is a no-op until M5 adds `.superman/hooks/pre-commit`.
+
+Rule `deno-runtime-shebang` extends the hook contract to the Deno runtime graph's sources: the operational Deno root `.superman/deno-bootstrap/`, which is Deno runtime source, and the Deno-named candidate surface `.scratch/superman-v0/deno-*.ts`, which is Node-hosted probe and measurement tooling that merely names Deno — a tracked shell helper is a tracked shell helper wherever it sits. The product `src/` tree stays Node until ticket 01 and row 11 port it, so `src/*.ts` is not Deno source yet. A shebang there must name `node` or `deno` as its interpreter — the shebang is read as an interpreter line, so `#!/bin/sh -c deno run x` is a shell helper and not a Deno entry point; a shell or Python interpreter is a tracked helper in a language the repository does not run. The existing `.sh`/`.py` file rejection already covers the whole tree, including the Deno graph. The exact Deno hook shebang is still ticket 04's decision, so both runtimes are accepted until then.
 
 ## References
 

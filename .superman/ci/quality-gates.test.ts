@@ -1,11 +1,28 @@
 // Approved raw-gates process seam; coverage depends on all product source src/**.
 import assert from "node:assert/strict";
 import { readFileSync, renameSync, rmSync, symlinkSync, utimesSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import { type TestContext, test } from "node:test";
+import { fixtureEnvironment } from "./fixture-env.ts";
+import { introducedSurvivors, qualityGate } from "./quality.ts";
 import { fixture, interceptPnpm } from "./raw-fixture.ts";
 
-function qualityFixture(t: TestContext, branch = "ticket/demo-01") {
+test("the critical survivor rule compares identities, not counts", () => {
+  // The counterexample a count comparison misses: the approved base had one
+  // survivor, the candidate killed it and a different mutant survived. The
+  // counts match, so a count comparison reports nothing — and an introduced
+  // critical survivor goes unreported.
+  const base = [{ file: "src/critical.ts", identity: "ArithmeticOperator:a + b->a - b" }];
+  const candidate = [{ file: "src/critical.ts", identity: "ArithmeticOperator:a * b->a / b" }];
+  assert.equal(introducedSurvivors(base, candidate).length, 1);
+  assert.equal(introducedSurvivors(base, candidate)[0]?.identity, "ArithmeticOperator:a * b->a / b");
+  // The same survivor on both sides is not introduced.
+  assert.equal(introducedSurvivors(base, base).length, 0);
+  // With no approved base, every survivor is introduced.
+  assert.equal(introducedSurvivors([], candidate).length, 1);
+});
+
+function qualityFixture(t: TestContext, branch = "ticket/demo-01", setup?: (repo: ReturnType<typeof fixture>) => void) {
   const repo = fixture(t, branch);
   const root = resolve(import.meta.dirname, "../..");
   for (const file of [".jscpd.json", "stryker.config.json", "pnpm-lock.yaml", ".npmrc"])
@@ -26,6 +43,7 @@ function qualityFixture(t: TestContext, branch = "ticket/demo-01") {
   );
   repo.write(".gitignore", "node_modules\n.tools/\n.superman-ci/\n.stryker-tmp/\nstryker-setup-*.js\n");
   rmSync(join(repo.root, "src/value.ts"));
+  setup?.(repo);
   repo.commit();
   repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
   return repo;
@@ -896,4 +914,623 @@ test("a retained mutation baseline cannot silently restart after its whole sourc
   const result = repo.runGate("G6");
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /retained mutation baseline.*empty base scope/u);
+});
+
+// --- Row 10: full-corpus G5 and fresh critical G6 evidence ------------------
+
+test("G5 refuses a reviewed profile that raises the >5-line clone floor", (t) => {
+  const repo = qualityFixture(t, "ticket/demo-01", (repo) => {
+    const profile = JSON.parse(readFileSync(join(repo.root, ".jscpd.json"), "utf8"));
+    profile.minLines = 10;
+    repo.write(".jscpd.json", JSON.stringify(profile));
+  });
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.commit();
+  const result = repo.runGate("G5");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /does not declare the reviewed clone floors \(50 tokens, 5 lines\)/u);
+});
+
+test("G5 refuses a reviewed profile that owns the duplication threshold", (t) => {
+  const repo = qualityFixture(t, "ticket/demo-01", (repo) => {
+    const profile = JSON.parse(readFileSync(join(repo.root, ".jscpd.json"), "utf8"));
+    profile.threshold = 100;
+    repo.write(".jscpd.json", JSON.stringify(profile));
+  });
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.commit();
+  const result = repo.runGate("G5");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /must not own a duplication threshold/u);
+});
+
+test("G5 refuses a reviewed profile that ignores sources", (t) => {
+  const repo = qualityFixture(t, "ticket/demo-01", (repo) => {
+    const profile = JSON.parse(readFileSync(join(repo.root, ".jscpd.json"), "utf8"));
+    profile.ignore = ["**/clone-*.ts"];
+    repo.write(".jscpd.json", JSON.stringify(profile));
+  });
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.commit();
+  const result = repo.runGate("G5");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /must not ignore sources/u);
+});
+
+test("G5 cannot be reduced to a changed-only scan", (t) => {
+  const repo = qualityFixture(t);
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.write("src/clone-b.ts", repeatedSource());
+  repo.write("src/clone-c.ts", repeatedSource());
+  repo.commit();
+  const captured = join(repo.root, ".git/jscpd-argv.json");
+  interceptPnpm(
+    repo.root,
+    `if (args.includes('jscpd')) writeFileSync(${JSON.stringify(captured)}, JSON.stringify(args));`,
+  );
+  const result = repo.runGate("G5");
+  assert.equal(result.status, 0, result.output);
+  const argv = JSON.parse(readFileSync(captured, "utf8")) as string[];
+  // The scan names every file of the declared corpus explicitly. There is no
+  // changed-only switch to reach for and no way to narrow the corpus: the
+  // invocation itself is the proof that a changed-only scan is impossible.
+  assert.ok(argv.includes("./src/clone-a.ts"));
+  assert.ok(argv.includes("./src/clone-b.ts"));
+  assert.ok(argv.includes("./src/clone-c.ts"));
+  assert.equal(
+    argv.some((argument) => argument.startsWith("--changed")),
+    false,
+    "the declared corpus is explicit; a changed-only switch must never appear",
+  );
+});
+
+test("G5 refuses a scan that covered fewer sources than the declared corpus", (t) => {
+  const repo = qualityFixture(t);
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.write("src/clone-b.ts", repeatedSource());
+  repo.commit();
+  // A changed-only scan covers fewer sources than the declared corpus. The
+  // corpus-completeness guard refuses it by name, whatever produced it.
+  interceptPnpm(
+    repo.root,
+    "if (args.includes('jscpd') && args.includes('--config')) { const path = process.cwd() + '/.superman-ci/duplication/jscpd-report.json'; const report = JSON.parse(readFileSync(path, 'utf8')); report.statistics.total.sources = 1; writeFileSync(path, JSON.stringify(report)); }",
+  );
+  const result = repo.runGate("G5");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /G5: incomplete jscpd corpus counters.*expected 2.*actual 1/u);
+});
+
+test("G5 refuses a clipped duplication percentage", (t) => {
+  const repo = qualityFixture(t);
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.write("src/clone-b.ts", repeatedSource());
+  repo.commit();
+  interceptPnpm(
+    repo.root,
+    "if (args.includes('jscpd') && args.includes('--config')) { const path = process.cwd() + '/.superman-ci/duplication/jscpd-report.json'; const report = JSON.parse(readFileSync(path, 'utf8')); report.statistics.total.percentage = 0; report.statistics.formats.typescript.percentage = 0; writeFileSync(path, JSON.stringify(report)); }",
+  );
+  const result = repo.runGate("G5");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /clipped duplication percentage 0 does not match the measured 50/u);
+});
+
+test("G6 blocks a missing critical case", (t) => {
+  const repo = qualityFixture(t, "ticket/demo-01", (repo) => {
+    const config = JSON.parse(readFileSync(join(repo.root, ".superman/ci/bootstrap.json"), "utf8"));
+    config.quality = {
+      mutation: {
+        scope: ["src/**/*.ts", "!src/**/*.test.ts"],
+        critical: [
+          {
+            id: "critical-classification",
+            module: "src/critical.ts",
+            case: "test/critical.test.ts",
+            runner: "vitest",
+          },
+        ],
+      },
+    };
+    repo.write(".superman/ci/bootstrap.json", JSON.stringify(config));
+  });
+  repo.write(
+    "src/critical.ts",
+    "export function classify(value: number) { return value > 0 ? 'positive' : 'other'; }\n",
+  );
+  repo.commit();
+  const result = repo.runGate("G6");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /missing critical case test\/critical\.test\.ts/u);
+});
+
+test("G6 blocks a missing critical module", (t) => {
+  const repo = qualityFixture(t, "ticket/demo-01", (repo) => {
+    const config = JSON.parse(readFileSync(join(repo.root, ".superman/ci/bootstrap.json"), "utf8"));
+    config.quality = {
+      mutation: {
+        scope: ["src/**/*.ts", "!src/**/*.test.ts"],
+        critical: [
+          {
+            id: "critical-classification",
+            module: "src/absent.ts",
+            case: "test/critical.test.ts",
+            runner: "vitest",
+          },
+        ],
+      },
+    };
+    repo.write(".superman/ci/bootstrap.json", JSON.stringify(config));
+  });
+  repo.write(
+    "src/critical.ts",
+    "export function classify(value: number) { return value > 0 ? 'positive' : 'other'; }\n",
+  );
+  repo.write(
+    "test/critical.test.ts",
+    "import { expect, test } from 'vitest'; import { classify } from '../src/critical.ts'; test('both sides', () => { expect(classify(1)).toBe('positive'); expect(classify(0)).toBe('other'); });\n",
+  );
+  repo.commit();
+  const result = repo.runGate("G6");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /missing critical module src\/absent\.ts/u);
+});
+
+function criticalMutationFixture(t: TestContext) {
+  const repo = qualityFixture(t, "ticket/demo-01", (repo) => {
+    const config = JSON.parse(readFileSync(join(repo.root, ".superman/ci/bootstrap.json"), "utf8"));
+    config.quality = {
+      mutation: {
+        scope: ["src/**/*.ts", "!src/**/*.test.ts"],
+        critical: [
+          {
+            id: "critical-classification",
+            module: "src/critical.ts",
+            case: "test/critical.test.ts",
+            runner: "vitest",
+          },
+        ],
+      },
+    };
+    repo.write(".superman/ci/bootstrap.json", JSON.stringify(config));
+  });
+  repo.write(
+    "src/critical.ts",
+    "export function classify(value: number) { return value > 0 ? 'positive' : 'other'; }\n",
+  );
+  repo.write(
+    "test/critical.test.ts",
+    "import { expect, test } from 'vitest'; import { classify } from '../src/critical.ts'; test('both sides', () => { expect(classify(1)).toBe('positive'); expect(classify(0)).toBe('other'); expect(classify(-1)).toBe('other'); });\n",
+  );
+  repo.write("src/other.ts", "export function other(value: number) { return value > 10 ? 'high' : 'low'; }\n");
+  repo.write(
+    "test/other.test.ts",
+    "import { expect, test } from 'vitest'; import { other } from '../src/other.ts'; test('other', () => { expect(other(11)).toBe('high'); expect(other(9)).toBe('low'); });\n",
+  );
+  repo.commit();
+  const measured = repo.runGate("G6");
+  assert.equal(measured.status, 0, measured.output);
+  const initial = measured.receipt.results[0];
+  repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({
+      jscpdPct: 0,
+      mutationScore: initial.metrics.mutationScore,
+      qualityInputsHash: initial.evidence.qualityInputsHash,
+    }),
+  );
+  repo.commit();
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  return { repo, initial };
+}
+
+test("G6 blocks an introduced critical survivor even when the aggregate improves", (t) => {
+  const { repo, initial } = criticalMutationFixture(t);
+  // The comparable scope improves: the non-critical module gains a boundary
+  // assertion and a fully covered export.
+  repo.write(
+    "src/other.ts",
+    "export function other(value: number) { return value > 10 ? 'high' : 'low'; }\nexport function doubled(value: number) { return value * 2; }\n",
+  );
+  repo.write(
+    "test/other.test.ts",
+    "import { expect, test } from 'vitest'; import { doubled, other } from '../src/other.ts'; test('other', () => { expect(other(11)).toBe('high'); expect(other(9)).toBe('low'); }); test('doubled', () => { expect(doubled(2)).toBe(4); });\n",
+  );
+  // The critical case loses an assertion: the critical module gains a survivor.
+  repo.write(
+    "test/critical.test.ts",
+    "import { expect, test } from 'vitest'; import { classify } from '../src/critical.ts'; test('both sides', () => { expect(classify(1)).toBe('positive'); });\n",
+  );
+  repo.commit();
+  const result = repo.runGate("G6");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /introduced critical survivor in src\/critical\.ts/u);
+  assert.equal(result.receipt.results[0].kind, "critical-survivor");
+  assert.ok(initial.metrics.counts.Survived + initial.metrics.counts.NoCoverage > 0);
+});
+
+test("G6 blocks a critical module the candidate deleted", (t) => {
+  const repo = qualityFixture(t, "ticket/demo-01", (repo) => {
+    const config = JSON.parse(readFileSync(join(repo.root, ".superman/ci/bootstrap.json"), "utf8"));
+    config.quality = {
+      mutation: {
+        scope: ["src/**/*.ts", "!src/**/*.test.ts"],
+        critical: [
+          { id: "critical-classification", module: "src/critical.ts", case: "test/critical.test.ts", runner: "vitest" },
+        ],
+      },
+    };
+    repo.write(".superman/ci/bootstrap.json", JSON.stringify(config));
+  });
+  repo.write(
+    "src/critical.ts",
+    "export function classify(value: number) { return value > 0 ? 'positive' : 'other'; }\n",
+  );
+  repo.write(
+    "test/critical.test.ts",
+    "import { expect, test } from 'vitest'; import { classify } from '../src/critical.ts'; test('both sides', () => { expect(classify(1)).toBe('positive'); expect(classify(0)).toBe('other'); });\n",
+  );
+  repo.commit();
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  // The candidate deletes the declared critical module.
+  rmSync(join(repo.root, "src/critical.ts"));
+  repo.commit();
+  const result = repo.runGate("G6");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /missing critical module src\/critical\.ts/u);
+  assert.equal(result.receipt.results[0].kind, "skipped-required-work");
+});
+
+test("G6 executes the declared critical case fresh and blocks a failing case", (t) => {
+  const repo = qualityFixture(t, "ticket/demo-01", (repo) => {
+    const config = JSON.parse(readFileSync(join(repo.root, ".superman/ci/bootstrap.json"), "utf8"));
+    config.quality = {
+      mutation: {
+        scope: ["src/**/*.ts", "!src/**/*.test.ts"],
+        critical: [
+          { id: "critical-classification", module: "src/critical.ts", case: "test/critical.test.ts", runner: "vitest" },
+        ],
+      },
+    };
+    repo.write(".superman/ci/bootstrap.json", JSON.stringify(config));
+  });
+  repo.write(
+    "src/critical.ts",
+    "export function classify(value: number) { return value > 0 ? 'positive' : 'other'; }\n",
+  );
+  repo.write(
+    "test/critical.test.ts",
+    "import { expect, test } from 'vitest'; import { classify } from '../src/critical.ts'; test('both sides', () => { expect(classify(1)).toBe('positive'); expect(classify(0)).toBe('other'); });\n",
+  );
+  repo.commit();
+  // The declared case fails at the candidate: it exists, and it does not pass.
+  repo.write(
+    "test/critical.test.ts",
+    "import { expect, test } from 'vitest'; import { classify } from '../src/critical.ts'; test('both sides', () => { expect(classify(1)).toBe('negative'); });\n",
+  );
+  repo.commit();
+  const result = repo.runGate("G6");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /declared critical case critical-classification failed/u);
+  assert.equal(result.receipt.results[0].kind, "failed-command");
+});
+
+test("G6 measures a declared critical module outside src/ and blocks its introduced survivor", (t) => {
+  const repo = qualityFixture(t, "ticket/demo-01", (repo) => {
+    const config = JSON.parse(readFileSync(join(repo.root, ".superman/ci/bootstrap.json"), "utf8"));
+    config.quality = {
+      mutation: {
+        // The declared scope is the applied scope: it reaches outside
+        // `src/`, so a declared critical module outside `src/` is measured.
+        scope: ["src/**/*.ts", "lib/**/*.ts", "!**/*.test.ts"],
+        critical: [
+          {
+            id: "critical-classification",
+            module: "lib/critical-module.ts",
+            case: "test/critical.test.ts",
+            runner: "vitest",
+          },
+        ],
+      },
+    };
+    repo.write(".superman/ci/bootstrap.json", JSON.stringify(config));
+  });
+  repo.write(
+    "lib/critical-module.ts",
+    "export function classify(value: number) { return value > 0 ? 'positive' : 'other'; }\n",
+  );
+  repo.write(
+    "test/critical.test.ts",
+    "import { expect, test } from 'vitest'; import { classify } from '../lib/critical-module.ts'; test('both sides', () => { expect(classify(1)).toBe('positive'); expect(classify(0)).toBe('other'); expect(classify(-1)).toBe('other'); });\n",
+  );
+  repo.commit();
+  const measured = repo.runGate("G6");
+  assert.equal(measured.status, 0, measured.output);
+  const initial = measured.receipt.results[0];
+  // The declared case covers the module completely: the base has no survivor.
+  assert.equal(initial.metrics.counts.Survived + initial.metrics.counts.NoCoverage, 0);
+  assert.deepEqual(initial.evidence.criticalCases, [
+    {
+      id: "critical-classification",
+      case: "test/critical.test.ts",
+      runner: "vitest",
+      status: "pass",
+    },
+  ]);
+  repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({
+      jscpdPct: 0,
+      mutationScore: initial.metrics.mutationScore,
+      qualityInputsHash: initial.evidence.qualityInputsHash,
+    }),
+  );
+  repo.commit();
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  // The declared case loses an assertion: the declared critical module gains
+  // a survivor, and the rule fires on it.
+  repo.write(
+    "test/critical.test.ts",
+    "import { expect, test } from 'vitest'; import { classify } from '../lib/critical-module.ts'; test('both sides', () => { expect(classify(1)).toBe('positive'); });\n",
+  );
+  repo.commit();
+  const result = repo.runGate("G6");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /introduced critical survivor in lib\/critical-module\.ts/u);
+  assert.equal(result.receipt.results[0].kind, "critical-survivor");
+});
+
+// --- The staged (pre-commit) form of G5 -------------------------------------
+
+/**
+ * The environment the driver hands the quality module: the fixture's pinned
+ * pnpm on PATH and no inherited Git state.
+ */
+function stagedEnvironment(root: string): NodeJS.ProcessEnv {
+  const isolated = fixtureEnvironment();
+  return { ...isolated, PATH: `${join(root, ".tools")}${delimiter}${isolated.PATH ?? ""}` };
+}
+
+/** The approved base a staged run compares against. */
+function approvedBase(repo: ReturnType<typeof fixture>): string {
+  return repo.git("rev-parse", "refs/remotes/origin/main").trim();
+}
+
+/**
+ * The staged scope's G5, called the way the driver calls it: the scope the
+ * stage declared and the changed files the index carries.
+ */
+function stagedG5(repo: ReturnType<typeof fixture>, changedFiles: string[]) {
+  return qualityGate(
+    "G5",
+    repo.root,
+    approvedBase(repo),
+    repo.git("rev-parse", "HEAD").trim(),
+    stagedEnvironment(repo.root),
+    { scope: "staged", changedFiles },
+  );
+}
+
+test("a staged change with no corpus file staged reports n/a, not an invented pass", (t) => {
+  const repo = qualityFixture(t);
+  repo.write("README.md", "staged documentation\n");
+  repo.git("add", "README.md");
+  const result = stagedG5(repo, ["README.md"]);
+  assert.equal(result.status, "n/a");
+  assert.equal(result.scope, "staged");
+  assert.match(result.reason ?? "", /no changed file.*declared duplication corpus/u);
+  assert.equal(result.metrics, undefined);
+  assert.equal(result.evidence, undefined);
+  // The result says what it did not check, so a partial result is never read
+  // as the merge bar.
+  assert.match(result.notChecked ?? "", /merge bar/u);
+});
+
+test("a staged change that introduces a clone fails and names the clone", (t) => {
+  const repo = qualityFixture(t);
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.commit();
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  // The base owns clone-a alone. The staged change gives it a partner.
+  repo.write("src/clone-a.ts", `${repeatedSource()}\nexport const extra = 1;\n`);
+  repo.write("src/clone-b.ts", repeatedSource());
+  repo.git("add", "src/clone-a.ts", "src/clone-b.ts");
+  assert.throws(
+    () => stagedG5(repo, ["src/clone-a.ts", "src/clone-b.ts"]),
+    /introduce 1 duplicate clone.*src\/clone-a\.ts <-> src\/clone-b\.ts/u,
+  );
+});
+
+test("a staged change whose clone already existed at the base passes", (t) => {
+  const repo = qualityFixture(t);
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.write("src/clone-b.ts", repeatedSource());
+  repo.commit();
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  // Both files move on, but the pair they clone with was already at the base.
+  repo.write("src/clone-a.ts", `${repeatedSource()}\nexport const extraA = 1;\n`);
+  repo.write("src/clone-b.ts", `${repeatedSource()}\nexport const extraB = 2;\n`);
+  repo.git("add", "src/clone-a.ts", "src/clone-b.ts");
+  const result = stagedG5(repo, ["src/clone-a.ts", "src/clone-b.ts"]);
+  assert.equal(result.status, "pass");
+  assert.equal(result.scope, "staged");
+  assert.equal(result.metrics?.clones, 1);
+  assert.deepEqual(result.evidence?.files, ["src/clone-a.ts", "src/clone-b.ts"]);
+  assert.equal(result.evidence?.preexistingClones, 1);
+  assert.equal(result.evidence?.baseClones, 1);
+  assert.deepEqual(result.evidence?.introduced, []);
+});
+
+test("the staged scope refuses a gate that declares no staged form", (t) => {
+  const repo = qualityFixture(t);
+  assert.throws(
+    () =>
+      qualityGate(
+        "G6",
+        repo.root,
+        approvedBase(repo),
+        repo.git("rev-parse", "HEAD").trim(),
+        stagedEnvironment(repo.root),
+        { scope: "staged", changedFiles: [] },
+      ),
+    /the staged scope declares no form of this gate/u,
+  );
+});
+
+test("the staged scope refuses a changed-file list that is not a list of paths", (t) => {
+  const repo = qualityFixture(t);
+  assert.throws(
+    () =>
+      qualityGate(
+        "G5",
+        repo.root,
+        approvedBase(repo),
+        repo.git("rev-parse", "HEAD").trim(),
+        stagedEnvironment(repo.root),
+        { scope: "staged", changedFiles: [42] as unknown as string[] },
+      ),
+    /the staged scope needs the changed file paths/u,
+  );
+});
+
+test("the staged scope refuses a reviewed profile that is not the reviewed measurement profile", async (t) => {
+  const cases: [string, (profile: Record<string, unknown>) => void, RegExp][] = [
+    [
+      "raised clone floors",
+      (profile) => {
+        profile.minTokens = 40;
+      },
+      /does not declare the reviewed clone floors \(50 tokens, 5 lines\)/u,
+    ],
+    [
+      "an owned threshold",
+      (profile) => {
+        profile.threshold = 100;
+      },
+      /must not own a duplication threshold/u,
+    ],
+    [
+      "ignored sources",
+      (profile) => {
+        profile.ignore = ["**/clone-*.ts"];
+      },
+      /must not ignore sources/u,
+    ],
+  ];
+  for (const [name, mutate, expected] of cases)
+    await t.test(name, (t) => {
+      const repo = qualityFixture(t, "ticket/demo-01", (repo) => {
+        const profile = JSON.parse(readFileSync(join(repo.root, ".jscpd.json"), "utf8"));
+        mutate(profile);
+        repo.write(".jscpd.json", JSON.stringify(profile));
+      });
+      repo.write("src/clone-a.ts", repeatedSource());
+      repo.git("add", "src/clone-a.ts");
+      assert.throws(() => stagedG5(repo, ["src/clone-a.ts"]), expected);
+    });
+  await t.test("an unreadable profile", (t) => {
+    const repo = qualityFixture(t, "ticket/demo-01", (repo) => {
+      repo.write(".jscpd.json", "{ not json");
+    });
+    repo.write("src/clone-a.ts", repeatedSource());
+    repo.git("add", "src/clone-a.ts");
+    assert.throws(() => stagedG5(repo, ["src/clone-a.ts"]), /no readable reviewed jscpd profile/u);
+  });
+  await t.test("a base without a reviewed profile", (t) => {
+    const repo = qualityFixture(t);
+    // The fixture's approved base predates the reviewed profile.
+    repo.git("update-ref", "refs/remotes/origin/main", repo.baseSha);
+    repo.write("src/clone-a.ts", repeatedSource());
+    repo.git("add", "src/clone-a.ts");
+    assert.throws(() => stagedG5(repo, ["src/clone-a.ts"]), /no regular reviewed jscpd profile/u);
+  });
+});
+
+test("the staged scope refuses a staged jscpd profile that differs from the reviewed base profile", (t) => {
+  const repo = qualityFixture(t);
+  const profile = JSON.parse(readFileSync(join(repo.root, ".jscpd.json"), "utf8"));
+  profile.minTokens = 40;
+  repo.write(".jscpd.json", JSON.stringify(profile));
+  repo.git("add", ".jscpd.json");
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.git("add", "src/clone-a.ts");
+  assert.throws(
+    () => stagedG5(repo, [".jscpd.json", "src/clone-a.ts"]),
+    /the staged jscpd profile differs from the reviewed base profile/u,
+  );
+});
+
+test("the staged scope verifies the declared package pins and the actual executable version", async (t) => {
+  await t.test("a declared pin mismatch", (t) => {
+    const repo = qualityFixture(t);
+    const pkg = JSON.parse(readFileSync(join(repo.root, "package.json"), "utf8"));
+    pkg.devDependencies.jscpd = "0.0.0";
+    repo.write("package.json", JSON.stringify(pkg));
+    repo.git("add", "package.json");
+    repo.write("src/clone-a.ts", repeatedSource());
+    repo.git("add", "src/clone-a.ts");
+    assert.throws(() => stagedG5(repo, ["package.json", "src/clone-a.ts"]), /jscpd pin mismatch/u);
+  });
+  await t.test("an executable pin mismatch", (t) => {
+    const repo = qualityFixture(t);
+    repo.write("src/clone-a.ts", repeatedSource());
+    repo.git("add", "src/clone-a.ts");
+    interceptPnpm(
+      repo.root,
+      "if (args.includes('jscpd') && args.includes('--version')) result.stdout = 'wrong executable 0.0.0';",
+    );
+    assert.throws(() => stagedG5(repo, ["src/clone-a.ts"]), /jscpd executable pin mismatch/u);
+  });
+});
+
+test("the staged scope refuses a staged source-level jscpd exclusion", (t) => {
+  const repo = qualityFixture(t);
+  repo.write(
+    "src/clone-a.ts",
+    `// jscpd:ignore-start\n${repeatedSource()}// jscpd:ignore-end\nexport const distinct = 2;\n`,
+  );
+  repo.git("add", "src/clone-a.ts");
+  assert.throws(() => stagedG5(repo, ["src/clone-a.ts"]), /source-level jscpd ignore range is forbidden/u);
+});
+
+test("the staged scope refuses an unknown jscpd report schema", (t) => {
+  const repo = qualityFixture(t);
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.write("src/clone-b.ts", repeatedSource());
+  repo.git("add", "src/clone-a.ts", "src/clone-b.ts");
+  interceptPnpm(
+    repo.root,
+    "if (args.includes('jscpd') && args.includes('--config')) { const path = process.cwd() + '/.superman-ci/duplication/jscpd-report.json'; const report = JSON.parse(readFileSync(path, 'utf8')); report.unknownSchema = 2; writeFileSync(path, JSON.stringify(report)); }",
+  );
+  assert.throws(() => stagedG5(repo, ["src/clone-a.ts", "src/clone-b.ts"]), /unknown jscpd reporter schema/u);
+});
+
+test("the staged scope materialises the index without writing into the repository", (t) => {
+  const repo = qualityFixture(t);
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.git("add", "src/clone-a.ts");
+  const index = readFileSync(join(repo.root, ".git/index"));
+  const status = repo.git("status", "--porcelain");
+  const result = stagedG5(repo, ["src/clone-a.ts"]);
+  assert.equal(result.status, "pass");
+  assert.deepEqual(readFileSync(join(repo.root, ".git/index")), index);
+  assert.equal(repo.git("status", "--porcelain"), status);
+});
+
+test("the full-scope G5 needs no scope argument and keeps its result shape", (t) => {
+  const repo = qualityFixture(t);
+  repo.write("src/clone-a.ts", repeatedSource());
+  repo.write("src/clone-b.ts", repeatedSource());
+  repo.commit();
+  const result = qualityGate(
+    "G5",
+    repo.root,
+    approvedBase(repo),
+    repo.git("rev-parse", "HEAD").trim(),
+    stagedEnvironment(repo.root),
+  );
+  assert.equal(result.status, "pass");
+  assert.equal(result.scope, undefined);
+  assert.equal(result.checked, undefined);
+  assert.equal(result.notChecked, undefined);
+  assert.equal(result.metrics?.jscpdPct, 50);
+  assert.deepEqual(result.evidence?.files, ["src/clone-a.ts", "src/clone-b.ts"]);
 });

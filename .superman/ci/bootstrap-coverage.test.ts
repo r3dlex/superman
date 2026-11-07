@@ -70,10 +70,13 @@ function trivy(repo: Repo, version: string) {
     `#!${process.execPath}
 import { writeFileSync } from "node:fs";
 if (process.argv.includes("--version")) console.log(${JSON.stringify(version)});
-else writeFileSync(${JSON.stringify(scan)}, JSON.stringify({
-  argv: process.argv.slice(2),
-  env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith("TRIVY_"))),
-}));
+else {
+  writeFileSync(${JSON.stringify(scan)}, JSON.stringify({
+    argv: process.argv.slice(2),
+    env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith("TRIVY_"))),
+  }));
+  console.log(JSON.stringify({ CreatedAt: new Date().toISOString(), Results: [] }));
+}
 `,
     { mode: 0o755 },
   );
@@ -254,6 +257,10 @@ test("G11 routes PATH Trivy with fixed scanner policy and only its cache environ
       "--include-dev-deps",
       "--exit-code",
       "1",
+      "--format",
+      "json",
+      "--timeout",
+      "15m",
       ".",
     ],
     env: { TRIVY_CACHE_DIR: cache },

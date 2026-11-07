@@ -21,6 +21,7 @@ Once any workflow calls `superman gate`, workflows run tests and the change-scop
 - Do call `superman gate ci [--affected]`, `superman gate nightly` and `superman gate pre-pr`, and put tool commands in `superman.config.json` gate argv.
 - Do keep the scheduled `tsc-drift` job (`tsc`/`tsrs --noEmit` are not covered here; SUP-006 covers them).
 - Don't call `vitest`, `jest`, `stryker`, `jscpd`, `knip`, `biome check|ci|lint|format`, `archgate check`, `mix test`, `mix muex`, `cargo test`, `cargo nextest`, `dotnet test`, `pytest`, `cabal test`, `stack test`, `go test`, `npm|pnpm|yarn|bun test`, `nx affected|run-many`, `moon run|ci` or `turbo run` in a workflow step.
+- Don't call `deno test`, `deno lint`, `deno fmt`, `deno coverage` or `deno task` in a workflow step. `deno test` is the counterpart of the banned `vitest`/`jest` runners; `deno lint` and `deno fmt` are the `biome lint|format` counterparts; `deno coverage` is a coverage gate invocation, and this repository's gates include coverage (G5/G6); and `deno task` is listed because a task is the indirection SUP-008 exists to catch. The Deno typecheck (`deno check`) is not listed: this rule keeps the typecheck out of its scope, as it does for `tsc`/`tsrs`, and leaves it to SUP-006. A benchmark run (`deno bench`) is not listed either: it is neither a test nor a gate.
 - Don't pass `--affected` to `superman gate nightly`, and don't disable the nightly job.
 
 ## Consequences
@@ -42,6 +43,8 @@ Once any workflow calls `superman gate`, workflows run tests and the change-scop
 
 - `tests-only-through-superman`: when a non-comment workflow line runs `superman gate`, no non-comment workflow line invokes a listed tool directly.
 - `nightly-full-run`: when a non-comment workflow line uses `--affected`, some workflow has a `schedule:` trigger and runs `superman gate nightly`; `superman gate nightly` never has `--affected`; a workflow that runs the nightly gate has no `if: false` job or step.
+
+The listed tools include the Deno runtime: `deno test`, `deno lint`, `deno fmt`, `deno coverage` and `deno task`. `deno test` is the counterpart of the banned `vitest`/`jest` runners; `deno lint` and `deno fmt` are the `biome lint|format` counterparts; `deno coverage` is a coverage gate invocation, and this repository's gates include coverage (G5/G6); and `deno task` is listed because a task is the indirection SUP-008 exists to catch, so the workflow step is rejected rather than only its resolved command. The Deno typecheck is not listed, exactly as `tsc`/`tsrs` are not: the typecheck stays with SUP-006. A benchmark run is not listed either: it is neither a test nor a gate. The Deno scope of this rule is its workflow set, because the Deno runtime is reached from the workflow; those workflow files exist today, so the scope is not empty, but the rule itself stays inactive until a workflow runs `superman gate`, exactly as it does for the other listed tools.
 
 Active once ticket 06's follow-up switches CI to `superman gate ci`. Until then the M1 `ci.yml` calls `archgate check` directly and the rule passes because no workflow runs `superman gate` yet.
 

@@ -16,10 +16,24 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, matchesGlob, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
-import { directGate, type GateResult } from "./direct-gates.ts";
+import {
+  ALL_GATES,
+  assertFullStage,
+  directGate,
+  execute as executeTool,
+  type FailureKind,
+  failureKind,
+  type GateContext,
+  GateFailure,
+  type GateResult,
+  runProfile,
+  type StageScope,
+  stagePolicy,
+} from "./direct-gates.ts";
 import { fixtureEnvironment } from "./fixture-env.ts";
+import { qualityGate } from "./quality.ts";
 import { replayBehavior } from "./replay.ts";
 
 const { values } = parseArgs({
@@ -27,6 +41,7 @@ const { values } = parseArgs({
     gate: { type: "string" },
     base: { type: "string", default: "origin/main" },
     receipt: { type: "string" },
+    stage: { type: "string" },
   },
 });
 const env = { ...fixtureEnvironment(), GIT_OPTIONAL_LOCKS: "0" };
@@ -36,6 +51,169 @@ function gitOptional(...args: string[]): string | undefined {
     return execFileSync("git", args, { env, encoding: "utf8", shell: false }).trim();
   } catch {
     return undefined;
+  }
+}
+/**
+ * The identity of the staged snapshot: every index entry's mode, blob and path.
+ * A staged run's input is the index, so this is what must not change while the
+ * checks run.
+ */
+function stagedInputsId(): string {
+  return createHash("sha256")
+    .update(git("ls-files", "--stage", "-z"))
+    .digest("hex");
+}
+
+/** True when a tracked file has an unstaged modification. */
+function unstagedChanges(): boolean {
+  try {
+    execFileSync("git", ["diff", "--quiet"], { env, encoding: "utf8", shell: false });
+    return false;
+  } catch {
+    return true;
+  }
+}
+/**
+ * A staged gate result. The staged scope reports the scope it checked and the
+ * half of the gate it did not, so a staged result can never be read as the
+ * whole gate.
+ */
+type StagedGateResult = {
+  gate: string;
+  status: "pass" | "n/a" | "fail";
+  reason?: string;
+  kind?: FailureKind;
+  [key: string]: unknown;
+};
+
+/**
+ * The pinned tools a staged test run binds.
+ *
+ * The declared, installed and executable versions of every tool the run uses
+ * must agree before a test runs, exactly as the full scope's gates require.
+ */
+function stagedToolIdentities(ctx: GateContext, tools: Record<string, unknown>): void {
+  const root = ctx.root;
+  const policy = JSON.parse(readFileSync(join(root, ".superman/ci/bootstrap.json"), "utf8"));
+  if (policy.tools.node !== process.versions.node && policy.tools.node !== process.versions.node.split(".")[0])
+    throw new GateFailure(
+      "policy-refusal",
+      `G9: Node pin expected ${policy.tools.node}, actual ${process.versions.node}`,
+    );
+  tools.node = { expected: policy.tools.node, actual: process.versions.node, status: "pass" };
+  const pnpm = executeTool(ctx, ["pnpm", "--version"]).trim();
+  if (pnpm !== policy.tools.pnpm)
+    throw new GateFailure("policy-refusal", `G9: pnpm pin expected ${policy.tools.pnpm}, actual ${pnpm}`);
+  tools.pnpm = { expected: policy.tools.pnpm, actual: pnpm, status: "pass" };
+  const expected = policy.tools.vitest;
+  const declared = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).devDependencies?.vitest;
+  const installed = JSON.parse(readFileSync(join(root, "node_modules/vitest/package.json"), "utf8")).version;
+  if (
+    typeof expected !== "string" ||
+    !/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/u.test(expected) ||
+    expected !== declared ||
+    expected !== installed
+  )
+    throw new GateFailure(
+      "policy-refusal",
+      `G9: vitest pin expected ${expected}, declared ${declared}, installed ${installed}`,
+    );
+  const version = executeTool(ctx, ["pnpm", "exec", "vitest", "--version"]).trim();
+  if (!version.includes(expected))
+    throw new GateFailure("policy-refusal", `G9: vitest executable version mismatch: ${version}`);
+  tools.vitest = { expected, actual: installed, executableVersion: version, status: "pass" };
+}
+
+/** The staged test files, run against the staged content through the pinned tools. */
+function runStagedTestFiles(ctx: GateContext, tests: string[]): void {
+  const argv = [
+    "pnpm",
+    "exec",
+    "vitest",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "--no-cache",
+    ...tests.map((file) => `./${file}`),
+  ];
+  executeTool(ctx, argv);
+}
+
+/**
+ * The staged form of G9: the staged content is green.
+ *
+ * §5.4's pre-commit cell for G9 is "commits stay green". The staged scope
+ * therefore proves the green half only: the staged test files are run against
+ * the staged content and must pass. The red-on-base half belongs to the
+ * pull-request replay (`runG9` -> `replayBehavior`) and is not claimed here,
+ * so the result states plainly which half it did not check. The working tree
+ * is the input the run reads, and the staged scope's precondition has already
+ * established that the working tree equals the index.
+ */
+/**
+ * The files the index changes against HEAD.
+ *
+ * The staged scope's input is the index, so the staged files are the ones the
+ * index changes. A deleted file is not a file any more and a type change is,
+ * so the filter keeps additions, copies, modifications, renames and type
+ * changes. The list is computed once per run and used by every staged gate,
+ * so two gates cannot disagree about what is staged.
+ */
+function stagedFiles(): string[] {
+  return git("diff", "--cached", "--name-only", "-z", "--diff-filter=ACMRT", "HEAD").split("\0").filter(Boolean);
+}
+
+function runStagedG9(ctx: GateContext): StagedGateResult {
+  const root = ctx.root;
+  const notChecked =
+    "the red-on-base half of the G9 replay is not checked at the staged scope; the pull-request G9 owns the red-to-green replay";
+  let stagedTests: string[] = [];
+  let checked = "no staged test file was checked";
+  try {
+    const policy = JSON.parse(readFileSync(join(root, ".superman/ci/bootstrap.json"), "utf8"));
+    const globs = policy?.test?.files;
+    if (
+      policy.version !== 1 ||
+      !Array.isArray(globs) ||
+      !globs.length ||
+      globs.some((glob: unknown) => typeof glob !== "string" || !glob)
+    )
+      throw new GateFailure("incomplete-report", "G9: invalid bootstrap tool/test policy");
+    // The staged scope's input is the index: the staged files are the ones the
+    // index changes against HEAD. A deleted file is not a test file any more,
+    // and a type change is: the bytes under test must be the staged bytes.
+    const staged = stagedFiles();
+    stagedTests = staged.filter((file) => globs.some((glob: string) => matchesGlob(file, glob))).sort();
+    for (const file of stagedTests)
+      if (!lstatSync(join(root, file)).isFile())
+        throw new GateFailure("policy-refusal", `G9: a staged test file must be a regular file: ${file}`);
+    if (!stagedTests.length)
+      return {
+        gate: "G9",
+        status: "n/a",
+        scope: "staged",
+        reason: `no staged file is a test file (${staged.length} staged file(s); declared test files: ${globs.join(", ")})`,
+        checked,
+        notChecked,
+      };
+    stagedToolIdentities(ctx, ctx.tools);
+    checked = "the staged test files were run against the staged content";
+    runStagedTestFiles(ctx, stagedTests);
+    return { gate: "G9", status: "pass", scope: "staged", stagedTests, checked, notChecked };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    const kind = failureKind(error);
+    console.error(`G9: ${reason}`);
+    return {
+      gate: "G9",
+      status: "fail",
+      scope: "staged",
+      reason,
+      ...(kind ? { kind } : {}),
+      ...(stagedTests.length ? { stagedTests } : {}),
+      checked,
+      notChecked,
+    };
   }
 }
 function committedInputsMatch(sha: string): boolean {
@@ -102,7 +280,9 @@ try {
   receipt.baseSha = git("rev-parse", "--verify", "--end-of-options", `${values.base}^{commit}`);
   receipt.evaluatedSha = git("rev-parse", "--verify", "HEAD^{commit}");
   receipt.headSha = receipt.evaluatedSha;
-  receipt.branch = process.env.HEAD_REF;
+  // A local run has no pull-request reference: it binds the local branch. The
+  // staged scope needs it because a pre-commit run has no PR identity.
+  receipt.branch = process.env.HEAD_REF ?? gitOptional("symbolic-ref", "--quiet", "--short", "HEAD") ?? "";
   if (process.env.GITHUB_ACTIONS === "true" || process.env.GITHUB_EVENT_PATH) {
     if (process.env.GITHUB_EVENT_NAME !== "pull_request" || !process.env.GITHUB_EVENT_PATH)
       throw new Error("G9: missing CI pull-request identity evidence");
@@ -144,15 +324,9 @@ try {
     receipt.headSha = git("rev-parse", "--verify", `${pr.head.sha}^{commit}`);
     receipt.testedMergeSha = receipt.evaluatedSha;
     receipt.eventMergeSha = eventMergeSha ?? null;
-  } else if (git("symbolic-ref", "--quiet", "--short", "HEAD") !== receipt.branch)
-    throw new Error("G9: HEAD_REF does not match the local branch");
-  if (
-    git("status", "--porcelain=v1", "-z", "--untracked-files=all") ||
-    !committedInputsMatch(String(receipt.evaluatedSha))
-  )
-    throw new Error("G9: dirty inputs; commit or preserve them before replay");
+  }
   const runG9 = (): GateResult => {
-    const branch = process.env.HEAD_REF ?? "";
+    const branch = String(receipt.branch);
     let reason: string | undefined;
     if (/^spec\/[a-z0-9][a-z0-9-]*$/u.test(branch)) reason = "spec-kind";
     else if (/^chore\/(?:wiki|skills)-[a-z0-9-]+$/u.test(branch)) reason = "chore-kind";
@@ -187,20 +361,74 @@ try {
       return { gate: "G9", status: "pass" };
     }
   };
-  const gates = Array.from({ length: 11 }, (_, i) => `G${i + 1}`);
-  const selected = values.gate ? [values.gate] : gates;
+  const gates = ALL_GATES;
+  const stage = values.stage ?? (process.env.GITHUB_ACTIONS === "true" ? "ci" : "pre-pr");
+  if (!["pre-commit", "pre-pr", "ci"].includes(stage)) throw new Error("Unknown raw stage selector");
+  receipt.stage = stage;
+  const declared = stagePolicy(process.cwd(), stage);
+  // The preconditions depend on the stage's scope, so they are resolved here
+  // rather than before the stage is known.
+  if (declared.scope === "staged") {
+    // A staged run's input is the index. The working tree must equal the
+    // index — no tracked file may carry an unstaged modification — so the
+    // bytes the checks read are the staged bytes. The committed tree
+    // deliberately differs from disk here: staging a modification is exactly
+    // what a pre-commit run is for, so the commit is not the comparison base
+    // for this scope. The index identity is recorded, and re-checked after
+    // the run, so the result binds the staged snapshot.
+    if (unstagedChanges()) throw new Error("G9: unstaged changes present; stage them before the staged checks run");
+    receipt.stagedInputsId = stagedInputsId();
+  } else if (process.env.GITHUB_ACTIONS !== "true" && !process.env.GITHUB_EVENT_PATH) {
+    // A local full run binds its pull-request reference: the branch it names must
+    // be the one checked out, and the tree it evaluates must be committed.
+    if ((gitOptional("symbolic-ref", "--quiet", "--short", "HEAD") ?? "") !== receipt.branch)
+      throw new Error("G9: HEAD_REF does not match the local branch");
+    if (
+      git("status", "--porcelain=v1", "-z", "--untracked-files=all") ||
+      !committedInputsMatch(String(receipt.evaluatedSha))
+    )
+      throw new Error("G9: dirty inputs; commit or preserve them before replay");
+  }
+  // The identity this run resolved is recorded even when a later guard
+  // refuses it, so a refused receipt still names the policy it refused.
+  receipt.profile = runProfile(process.cwd(), stage);
+  // A stage declared full must declare the complete inventory, exactly once.
+  assertFullStage(stage, declared);
+  if (declared.feedback === "full") {
+    // One policy, two hosts: the full local pre-PR run and the CI run must
+    // declare the same gate inventory and the same feedback kind. The two
+    // declarations are compared as they are written, so a divergence in
+    // either is a refusal rather than a silent pass.
+    const local = stagePolicy(process.cwd(), "pre-pr");
+    const remote = stagePolicy(process.cwd(), "ci");
+    if (local.feedback !== remote.feedback || JSON.stringify(local.gates) !== JSON.stringify(remote.gates))
+      throw new GateFailure(
+        "policy-refusal",
+        "The full local pre-PR run and the CI run must declare one gate inventory",
+      );
+  }
+  const selected = values.gate ? [values.gate] : declared.gates;
   if (selected.some((gate) => !gates.includes(gate))) throw new Error("Unknown raw gate selector");
   receipt.scope = selected;
+  receipt.feedback = values.gate ? "scoped" : declared.feedback;
+  receipt.satisfiesFullBar = !values.gate && declared.feedback === "full";
+  // The file scope the run actually checked: the staged files, or the whole
+  // repository. It is recorded beside the gate selection so a reader can tell
+  // how much was checked from how many gates ran.
+  receipt.inputScope = (values.gate ? "full" : declared.scope) as StageScope;
   const tools: Record<string, unknown> = {};
   receipt.tools = tools;
   const context = {
     root: process.cwd(),
     baseSha: String(receipt.baseSha),
     headSha: String(receipt.headSha),
-    branch: process.env.HEAD_REF ?? "",
+    // The branch this run resolved. A local run has no pull-request
+    // reference, so the resolved local branch is what the policy classifies.
+    branch: String(receipt.branch),
     env,
     tools,
-    fullRun: !values.gate,
+    stage: (values.gate ? "scoped" : stage) as "scoped" | "pre-commit" | "pre-pr" | "ci",
+    scope: (values.gate ? "full" : declared.scope) as StageScope,
   };
   const results: Record<string, unknown>[] = [];
   let policyError: string | undefined;
@@ -208,7 +436,13 @@ try {
     receipt.policyPreflight = await directGate("G4", context);
   } catch (error) {
     policyError = error instanceof Error ? error.message : String(error);
-    receipt.policyPreflight = { gate: "G4", status: "fail", reason: policyError };
+    const kind = failureKind(error);
+    receipt.policyPreflight = {
+      gate: "G4",
+      status: "fail",
+      reason: policyError,
+      ...(kind ? { kind } : {}),
+    };
     console.error(policyError);
   }
   for (const gate of selected) {
@@ -219,29 +453,57 @@ try {
     try {
       const result =
         gate === "G9"
-          ? runG9()
+          ? context.scope === "staged"
+            ? runStagedG9(context)
+            : runG9()
           : gate === "G8" && !context.branch.startsWith("ticket/")
             ? { gate, status: "n/a", reason: "spec/chore kind (no ticket traceability)" }
             : gate === "G4" || gate === "G8"
               ? { gate, status: "pass", sharedCheck: "G4/G8 policy preflight" }
-              : await directGate(gate, context);
+              : gate === "G5" || gate === "G6"
+                ? qualityGate(gate, context.root, context.baseSha, context.headSha, context.env, {
+                    scope: context.scope,
+                    changedFiles: context.scope === "staged" ? stagedFiles() : [],
+                  })
+                : await directGate(gate, context);
       results.push(result);
       console.log(`${gate}: ${result.status}`);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      results.push({ gate, status: "fail", reason });
+      const kind = failureKind(error);
+      results.push({ gate, status: "fail", reason, ...(kind ? { kind } : {}) });
       console.error(`${gate}: ${reason}`);
     }
   }
+  // Complete result accounting: one recorded result per selected gate, no
+  // gate recorded twice, and no result outside the selected scope. A stage
+  // inventory that names the same gate twice fails here rather than
+  // producing two results for one gate.
+  const recorded = results.map((result) => String(result.gate));
+  const scope = new Set(selected);
+  if (
+    recorded.length !== selected.length ||
+    new Set(recorded).size !== recorded.length ||
+    recorded.some((gate) => !scope.has(gate)) ||
+    selected.some((gate) => !recorded.includes(gate))
+  )
+    throw new GateFailure(
+      "incomplete-report",
+      `Incomplete result accounting: ${recorded.length} result(s) for ${selected.length} selected gate(s): ${recorded.join(", ")}`,
+    );
   receipt.results = results;
   const failed = results.some((result) => result.status === "fail");
-  receipt.verdict = failed ? "fail" : "pass";
+  // A partial or scoped run never satisfies the full bar; only a complete
+  // full-stage evaluation may be reported as a pass.
+  receipt.verdict = failed ? "fail" : receipt.satisfiesFullBar ? "pass" : "partial-feedback";
   if (failed) process.exitCode = 1;
-  if (
+  const inputsChanged =
     git("rev-parse", "--verify", "HEAD^{commit}") !== receipt.evaluatedSha ||
-    git("status", "--porcelain=v1", "-z", "--untracked-files=all") ||
-    !committedInputsMatch(String(receipt.evaluatedSha))
-  ) {
+    (declared.scope === "staged"
+      ? receipt.stagedInputsId !== stagedInputsId() || unstagedChanges()
+      : Boolean(git("status", "--porcelain=v1", "-z", "--untracked-files=all")) ||
+        !committedInputsMatch(String(receipt.evaluatedSha)));
+  if (inputsChanged) {
     const reason =
       "Inputs changed during raw checks; evidence does not bind the committed snapshot (caller changes were preserved)";
     receipt.inputIntegrity = { status: "fail", reason };
@@ -252,7 +514,11 @@ try {
 } catch (error) {
   receipt.verdict = "fail";
   receipt.error = error instanceof Error ? error.message : String(error);
-  receipt.results = [{ gate: values.gate ?? "G1–G11", status: "fail", reason: receipt.error }];
+  const kind = failureKind(error);
+  receipt.errorKind = kind;
+  receipt.results = [
+    { gate: values.gate ?? "G1–G11", status: "fail", reason: receipt.error, ...(kind ? { kind } : {}) },
+  ];
   console.error(receipt.error);
   process.exitCode = 1;
 }

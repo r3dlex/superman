@@ -10,6 +10,7 @@ The approver reviews the exact PR head; CI tests its merge with a recorded base.
 - Tickets: [`.scratch/superman-v0/issues/`](.scratch/superman-v0/issues/)
 - Decisions: [`docs/adr/`](docs/adr/) (why) and [`.archgate/adrs/`](.archgate/adrs/) (enforced rules)
 - Glossary: [`GLOSSARY.md`](GLOSSARY.md)
+- Workflows: [`WORKFLOW.md`](WORKFLOW.md) — which command answers which question, and what each result proves
 
 The first usable v0 release includes change-aware tests and verified-project typechecking, all M7b providers and cache tiers, and shared ticket claims. Its checker runs from the PR itself: tests and human review, not an independent evaluator, are the accepted trust boundary. Q35's confirmed quality plan requires full approved-corpus duplication before merge, conservative required-check selection, fresh owner-governed critical cases and quarantine on the first confirmed selection miss or stale cached pass; see spec §5.4–5.7. This supersedes the earlier accepted scoped-G5/heuristic-Elixir omissions, not the remaining implementation/evidence work.
 

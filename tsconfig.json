@@ -10,5 +10,5 @@
     "types": ["node"],
     "skipLibCheck": false
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", ".superman/ci/**/*.ts", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", ".superman/ci/**/*.ts", ".scratch/superman-v0/**/*.ts", "vitest.config.ts"]
 }

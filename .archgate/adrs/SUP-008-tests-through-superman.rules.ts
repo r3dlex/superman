@@ -18,6 +18,15 @@ const DIRECT = [
   /\bnx\s+(affected|run-many)\b/u,
   /\bmoon\s+(run|ci)\b/u,
   /\bturbo\s+run\b/u,
+  // ADR 0016: the Deno runtime is reached through `superman gate` too. `deno
+  // test` is the counterpart of the banned `vitest`/`jest` runners; `deno lint`
+  // and `deno fmt` are the `biome lint|format` counterparts; `deno coverage` is
+  // a coverage gate invocation, and this repository's gates include coverage
+  // (G5/G6); and `deno task` is the indirection SUP-008 exists to catch. The
+  // Deno typecheck is not listed: the rule above keeps the typecheck out of
+  // SUP-008's scope and leaves it to SUP-006. `deno bench` is not listed
+  // either: a benchmark run is neither a test nor a gate.
+  /\bdeno\s+(test|lint|fmt|coverage|task)\b/u,
 ];
 
 interface Line {

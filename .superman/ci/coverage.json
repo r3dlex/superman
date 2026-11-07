@@ -1,9 +1,72 @@
 {
   "version": 1,
-  "minimum": { "lines": 90, "statements": 90, "branches": 90, "functions": 90 },
+  "minimum": {
+    "lines": 90,
+    "statements": 90,
+    "branches": 90,
+    "functions": 90
+  },
   "target": 100,
   "node": [".superman/ci/**/*.ts", ".archgate/adrs/*.rules.ts"],
   "product": ["src/**/*.ts"],
-  "exclude": ["**/*.test.ts", "**/*.d.ts", ".superman/ci/raw-fixture.ts"],
-  "tests": [".superman/ci/**/*.test.ts"]
+  "candidate": {
+    "root": ".scratch/superman-v0",
+    "patterns": [".scratch/superman-v0/**/*.ts", ".scratch/superman-v0/**/*.mjs"],
+    "members": [
+      ".scratch/superman-v0/deno-checker.manifest.ts",
+      ".scratch/superman-v0/deno-coverage-independent.ts",
+      ".scratch/superman-v0/deno-coverage-measurement.ts",
+      ".scratch/superman-v0/gate1-loop-check.mjs"
+    ],
+    "suites": [
+      {
+        "kind": "test",
+        "file": ".scratch/superman-v0/deno-checker.probe.test.ts",
+        "pattern": "^the manifest generator transforms and reverses a tiny fixture$",
+        "environment": {
+          "SUPERMAN_STEP3_T0": "step3",
+          "SUPERMAN_STEP3_T1": "step3"
+        }
+      },
+      {
+        "kind": "test",
+        "file": ".scratch/superman-v0/deno-coverage-independent.probe.test.ts",
+        "pattern": "^(?:S5-|a fully hit identity function)",
+        "environment": {
+          "SUPERMAN_INDEPENDENT_ROOT": "independent"
+        }
+      },
+      {
+        "kind": "program",
+        "file": ".scratch/superman-v0/gate1-loop-check.mjs"
+      }
+    ]
+  },
+  "deno": {
+    "root": ".superman/deno-bootstrap",
+    "patterns": [".superman/deno-bootstrap/**/*.ts"],
+    "members": [
+      ".superman/deno-bootstrap/archgate-arm64-build.ts",
+      ".superman/deno-bootstrap/archgate-linux-arm64-wizard.ts",
+      ".superman/deno-bootstrap/coverage.ts",
+      ".superman/deno-bootstrap/direct-gates.ts",
+      ".superman/deno-bootstrap/exec.ts",
+      ".superman/deno-bootstrap/fixture-env.ts",
+      ".superman/deno-bootstrap/pr-policy.ts",
+      ".superman/deno-bootstrap/provision-tools.ts",
+      ".superman/deno-bootstrap/quality.ts",
+      ".superman/deno-bootstrap/raw-gates.ts",
+      ".superman/deno-bootstrap/replay.ts"
+    ],
+    "collector": ".superman/deno-bootstrap/coverage.ts",
+    "receipt": ".superman-ci/coverage-deno-*/coverage-receipt.json"
+  },
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.d.ts",
+    ".superman/ci/raw-fixture.ts",
+    ".superman/ci/critical/fixture-context.ts",
+    "vitest.config.ts"
+  ],
+  "tests": [".superman/ci/*.test.ts"]
 }

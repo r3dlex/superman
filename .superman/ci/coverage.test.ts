@@ -1,6 +1,7 @@
 // Approved coverage-command process seam; real collectors, owned tiny repositories.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   copyFileSync,
@@ -19,6 +20,12 @@ import { fixtureEnvironment } from "./fixture-env.ts";
 
 const source = resolve(import.meta.dirname, "../..");
 const isolated = fixtureEnvironment();
+
+// The binding point both carried coverage floors share: the merge-bound
+// cutover, when the Deno root becomes the required evaluator. André settled
+// both floors there on 2026-11-04, so the Node gate and the Deno collector
+// name the same point.
+const MERGE_BOUND_BINDING = "the merge-bound cutover, when the Deno root becomes the required evaluator";
 
 function fixture(t: TestContext) {
   // The coverage command measures from realpathSync(process.cwd()); the fixture
@@ -41,6 +48,17 @@ function fixture(t: TestContext) {
     mkdirSync(dirname(join(root, file)), { recursive: true });
     copyFileSync(join(source, file), join(root, file));
   }
+  // The fixture repository owns no candidate surface, no candidate host and
+  // no Deno surface: the candidate and Deno scopes stay declared, and their
+  // inventories are exercised by the dedicated candidate and Deno tests.
+  const policy = JSON.parse(readFileSync(join(root, ".superman/ci/coverage.json"), "utf8"));
+  policy.candidate.members = [];
+  policy.candidate.suites = [];
+  policy.deno.members = [];
+  policy.tests = [".superman/ci/**/*.test.ts"];
+  writeFileSync(join(root, ".superman/ci/coverage.json"), JSON.stringify(policy));
+  mkdirSync(join(root, policy.candidate.root), { recursive: true });
+  mkdirSync(join(root, policy.deno.root), { recursive: true });
   write("package.json", readFileSync(join(source, "package.json"), "utf8"));
   write(".gitignore", "node_modules\n.superman-ci/\n");
   git("init", "--quiet", "--initial-branch=main");
@@ -353,6 +371,423 @@ test("coverage cannot silently omit repository runtime code outside the modeled 
   assert.match(result.output, /Coverage scope does not model.*tools\/unmodeled\.ts/u);
 });
 
+test("coverage rejects a source file that no declared scope models and names its path", (t) => {
+  const repo = coveredBootstrap(t);
+  repo.write("tools/unmodeled.ts", "export function untested() { return 'outside every declared scope'; }\n");
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /Coverage scope does not model source file: tools\/unmodeled\.ts/u);
+});
+
+function candidateFixture(t: TestContext) {
+  const repo = fixture(t);
+  const policy = JSON.parse(readFileSync(join(repo.root, ".superman/ci/coverage.json"), "utf8"));
+  policy.candidate = {
+    root: ".superman/ci",
+    patterns: [".superman/ci/deno-*.ts"],
+    members: [".superman/ci/deno-subject.ts"],
+    suites: [{ kind: "test", file: ".superman/ci/deno-subject.test.ts", pattern: "^candidate subject$" }],
+  };
+  repo.write(".superman/ci/coverage.json", JSON.stringify(policy));
+  repo.write(
+    ".superman/ci/subject.ts",
+    "export function sign(value: number) { return value > 0 ? 'positive' : 'other'; }\n",
+  );
+  repo.write(
+    ".superman/ci/subject.test.ts",
+    'import assert from "node:assert/strict"; import { test } from "node:test"; import { sign } from "./subject.ts"; test("both sides", () => { assert.equal(sign(1), "positive"); assert.equal(sign(0), "other"); });\n',
+  );
+  repo.write(".superman/ci/deno-subject.ts", "export function subject() { return 'candidate'; }\n");
+  repo.write(
+    ".superman/ci/deno-subject.test.ts",
+    'import assert from "node:assert/strict"; import { test } from "node:test"; import { subject } from "./deno-subject.ts"; test("candidate subject", () => assert.equal(subject(), "candidate"));\n',
+  );
+  return repo;
+}
+
+test("the runtime-reachable-excluded-module guard covers the candidate scope", (t) => {
+  const repo = candidateFixture(t);
+  repo.write("tools/hidden.test.ts", "export function hidden() { return 'hidden'; }\n");
+  repo.write(
+    ".superman/ci/deno-subject.ts",
+    'import "../../tools/hidden.test.ts";\nexport function subject() { return "candidate"; }\n',
+  );
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(
+    result.output,
+    /Coverage scope does not model runtime-reachable excluded module: tools\/hidden\.test\.ts/u,
+  );
+});
+
+test("a runtime-reachable excluded file matching the candidate scope cannot enlarge the declared inventory", (t) => {
+  const repo = candidateFixture(t);
+  repo.write(".superman/ci/deno-hidden.test.ts", "export function hidden() { return 'hidden'; }\n");
+  repo.write(
+    ".superman/ci/deno-subject.ts",
+    'import "./deno-hidden.test.ts";\nexport function subject() { return "candidate"; }\n',
+  );
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(
+    result.output,
+    /Coverage candidate inventory does not match its manifest: resolved 2 of 1 declared members/u,
+  );
+  assert.equal(result.directory, undefined, "An enlarged inventory cannot publish measurements");
+});
+
+test("a candidate file with a real source map directive is rejected", (t) => {
+  const repo = candidateFixture(t);
+  repo.write(
+    ".superman/ci/deno-subject.ts",
+    "export function subject() { return 'candidate'; }\n//# sourceMappingURL=data:application/json;base64,e30=\n",
+  );
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(
+    result.output,
+    /Coverage source maps require reviewed input modeling: \.superman\/ci\/deno-subject\.ts/u,
+  );
+});
+
+test("a candidate inventory below the floors is a carried obligation, not a run failure", (t) => {
+  const repo = candidateFixture(t);
+  repo.write(
+    ".superman/ci/deno-subject.ts",
+    "export function subject() { return 'candidate'; }\nexport function untested() { return 'never imported'; }\n",
+  );
+  const result = repo.run();
+  assert.equal(result.status, 0, result.output);
+  assert.ok(result.directory);
+  const receipt = JSON.parse(readFileSync(join(result.directory, "coverage-receipt.json"), "utf8"));
+  // The floors bind the shipped inventories; the candidate's shortfall is
+  // measured, reported and carried, not silently ignored and not a run failure.
+  assert.equal(receipt.verdict, "pass");
+  assert.equal(receipt.carriedObligations.length, 1);
+  assert.equal(receipt.carriedObligations[0].inventory, "candidate");
+  // The binding point is the settled one, in full: André settled both carried
+  // coverage floors at the merge-bound cutover on 2026-11-04. Exact equality,
+  // so a regression to the superseded wording fails here.
+  assert.equal(receipt.carriedObligations[0].binds, MERGE_BOUND_BINDING);
+  assert.ok(receipt.carriedObligations[0].metrics.functions);
+  assert.match(result.output, /Coverage carried obligation \(candidate\)/u);
+  assert.equal(receipt.inventories.candidate.total.functions.covered, 1);
+});
+
+test("the candidate inventory is measured and reported separately from the node inventory", (t) => {
+  const repo = candidateFixture(t);
+  const result = repo.run();
+  assert.equal(result.status, 0, result.output);
+  assert.ok(result.directory);
+  const receipt = JSON.parse(readFileSync(join(result.directory, "coverage-receipt.json"), "utf8"));
+  assert.deepEqual(Object.keys(receipt.inventories).sort(), ["candidate", "node"]);
+  assert.equal(receipt.inventories.candidate.files, 1);
+  assert.equal(receipt.inventories.candidate.total.functions.covered, 1);
+  assert.equal(receipt.inventories.node.files, 1);
+  assert.equal(receipt.total.functions.covered, 2);
+  // The candidate inventory is measured by another process: its receipt binds
+  // the suites that measured it, their outcomes and the host's identity.
+  assert.equal(receipt.candidateMeasurement.suites.length, 1);
+  assert.equal(receipt.candidateMeasurement.suites[0].file, ".superman/ci/deno-subject.test.ts");
+  assert.equal(receipt.candidateMeasurement.suites[0].outcome, "pass");
+  assert.equal(receipt.candidateMeasurement.candidateRuntime, "not executed");
+  assert.match(receipt.candidateMeasurement.host.sha256, /^[a-f0-9]{64}$/u);
+  const candidate = JSON.parse(readFileSync(join(result.directory, "candidate/coverage-summary.json"), "utf8"));
+  assert.deepEqual(
+    Object.keys(candidate).filter((key) => key !== "total"),
+    [join(repo.root, ".superman/ci/deno-subject.ts")],
+  );
+});
+
+test("a declared candidate inventory that is incomplete fails visibly instead of shrinking the aggregate", async (t) => {
+  const cases = [
+    {
+      name: "the declared root is missing",
+      declaration: {
+        root: ".superman/ci/deno-candidate",
+        patterns: [".superman/ci/deno-*.ts"],
+        members: [".superman/ci/deno-subject.ts"],
+      },
+      expected: /Coverage candidate inventory is missing its declared root/u,
+    },
+    {
+      name: "a declared member matches no scope",
+      declaration: {
+        root: ".superman/ci",
+        patterns: [".superman/ci/deno-*.ts"],
+        members: ["tools/deno-subject.ts"],
+      },
+      expected: /Coverage candidate inventory member matches no declared scope: tools\/deno-subject\.ts/u,
+    },
+    {
+      name: "the scope resolves to fewer files than the manifest declares",
+      declaration: {
+        root: ".superman/ci",
+        patterns: [".superman/ci/deno-*.ts"],
+        members: [".superman/ci/deno-absent.ts"],
+      },
+      expected: /Coverage candidate inventory is missing a declared member: \.superman\/ci\/deno-absent\.ts/u,
+    },
+    {
+      name: "the scope resolves to more files than the manifest declares",
+      declaration: {
+        root: ".superman/ci",
+        patterns: [".superman/ci/deno-*.ts"],
+        members: [],
+      },
+      expected: /Coverage candidate inventory does not match its manifest: resolved 1 of 0 declared members/u,
+    },
+  ];
+  for (const item of cases) {
+    await t.test(item.name, (t) => {
+      const repo = coveredBootstrap(t);
+      repo.write(".superman/ci/deno-subject.ts", "export function subject() { return 'candidate'; }\n");
+      repo.write("tools/deno-subject.ts", "export function subject() { return 'candidate'; }\n");
+      const policy = JSON.parse(readFileSync(join(repo.root, ".superman/ci/coverage.json"), "utf8"));
+      policy.candidate = item.declaration;
+      repo.write(".superman/ci/coverage.json", JSON.stringify(policy));
+      const result = repo.run();
+      assert.equal(result.status, 1, result.output);
+      assert.match(result.output, item.expected);
+      assert.equal(result.directory, undefined, "An incomplete inventory cannot publish measurements");
+    });
+  }
+});
+
+const denoMembers = [".superman/deno-bootstrap/coverage.ts", ".superman/deno-bootstrap/subject.ts"];
+
+const denoCounts = {
+  lines: { covered: 40, total: 100 },
+  statements: { covered: 30, total: 100 },
+  branches: { covered: 20, total: 100 },
+  functions: { covered: 4, total: 10 },
+};
+
+function denoFixture(t: TestContext, declaration?: Record<string, unknown>) {
+  const repo = fixture(t);
+  const policy = JSON.parse(readFileSync(join(repo.root, ".superman/ci/coverage.json"), "utf8"));
+  policy.deno = {
+    root: ".superman/deno-bootstrap",
+    patterns: [".superman/deno-bootstrap/**/*.ts"],
+    members: denoMembers,
+    collector: ".superman/deno-bootstrap/coverage.ts",
+    receipt: ".superman-ci/coverage-deno-*/coverage-receipt.json",
+    ...declaration,
+  };
+  repo.write(".superman/ci/coverage.json", JSON.stringify(policy));
+  repo.write(".superman/deno-bootstrap/subject.ts", "export function subject() { return 'deno'; }\n");
+  repo.write(".superman/deno-bootstrap/coverage.ts", "export const collector = 'deno collector';\n");
+  repo.write(
+    ".superman/ci/subject.ts",
+    "export function sign(value: number) { return value > 0 ? 'positive' : 'other'; }\n",
+  );
+  repo.write(
+    ".superman/ci/subject.test.ts",
+    'import assert from "node:assert/strict"; import { test } from "node:test"; import { sign } from "./subject.ts"; test("both sides", () => { assert.equal(sign(1), "positive"); assert.equal(sign(0), "other"); });\n',
+  );
+  return repo;
+}
+
+// The Deno collector's own receipt, as the Deno collector writes it.
+function denoReceipt(
+  repo: { root: string },
+  sources: string[],
+  counts: Record<string, { covered: number; total: number }>,
+) {
+  const total = Object.fromEntries(
+    Object.entries(counts).map(([name, value]) => [
+      name,
+      { total: value.total, covered: value.covered, skipped: 0, pct: (value.covered * 100) / value.total },
+    ]),
+  );
+  return {
+    schema: "superman.coverage/1",
+    mergeAuthority: "none",
+    requestedMode: "full",
+    execution: "full",
+    cachedFiles: 0,
+    fallbackReason: null,
+    evaluatedSha: "0".repeat(40),
+    platform: "darwin-arm64",
+    minimum: { lines: 90, statements: 90, branches: 90, functions: 90 },
+    target: 100,
+    inputsHash: "0".repeat(64),
+    sources,
+    // The collector that wrote the receipt, by file and digest: the gate
+    // binds a receipt to the collector revision that produced it.
+    collector: {
+      file: ".superman/deno-bootstrap/coverage.ts",
+      sha256: createHash("sha256")
+        .update(readFileSync(join(repo.root, ".superman/deno-bootstrap/coverage.ts")))
+        .digest("hex"),
+    },
+    tools: {
+      node: "v26.5.0",
+      c8: "12.0.0",
+      vitest: "5.0.5",
+      coverageV8: "5.0.5",
+      conversion: "ast-v8-to-istanbul (locked, Node conversion host)",
+    },
+    inventories: { deno: { files: sources.length, total } },
+    total,
+    carriedObligations: [
+      {
+        inventory: "deno",
+        metrics: Object.fromEntries(
+          Object.entries(counts).map(([name, value]) => [name, `${value.covered}/${value.total}`]),
+        ),
+        binds: "the merge-bound cutover, when the Deno root becomes the required evaluator",
+      },
+    ],
+    // The measurement misses the floor, so the verdict is the truth about it.
+    verdict: "fail",
+  };
+}
+
+test("the Deno operational surface is measured by the Deno collector's receipt, not by the Node host", (t) => {
+  const repo = denoFixture(t);
+  repo.write(
+    ".superman-ci/coverage-deno-fixture/coverage-receipt.json",
+    JSON.stringify(denoReceipt(repo, denoMembers, denoCounts)),
+  );
+  const result = repo.run();
+  assert.equal(result.status, 0, result.output);
+  assert.ok(result.directory);
+  const receipt = JSON.parse(readFileSync(join(result.directory, "coverage-receipt.json"), "utf8"));
+  // The Deno surface is bound from the Deno collector's own receipt: the
+  // collector's identity, the receipt that carries it, the declared members
+  // and the four metrics with their covered/total tuples.
+  assert.equal(receipt.denoMeasurement.collector.file, ".superman/deno-bootstrap/coverage.ts");
+  assert.match(receipt.denoMeasurement.collector.sha256, /^[a-f0-9]{64}$/u);
+  assert.equal(receipt.denoMeasurement.receipt, ".superman-ci/coverage-deno-fixture/coverage-receipt.json");
+  assert.match(receipt.denoMeasurement.receiptSha256, /^[a-f0-9]{64}$/u);
+  assert.deepEqual(receipt.denoMeasurement.members, denoMembers);
+  assert.deepEqual(receipt.denoMeasurement.metrics, denoCounts);
+  // The Deno surface is reported on its own and is never folded into the Node
+  // or product inventories.
+  assert.equal(receipt.inventories.deno.files, 2);
+  assert.equal(receipt.inventories.deno.total.lines.covered, 40);
+  assert.equal(receipt.inventories.node.files, 1);
+  assert.ok(!receipt.sources.includes(".superman/deno-bootstrap/subject.ts"));
+  // Its floor is a carried obligation, not a pass and not a run failure.
+  assert.equal(receipt.verdict, "pass");
+  const obligation = receipt.carriedObligations.find((entry: { inventory: string }) => entry.inventory === "deno");
+  assert.deepEqual(obligation.metrics, {
+    lines: "40/100",
+    statements: "30/100",
+    branches: "20/100",
+    functions: "4/10",
+  });
+  // The Deno floor's binding point is the Deno collector's own recorded one,
+  // carried forward verbatim: it is the same string the candidate floor names,
+  // so the Node gate and the Deno collector say one thing.
+  assert.equal(obligation.binds, MERGE_BOUND_BINDING);
+  assert.match(result.output, /Coverage carried obligation \(deno\)/u);
+});
+
+test("a declared Deno inventory that is incomplete fails visibly instead of shrinking the aggregate", async (t) => {
+  const cases = [
+    {
+      name: "the declared root is missing",
+      declaration: { root: ".superman/deno-bootstrap-absent" },
+      expected: /Coverage Deno inventory is missing its declared root/u,
+    },
+    {
+      name: "a declared member matches no scope",
+      declaration: { members: ["tools/deno-subject.ts"] },
+      expected: /Coverage Deno inventory member matches no declared scope: tools\/deno-subject\.ts/u,
+    },
+    {
+      name: "the scope resolves to fewer files than the manifest declares",
+      declaration: { members: [".superman/deno-bootstrap/absent.ts"] },
+      expected: /Coverage Deno inventory is missing a declared member: \.superman\/deno-bootstrap\/absent\.ts/u,
+    },
+    {
+      name: "the scope resolves to more files than the manifest declares",
+      declaration: { members: [] },
+      expected: /Coverage Deno inventory does not match its manifest: resolved 2 of 0 declared members/u,
+    },
+  ];
+  for (const item of cases) {
+    await t.test(item.name, (t) => {
+      const repo = denoFixture(t, item.declaration);
+      repo.write("tools/deno-subject.ts", "export function subject() { return 'deno'; }\n");
+      const result = repo.run();
+      assert.equal(result.status, 1, result.output);
+      assert.match(result.output, item.expected);
+      assert.equal(result.directory, undefined, "An incomplete inventory cannot publish measurements");
+    });
+  }
+});
+
+test("the Deno surface cannot be measured without the Deno collector's receipt", (t) => {
+  const repo = denoFixture(t);
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /Coverage Deno measurement receipt is absent/u);
+  assert.equal(result.directory, undefined, "An unmeasured Deno surface cannot publish measurements");
+});
+
+test("a Deno receipt that does not bind every declared member is refused", (t) => {
+  const repo = denoFixture(t);
+  repo.write(
+    ".superman-ci/coverage-deno-fixture/coverage-receipt.json",
+    JSON.stringify(denoReceipt(repo, [denoMembers[0]], denoCounts)),
+  );
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(
+    result.output,
+    /Coverage Deno measurement receipt does not bind every declared member: \.superman\/deno-bootstrap\/subject\.ts/u,
+  );
+  assert.equal(result.directory, undefined, "A partial Deno measurement cannot publish measurements");
+});
+
+test("a Deno receipt from a collector revision that no longer exists is refused", (t) => {
+  const repo = denoFixture(t);
+  const receipt = denoReceipt(repo, denoMembers, denoCounts);
+  // The receipt names a collector that is not the collector in the tree, so
+  // the measurement cannot be attributed to a collector revision.
+  receipt.collector.sha256 = "0".repeat(64);
+  repo.write(".superman-ci/coverage-deno-fixture/coverage-receipt.json", JSON.stringify(receipt));
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /Coverage Deno measurement receipt does not bind the current collector/u);
+  assert.equal(result.directory, undefined, "An unattributable Deno measurement cannot publish measurements");
+});
+
+test("the Deno measurement binds the receipt the current collector wrote", (t) => {
+  const repo = denoFixture(t);
+  // The receipt the collector in the tree wrote, and a stale receipt from
+  // another collector revision that was written afterwards. The gate binds
+  // the attributed one, not the newest.
+  repo.write(
+    ".superman-ci/coverage-deno-fixture/coverage-receipt.json",
+    JSON.stringify(denoReceipt(repo, denoMembers, denoCounts)),
+  );
+  const stale = denoReceipt(repo, denoMembers, denoCounts);
+  stale.collector.sha256 = "0".repeat(64);
+  repo.write(".superman-ci/coverage-deno-stale/coverage-receipt.json", JSON.stringify(stale));
+  const result = repo.run();
+  assert.equal(result.status, 0, result.output);
+  assert.ok(result.directory);
+  const receipt = JSON.parse(readFileSync(join(result.directory, "coverage-receipt.json"), "utf8"));
+  assert.equal(receipt.denoMeasurement.receipt, ".superman-ci/coverage-deno-fixture/coverage-receipt.json");
+});
+
+test("a Deno receipt that claims a pass while its metrics miss the floor is refused", (t) => {
+  const repo = denoFixture(t);
+  const receipt = denoReceipt(repo, denoMembers, denoCounts);
+  // The measurement misses the floor, so a receipt that claims a pass is a
+  // false green.
+  receipt.verdict = "pass";
+  repo.write(".superman-ci/coverage-deno-fixture/coverage-receipt.json", JSON.stringify(receipt));
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /Coverage Deno measurement receipt verdict does not match its metrics: pass/u);
+  assert.equal(result.directory, undefined, "A false Deno verdict cannot publish measurements");
+});
+
 test("coverage rejects an unmodeled extensionless Node program instead of reporting false 100 percent", (t) => {
   const repo = coveredBootstrap(t);
   repo.write(
@@ -415,14 +850,17 @@ test("coverage cannot hide observed runtime behind a preserved symlink identity"
 });
 
 test("coverage policy cannot add an exclusion for untested runtime code", (t) => {
-  const repo = coveredBootstrap(t);
-  repo.write(".superman/ci/unloaded.ts", "export function untested() { return 'hidden by policy'; }\n");
-  const policy = JSON.parse(readFileSync(join(repo.root, ".superman/ci/coverage.json"), "utf8"));
-  policy.exclude.push(".superman/ci/unloaded.ts");
-  repo.write(".superman/ci/coverage.json", JSON.stringify(policy));
-  const result = repo.run();
-  assert.equal(result.status, 1, result.output);
-  assert.match(result.output, /Coverage exclusions require reviewed test-only modeling/u);
+  for (const change of ["add", "drop"]) {
+    const repo = coveredBootstrap(t);
+    repo.write(".superman/ci/unloaded.ts", "export function untested() { return 'hidden by policy'; }\n");
+    const policy = JSON.parse(readFileSync(join(repo.root, ".superman/ci/coverage.json"), "utf8"));
+    if (change === "add") policy.exclude.push(".superman/ci/unloaded.ts");
+    else policy.exclude = policy.exclude.filter((entry: string) => entry !== "**/*.d.ts");
+    repo.write(".superman/ci/coverage.json", JSON.stringify(policy));
+    const result = repo.run();
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /Coverage exclusions require reviewed test-only modeling/u);
+  }
 });
 
 test("coverage rejects a test-time source change instead of certifying different bytes", (t) => {

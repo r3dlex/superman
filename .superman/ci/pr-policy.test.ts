@@ -193,6 +193,25 @@ test("compiler and quality configs are protected at the root and in nested proje
   }
 });
 
+test("Deno configuration inputs are protected at the root and in nested projects", (t) => {
+  for (const file of ["deno.json", "deno.jsonc", "deno.lock", "import_map.json", "packages/demo/deno.json"]) {
+    const repo = fixture(t, "ticket/demo-01");
+    repo.write(file, "{}\n");
+    const result = repo.check();
+    assert.equal(result.status, 1, `${file}\n${result.output}`);
+    assert.match(result.output, /G4: ticket PRs may not touch protected paths/u);
+  }
+});
+
+test("a spec-kind PR may change the Deno configuration inputs it declares", (t) => {
+  const repo = fixture(t, "spec/demo");
+  repo.write("wiki/log.md", "# Log\n\n## 2026-11-04\n\nPR #43: Deno configuration reviewed.\n");
+  repo.write("deno.json", '{ "imports": {} }\n');
+  repo.write("packages/demo/deno.lock", '{ "version": "4" }\n');
+  const result = repo.check();
+  assert.equal(result.status, 0, result.output);
+});
+
 test("moving compiler policy to an arbitrary referenced file does not make it ticket-writable", (t) => {
   const repo = fixture(t, "ticket/demo-01");
   repo.write("tsconfig.json", '{"extends":"./settings/shared.json"}\n');
@@ -440,6 +459,18 @@ test("a spec PR cannot reclassify product src as policy to authorize its own imp
   const result = repo.check();
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /spec-kind PRs may not change this path/u);
+});
+
+test("the root workflow map is a Gate 1 document, and a ticket PR may change it only as documentation", (t) => {
+  const spec = fixture(t, "spec/demo");
+  spec.write("WORKFLOW.md", "# superman workflows\n");
+  const allowed = spec.check();
+  assert.equal(allowed.status, 0, allowed.output);
+
+  const ticket = fixture(t, "ticket/demo-01");
+  ticket.write("WORKFLOW.md", "# superman workflows\n");
+  const documented = ticket.check();
+  assert.equal(documented.status, 0, documented.output);
 });
 
 test("package metadata stops being unrelated when an effective config imports it as policy", (t) => {

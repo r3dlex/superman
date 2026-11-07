@@ -227,6 +227,141 @@ test("SUP-001 reports every runtime dependency and invalid field value", async (
   }
 });
 
+test("SUP-001 reports a third-party import in the Deno graph and leaves the Node tree alone", async (t) => {
+  const repo = fixture(t, {
+    ".superman/deno-bootstrap/cli.ts": 'import chalk from "npm:chalk@5.3.0";\nexport const label = chalk;\n',
+    ".superman/deno-bootstrap/local.ts":
+      'import { readFile } from "node:fs/promises";\nexport const label = readFile;\n',
+    "src/cli.ts": 'import chalk from "npm:chalk@5.3.0";\nexport const label = chalk;\n',
+  });
+  const findings = await repo.check("SUP-001", "no-deno-runtime-deps");
+  assert.deepEqual(diagnostics(findings), [
+    {
+      message: "Third-party runtime import in the Deno runtime graph",
+      file: ".superman/deno-bootstrap/cli.ts",
+      line: 1,
+    },
+  ]);
+  assert.match(findings[0].fix ?? "", /ADR 0016 allows no npm, JSR or HTTP runtime dependency/u);
+});
+
+test("SUP-001 reports an import map alias that resolves to a third-party runtime dependency", async (t) => {
+  const repo = fixture(t, {
+    "import_map.json": JSON.stringify({ compilerOptions: {} }),
+    "deno.json": JSON.stringify({
+      imports: { chalk: "npm:chalk@5.3.0", bare: "chalk", notAString: 42 },
+      scopes: { "./vendor/": { scoped: "npm:chalk@5.3.0" } },
+    }),
+  });
+  const findings = await repo.check("SUP-001", "no-deno-runtime-deps");
+  assert.deepEqual(
+    findings.map((finding) => finding.message),
+    [
+      'Import map alias "chalk" resolves to the third-party runtime dependency "npm:chalk@5.3.0"',
+      'Import map alias "scoped" resolves to the third-party runtime dependency "npm:chalk@5.3.0"',
+    ],
+  );
+  assert.ok(findings.every((finding) => finding.file === "deno.json" && finding.line === undefined));
+});
+
+test("SUP-001 follows a local import map alias to the third-party import it reaches", async (t) => {
+  const repo = fixture(t, {
+    "deno.json": JSON.stringify({ imports: { chalk: "./vendor/chalk.ts" } }),
+    "vendor/chalk.ts": 'import { value } from "./deep.ts";\nexport default value;\n',
+    "vendor/deep.ts": 'import chalk from "npm:chalk@5.3.0";\nexport const value = chalk;\n',
+  });
+  const findings = await repo.check("SUP-001", "no-deno-runtime-deps");
+  assert.deepEqual(diagnostics(findings), [
+    {
+      message:
+        'Import map alias "chalk" resolves to "./vendor/chalk.ts", whose import graph reaches a third-party runtime dependency',
+      file: "vendor/deep.ts",
+      line: 1,
+    },
+  ]);
+});
+
+test("SUP-001 reads a Deno configuration with comments, trailing commas and escapes", async (t) => {
+  const repo = fixture(t, {
+    "deno.jsonc": [
+      "{",
+      "  // A line comment.",
+      "  /* A block comment. */",
+      '  "imports": {',
+      '    "escaped": "./vendor/a\\\\b.ts",',
+      "  },",
+      "}",
+      "// A trailing comment",
+    ].join("\n"),
+  });
+  assert.deepEqual(await repo.check("SUP-001", "no-deno-runtime-deps"), []);
+});
+
+test("SUP-001 refuses a Deno configuration that is not an object", async (t) => {
+  for (const content of ["null", '"text"', "[]"]) {
+    const repo = fixture(t, { "deno.json": content });
+    await assert.rejects(repo.check("SUP-001", "no-deno-runtime-deps"), {
+      message: "Deno configuration is not an object: deno.json",
+    });
+  }
+});
+
+test("SUP-001 refuses a Deno configuration whose comment or string is unterminated", async (t) => {
+  const comment = fixture(t, { "deno.jsonc": '{ "imports": { /* unterminated\n' });
+  await assert.rejects(comment.check("SUP-001", "no-deno-runtime-deps"), {
+    message: "Unterminated Deno configuration comment",
+  });
+  const truncated = fixture(t, { "deno.jsonc": '{ "imports": { "a": "b\\' });
+  await assert.rejects(truncated.check("SUP-001", "no-deno-runtime-deps"), SyntaxError);
+});
+
+test("SUP-001 resolves a local alias against the configuration that declares it", async (t) => {
+  const repo = fixture(t, {
+    ".superman/deno-bootstrap/deno.json": JSON.stringify({
+      imports: { parent: "../vendor/chalk.ts", doubled: ".//./vendor/chalk.ts" },
+    }),
+    ".superman/vendor/chalk.ts": 'import chalk from "npm:chalk@5.3.0";\nexport default chalk;\n',
+  });
+  const findings = await repo.check("SUP-001", "no-deno-runtime-deps");
+  assert.deepEqual(diagnostics(findings), [
+    {
+      message:
+        'Import map alias "parent" resolves to "../vendor/chalk.ts", whose import graph reaches a third-party runtime dependency',
+      file: ".superman/vendor/chalk.ts",
+      line: 1,
+    },
+  ]);
+});
+
+test("SUP-001 stops an import graph walk that leaves the repository", async (t) => {
+  const repo = fixture(t, {
+    "deno.json": JSON.stringify({ imports: { entry: "./a.ts", parent: "../outside.ts" } }),
+    "a.ts": 'import { b } from "../b.ts";\nexport const a = b;\n',
+  });
+  assert.deepEqual(await repo.check("SUP-001", "no-deno-runtime-deps"), []);
+});
+
+test("SUP-001 stops the import graph walk at a repeated file and at the depth limit", async (t) => {
+  const cycle = fixture(t, {
+    "deno.json": JSON.stringify({ imports: { entry: "./vendor/a.ts" } }),
+    "vendor/a.ts": 'import { b } from "./b.ts";\nexport const a = b;\n',
+    "vendor/b.ts": 'import { a } from "./a.ts";\nexport const b = a;\n',
+  });
+  assert.deepEqual(await cycle.check("SUP-001", "no-deno-runtime-deps"), []);
+  const deep = fixture(t, {
+    "deno.json": JSON.stringify({ imports: { entry: "./vendor/0.ts" } }),
+    ...Object.fromEntries(
+      Array.from({ length: 10 }, (_, index) => [
+        `vendor/${index}.ts`,
+        index < 9
+          ? `import { v } from "./${index + 1}.ts";\nexport const v = ${index};\n`
+          : 'import chalk from "npm:chalk@5.3.0";\nexport const v = chalk;\n',
+      ]),
+    ),
+  });
+  assert.deepEqual(await deep.check("SUP-001", "no-deno-runtime-deps"), []);
+});
+
 test("SUP-002 catches static, require and dynamic child-process imports except in exec.ts", async (t) => {
   const imports = [
     'import { spawn } from "node:child_process";',
@@ -263,6 +398,64 @@ test("SUP-002 forbids shell true even within the approved exec boundary", async 
   ]);
 });
 
+test("SUP-002 reports a Deno spawn outside the exec seam and permits the seam itself", async (t) => {
+  const repo = fixture(t, {
+    ".superman/deno-bootstrap/tool.ts": 'const child = new Deno.Command("git", { args: ["status"] });\n',
+    ".superman/deno-bootstrap/exec.ts": 'const child = new Deno.Command("git", { args: ["status"] });\n',
+    ".superman/deno-bootstrap/legacy.ts": 'const result = Deno.run({ cmd: ["git", "status"] });\n',
+  });
+  const findings = await repo.check("SUP-002", "deno-exec-boundary");
+  assert.deepEqual(diagnostics(findings), [
+    { message: "Deno.Command outside the exec seam", file: ".superman/deno-bootstrap/tool.ts", line: 1 },
+    { message: "Deno.run outside the exec seam", file: ".superman/deno-bootstrap/legacy.ts", line: 1 },
+  ]);
+  assert.ok(findings.every((finding) => finding.fix?.includes("spawn helper")));
+});
+
+test("SUP-002 reports a shell spawn, a node:child_process import and a blanket permission grant", async (t) => {
+  const repo = fixture(t, {
+    ".superman/deno-bootstrap/exec.ts": 'const child = new Deno.Command("sh", { args: ["-c", "git status"] });\n',
+    ".superman/deno-bootstrap/bypass.ts": 'import { spawnSync } from "node:child_process";\n',
+    ".superman/deno-bootstrap/flags.ts": 'export const DENO_FLAGS = ["-A"];\n',
+    ".superman/deno-bootstrap/notes.txt": "plain text\n",
+    ".superman/deno-bootstrap/data.json": '{ "args": "deno run -A src/cli.ts" }\n',
+    "deno.json": JSON.stringify({ tasks: { build: "deno compile --allow-all src/cli.ts" } }),
+  });
+  const findings = await repo.check("SUP-002", "deno-exec-boundary");
+  assert.deepEqual(diagnostics(findings), [
+    {
+      message: "Deno shell-equivalent spawn is not allowed",
+      file: ".superman/deno-bootstrap/exec.ts",
+      line: 1,
+    },
+    {
+      message: "node:child_process is not a Deno spawn API",
+      file: ".superman/deno-bootstrap/bypass.ts",
+      line: 1,
+    },
+    {
+      message: "Deno blanket permission grant is not allowed",
+      file: ".superman/deno-bootstrap/data.json",
+      line: 1,
+    },
+    { message: "Deno blanket permission grant is not allowed", file: "deno.json", line: 1 },
+  ]);
+});
+
+test("SUP-002 leaves the Node product tree to the Node rules", async (t) => {
+  const repo = fixture(t, {
+    "src/app.ts": 'import { spawn } from "node:child_process";\nconst options = { shell: true };\n',
+    "docs/app.ts": 'import { spawn } from "node:child_process";\nconst options = { shell: true };\n',
+  });
+  assert.deepEqual(diagnostics(await repo.check("SUP-002", "child-process-only-in-exec")), [
+    { message: "child_process imported outside src/exec.ts", file: "src/app.ts", line: 1 },
+  ]);
+  assert.deepEqual(diagnostics(await repo.check("SUP-002", "no-shell-true")), [
+    { message: "shell: true is not allowed", file: "src/app.ts", line: 2 },
+  ]);
+  assert.deepEqual(await repo.check("SUP-002", "deno-exec-boundary"), []);
+});
+
 test("SUP-003 forbids shell and Python paths but checks only hooks for the exact Node shebang", async (t) => {
   const repo = fixture(t, {
     "tool.sh": "#!/bin/sh\n",
@@ -289,6 +482,38 @@ test("SUP-003 forbids shell and Python paths but checks only hooks for the exact
     ],
   );
   assert.ok(hooks.every((finding) => finding.message === "Hook must start with #!/usr/bin/env node"));
+});
+
+test("SUP-003 accepts a Node or Deno shebang in the Deno graph and rejects a shell or Python one", async (t) => {
+  const repo = fixture(t, {
+    ".superman/deno-bootstrap/node-hook": "#!/usr/bin/env node\nexport const value = 1;\n",
+    ".superman/deno-bootstrap/deno-hook": "#!/usr/bin/env deno\nexport const value = 1;\n",
+    ".superman/deno-bootstrap/env-hook": "#!/usr/bin/env -S deno run\nexport const value = 1;\n",
+    ".superman/deno-bootstrap/empty-env-hook": "#!/usr/bin/env\n",
+    ".superman/deno-bootstrap/shell-hook": "#!/bin/sh\nexit 0\n",
+    ".superman/deno-bootstrap/python-hook": "#!/usr/bin/env python3\nexit 0\n",
+    ".superman/deno-bootstrap/disguised-hook": "#!/bin/sh -c deno run x\nexit 0\n",
+    ".superman/deno-bootstrap/plain.ts": "export const value = 1;\n",
+    "src/app.ts": "export const value = 1;\n",
+  });
+  const findings = await repo.check("SUP-003", "deno-runtime-shebang");
+  assert.deepEqual(diagnostics(findings), [
+    {
+      message: "Deno runtime shebang must run on node or deno",
+      file: ".superman/deno-bootstrap/shell-hook",
+      line: 1,
+    },
+    {
+      message: "Deno runtime shebang must run on node or deno",
+      file: ".superman/deno-bootstrap/python-hook",
+      line: 1,
+    },
+    {
+      message: "Deno runtime shebang must run on node or deno",
+      file: ".superman/deno-bootstrap/disguised-hook",
+      line: 1,
+    },
+  ]);
 });
 
 const budgets = [
@@ -898,6 +1123,64 @@ test("SUP-006 requires both tsrs and noEmit in an argv array when config is scop
   }
   repo.write("superman.config.json", JSON.stringify({ gates: { typecheck: ["pnpm", "exec", "tsrs", "--noEmit"] } }));
   assert.deepEqual(await repo.check("SUP-006", "typecheck-uses-tsrs"), []);
+});
+
+test("SUP-006 rejects fast mode, a floating tsrs pin, a third-party lock entry and a remote type input", async (t) => {
+  const repo = fixture(t, {
+    "deno.json": JSON.stringify({
+      tasks: { typecheck: "deno run npm:tsrs@^0.20.1 --fast --noEmit" },
+      compilerOptions: { types: ["npm:@types/node"] },
+    }),
+    "deno.lock": JSON.stringify({
+      version: "4",
+      specifiers: {
+        "npm:tsrs@0.20.1-ts7.1.0-beta": "npm:tsrs@0.20.1-ts7.1.0-beta",
+        "npm:chalk@5.3.0": "npm:chalk@5.3.0",
+      },
+    }),
+    ".superman/deno-bootstrap/tool.ts":
+      'import { run } from "npm:tsrs@0.20.1-ts7.1.0-beta";\nexport const value = run;\n',
+    ".superman/deno-bootstrap/editor.ts":
+      "// A local editor may use --fast in a watch loop.\nexport const value = 1;\n",
+    "src/app.ts": "export const value = 1;\n",
+  });
+  const findings = await repo.check("SUP-006", "deno-check-policy");
+  assert.deepEqual(diagnostics(findings), [
+    {
+      message: "tsrs fast mode is not allowed in the Deno gate configuration",
+      file: "deno.json",
+      line: 1,
+    },
+    {
+      message: 'The tsrs pin "^0.20.1" on the Deno path is not an exact version',
+      file: "deno.json",
+      line: 1,
+    },
+    {
+      message: "A Deno type input would be resolved outside the checked graph",
+      file: "deno.json",
+      line: 1,
+    },
+    {
+      message: 'The Deno lock records the third-party package "npm:chalk@5.3.0"',
+      file: "deno.lock",
+      line: 1,
+    },
+  ]);
+});
+
+test("SUP-006 reports the fast environment variable in a Deno gate configuration", async (t) => {
+  const repo = fixture(t, {
+    "deno.json": JSON.stringify({ tasks: { typecheck: "TSRS_FAST=1 deno check src/cli.ts" } }),
+  });
+  const findings = await repo.check("SUP-006", "deno-check-policy");
+  assert.deepEqual(diagnostics(findings), [
+    {
+      message: "tsrs fast mode is not allowed in the Deno gate configuration",
+      file: "deno.json",
+      line: 1,
+    },
+  ]);
 });
 
 test("SUP-007 rejects each scoped Trivy ignore or config file and permits an absent inventory", async (t) => {

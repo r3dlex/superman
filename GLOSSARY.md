@@ -86,6 +86,10 @@ _Avoid_: report, log, attestation
 A named upstream release asset proposed for later review, not an accepted pin.
 _Avoid_: pin, bottle, latest
 
+**H/B/M**:
+The three revisions a pull-request integration binds: the **head** H that is proposed, the **base** B it is tested against, and the **merge** M that integrates them. A receipt that names them distinguishes the head from the integration that was actually tested; querying H alone and assuming it is M is not proof.
+_Avoid_: the PR, the commit, headSha
+
 **Red–green replay**:
 A comparison in which a behavior test fails against the approved-base implementation and passes against the proposed implementation. It demonstrates regression sensitivity, not the order in which changes were authored.
 _Avoid_: proof of TDD order, red-commit requirement
