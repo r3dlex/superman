@@ -115,6 +115,64 @@ function coveredBootstrap(t: TestContext) {
   return repo;
 }
 
+/**
+ * The declared concurrency the collector applies to the test files. It is a
+ * reviewed value in the coverage policy, never an environment switch, and
+ * the receipt names the one it used.
+ */
+function withConcurrency(repo: ReturnType<typeof fixture>, concurrency: number) {
+  const policy = JSON.parse(readFileSync(join(repo.root, ".superman/ci/coverage.json"), "utf8"));
+  policy.testConcurrency = concurrency;
+  repo.write(".superman/ci/coverage.json", JSON.stringify(policy));
+}
+
+test("the coverage receipt is the same measurement at every concurrency", (t) => {
+  // The collectors run the test files in parallel; the measurement they
+  // report must not depend on how many ran at once. Two test files, so the
+  // concurrency has something to parallelise.
+  const one = coveredBootstrap(t);
+  const many = coveredBootstrap(t);
+  withConcurrency(one, 1);
+  withConcurrency(many, 4);
+  one.write(
+    ".superman/ci/second.test.ts",
+    'import assert from "node:assert/strict"; import { test } from "node:test"; import { sign } from "./subject.ts"; test("again", () => { assert.equal(sign(-1), "other"); });\n',
+  );
+  many.write(
+    ".superman/ci/second.test.ts",
+    'import assert from "node:assert/strict"; import { test } from "node:test"; import { sign } from "./subject.ts"; test("again", () => { assert.equal(sign(-1), "other"); });\n',
+  );
+
+  const serial = one.run();
+  const parallel = many.run();
+
+  assert.equal(serial.status, 0, serial.output);
+  assert.equal(parallel.status, 0, parallel.output);
+  const first = JSON.parse(readFileSync(join(serial.directory as string, "coverage-receipt.json"), "utf8"));
+  const second = JSON.parse(readFileSync(join(parallel.directory as string, "coverage-receipt.json"), "utf8"));
+  // The receipt names the concurrency it ran at.
+  assert.equal(first.testConcurrency, 1);
+  assert.equal(second.testConcurrency, 4);
+  // And the measurement is the same one: the four metric totals and the
+  // inventories are identical.
+  assert.deepEqual(second.total, first.total);
+  assert.deepEqual(second.inventories, first.inventories);
+});
+
+test("a failing test still refuses the collector at the declared concurrency", (t) => {
+  const repo = coveredBootstrap(t);
+  withConcurrency(repo, 4);
+  repo.write(
+    ".superman/ci/broken.test.ts",
+    'import assert from "node:assert/strict"; import { test } from "node:test"; test("broken", () => { assert.equal(1, 2); });\n',
+  );
+
+  const result = repo.run();
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /Coverage process tests failed/u);
+});
+
 test("coverage command also measures product source with real pinned Vitest coverage", (t) => {
   const repo = coveredBootstrap(t);
   repo.write(

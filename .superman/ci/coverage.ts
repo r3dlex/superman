@@ -502,14 +502,21 @@ async function main() {
   const childEnv: NodeJS.ProcessEnv = { ...env, NODE_V8_COVERAGE: raw };
   delete childEnv.NODE_OPTIONS;
   delete childEnv.NODE_TEST_CONTEXT;
-  const result = runOwned(process.execPath, ["--test", "--test-concurrency=1", "--test-reporter=tap", ...tests], {
-    cwd: root,
-    env: childEnv,
-    encoding: "utf8",
-    shell: false,
-    timeout: 20 * 60_000,
-    maxBuffer: 32 * 1024 * 1024,
-  });
+  // The test files run in parallel at the declared concurrency. The value is
+  // reviewed policy, never an environment switch, and the receipt names it.
+  const testConcurrency = policy.testConcurrency ?? 1;
+  const result = runOwned(
+    process.execPath,
+    ["--test", `--test-concurrency=${testConcurrency}`, "--test-reporter=tap", ...tests],
+    {
+      cwd: root,
+      env: childEnv,
+      encoding: "utf8",
+      shell: false,
+      timeout: 20 * 60_000,
+      maxBuffer: 32 * 1024 * 1024,
+    },
+  );
   process.stdout.write(result.stdout ?? "");
   process.stderr.write(result.stderr ?? "");
   if (result.error || result.signal || result.status !== 0) throw new Error("Coverage process tests failed");
@@ -775,6 +782,7 @@ async function main() {
         platform: `${process.platform}-${process.arch}`,
         minimum: policy.minimum,
         target: policy.target,
+        testConcurrency,
         inputsHash: before,
         sources: [...sources, ...product, ...candidateFiles].sort(),
         // The collector that wrote this receipt, by file and digest: the

@@ -249,14 +249,22 @@ async function main() {
   delete childEnv.NODE_TEST_CONTEXT;
   delete childEnv.NODE_V8_COVERAGE;
   // The Node runtime is the bounded tool host for the process suites.
-  const result = await runOwned("node", ["--test", "--test-concurrency=1", "--test-reporter=tap", ...tests], {
-    cwd: root,
-    env: childEnv,
-    encoding: "utf8",
-    shell: false,
-    timeout: 20 * 60_000,
-    maxBuffer: 32 * 1024 * 1024,
-  });
+  // The test files run in parallel at the declared concurrency, the same
+  // reviewed value the Node collector applies. The value is policy, never an
+  // environment switch, and the receipt names it.
+  const testConcurrency = policy.testConcurrency ?? 1;
+  const result = await runOwned(
+    "node",
+    ["--test", `--test-concurrency=${testConcurrency}`, "--test-reporter=tap", ...tests],
+    {
+      cwd: root,
+      env: childEnv,
+      encoding: "utf8",
+      shell: false,
+      timeout: 20 * 60_000,
+      maxBuffer: 32 * 1024 * 1024,
+    },
+  );
   Deno.stdout.writeSync(new TextEncoder().encode(result.stdout));
   Deno.stderr.writeSync(new TextEncoder().encode(result.stderr));
   if (result.error || result.signal || result.status !== 0) throw new Error("Coverage process tests failed");
@@ -338,6 +346,7 @@ async function main() {
         }`,
         minimum: policy.minimum,
         target: policy.target,
+        testConcurrency,
         inputsHash: before,
         sources: [...sources].sort(),
         // The collector that produced this receipt, by file and digest: the

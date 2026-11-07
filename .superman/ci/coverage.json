@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "testConcurrency": 4,
   "minimum": {
     "lines": 90,
     "statements": 90,
