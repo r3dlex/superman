@@ -732,19 +732,7 @@ function toolIdentityFindings(job: WorkflowJob): string[] {
 const LEVEL_CONTEXTS: Record<string, string[]> = {
   workflow: ["github", "inputs", "vars", "secrets"],
   job: ["github", "inputs", "vars", "secrets", "needs", "strategy", "matrix"],
-  step: [
-    "github",
-    "inputs",
-    "vars",
-    "secrets",
-    "needs",
-    "strategy",
-    "matrix",
-    "runner",
-    "env",
-    "job",
-    "steps",
-  ],
+  step: ["github", "inputs", "vars", "secrets", "needs", "strategy", "matrix", "runner", "env", "job", "steps"],
 };
 
 function contextFindings(entries: Record<string, string>, level: string): string[] {
