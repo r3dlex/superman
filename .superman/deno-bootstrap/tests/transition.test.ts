@@ -1223,6 +1223,60 @@ test("the candidate route binds the recorded tool identities", () => {
   assert.match(findings[0], /deno_sha256/u);
 });
 
+test("both hosts' policy scan decide the same paths", () => {
+  // The two allowed sets are two lists in two files. A divergence between
+  // them is invisible until the candidate's own proof runs, and then it fails
+  // the whole leg with a path the Node original allowed. Both scans run over
+  // this tree here, so a divergence is a local failure.
+  const head = runOwned("git", ["rev-parse", "HEAD"], {
+    cwd: repository,
+    env: isolated,
+    encoding: "utf8",
+    shell: false,
+  });
+  const base = runOwned("git", ["rev-parse", "origin/main"], {
+    cwd: repository,
+    env: isolated,
+    encoding: "utf8",
+    shell: false,
+  });
+  const env = {
+    ...isolated,
+    HEAD_REF: "spec/superman-v0",
+    HEAD_SHA: head.stdout.trim(),
+    BASE_SHA: base.stdout.trim(),
+  };
+  const node = runOwned(process.execPath, [".superman/ci/pr-policy.ts"], {
+    cwd: repository,
+    env,
+    encoding: "utf8",
+    shell: false,
+  });
+  const deno = runOwned(
+    explicitDeno(),
+    [
+      "run",
+      "--no-prompt",
+      "--no-config",
+      "--no-lock",
+      "--no-npm",
+      "--no-remote",
+      "--allow-read",
+      "--allow-write",
+      "--allow-env",
+      "--allow-run",
+      ".superman/deno-bootstrap/pr-policy.ts",
+    ],
+    { cwd: repository, env, encoding: "utf8", shell: false },
+  );
+  const findings = (output: string) =>
+    output
+      .split("\n")
+      .filter((line) => line.startsWith("::error"))
+      .sort();
+  assert.deepEqual(findings(deno.stdout ?? ""), findings(node.stdout ?? ""));
+});
+
 test("a published workflow names only the contexts its level has", () => {
   // The published candidate workflow is GitHub's own parser's input, and the
   // runner context is a step context: a job-level environment that names it
