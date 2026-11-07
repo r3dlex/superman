@@ -93,8 +93,17 @@ jobs:
             const zipped = asset.url.endsWith('.zip');
             const archive = join(directory, zipped ? 'asset.zip' : 'asset.tar.gz');
             writeFileSync(archive, bytes);
-            if (zipped) execFileSync('unzip', ['-o', '-q', archive, '-d', directory], { shell: false });
-            else execFileSync('tar', ['-xzf', archive, '-C', directory], { shell: false });
+            if (zipped) {
+              // The zip is read with the repository's own reader. An external
+              // unzip would make the install depend on the runner's image:
+              // the self-hosted arm64 runner has none.
+              const { zipContent, zipEntry } = await import(
+                new URL('.superman/ci/extract-zip.ts', `file://${process.cwd()}/`).href
+              );
+              const entry = zipEntry(bytes, tool);
+              if (!entry) throw new Error(`${tool} is not in the downloaded archive`);
+              writeFileSync(join(directory, tool), zipContent(bytes, entry));
+            } else execFileSync('tar', ['-xzf', archive, '-C', directory], { shell: false });
             const binary = join(directory, tool);
             if (asset.binarySha256) {
               const digest = createHash('sha256').update(readFileSync(binary)).digest('hex');
@@ -108,10 +117,14 @@ jobs:
           NODE
       - name: Deno candidate surface measurement (the Node collector binds this receipt)
         run: |
-          set -uo pipefail
+          # The runner's shell aborts on a non-zero exit, and the Deno
+          # collector's own floor is unmet, so it exits 1 truthfully. The
+          # binding is by receipt, not by exit status.
+          set +e
           deno run --no-prompt --no-config --no-lock --no-npm --no-remote \
             --allow-read --allow-write --allow-env --allow-run .superman/deno-bootstrap/coverage.ts
           status=$?
+          set -e
           # The Deno surface's own floor is unmet, so the collector exits 1
           # truthfully; the binding is by receipt, not by exit status. Any other
           # exit is a real failure. A missing receipt is refused below, and the

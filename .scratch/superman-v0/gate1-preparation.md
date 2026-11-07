@@ -2425,6 +2425,35 @@ three loops and report each one's red and green.
 
 **What the loops show now.** Loops 2 and 3 are green locally. **Loop 1 still shows the refusal, and that is correct** — the refusal is the gate working; the fix is that the workflow now produces the receipt, which only the hosted run can show. That run is the next step.
 
+#### The fourth hosted run: two more causes, both found from the runner's own log — 2026-11-07
+
+**Outcome:** the head `29c29be` produced two *different* failures — the macOS and Linux legs failed in the new Deno measurement step, the arm64 leg failed earlier, in the install step. The Deno measurement itself **worked**: the receipt was produced and the artifact uploaded. Both causes are now fixed.
+
+**Cause 1 — the step's own exit handling.** The step wrote `set -uo pipefail` and expected that to tolerate the collector's truthful exit 1. It does not: the runner's shell runs the script with `-e` already on, and `set -uo pipefail` only *adds* flags — it never turns `-e` off. So the collector's exit 1 aborted the step, and the coverage step never ran. The step now wraps the collector in `set +e` and restores `set -e` before the receipt check, so the exit 1 is tolerated, any other exit is a real failure, and a missing receipt still fails the step.
+
+**Cause 2 — the arm64 runner has no `unzip`.**
+
+```text
+Error: spawnSync unzip ENOENT
+```
+
+The macOS and Linux images ship `unzip`; the self-hosted arm64 runner does not. The install step's dependency on it was invisible until a runner without it ran. The **candidate template has the same dependency** — `unzip -o -q "$DENO_DIR/deno.zip" -d "$DENO_DIR"` — so the candidate legs would have failed the same way.
+
+**The fix removes the host dependency instead of requiring a host change.** `.superman/ci/extract-zip.ts` reads a zip with Node's built-ins only (`node:zlib`'s `inflateRawSync` ✓ and the archive's own central directory ✓), and both the bootstrap workflow and the candidate template use it. The extraction is therefore the same on every platform, and it is covered by the repository's own tests rather than by a runner's image.
+
+**The loop.** A zip built by the independent `zip` tool, extracted by the module:
+
+```text
+$ zip -q real.zip deno                 # method 0, stored
+$ zip -q -9 deflated.zip deno          # method 8, deflated
+entries: [ 'deno method=0 size=12' ]
+content matches the original: true
+```
+
+and the unit suite (`6 tests, 6 pass`) builds its own archives so it cannot drift from the format it reads. The extractor was also checked against the workflow's exact import form — `await import(new URL('.superman/ci/extract-zip.ts', \`file://\${process.cwd()}/\`).href)` ✓ — which loads ✓.
+
+**What this round costs and buys.** Two new files under `.superman/ci/`, one of them a test that runs in the coverage inventory ✓ so the helper is measured like any other enforcement-core code ✓. In exchange the workflow and the candidate template no longer depend on a tool the arm64 runner does not have ✓ — which is a *host prerequisite* the operator request already asks about ("the actual tools and software on each host") ✓, now removed rather than provisioned ✓.
+
 ### Step 12 — exact-source replacement and transition proof
 
 #### Step 12 local half record — 2026-11-04

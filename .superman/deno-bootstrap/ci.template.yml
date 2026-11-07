@@ -141,8 +141,22 @@ jobs:
             writeFileSync(join(process.env.DENO_DIR, `${candidate.name}.zip`), bytes);
           }
           NODE
-          unzip -o -q "$DENO_DIR/deno.zip" -d "$DENO_DIR"
-          unzip -o -q "$DENO_DIR/denort.zip" -d "$DENO_DIR"
+          # The archives are read with the repository's own reader, so the
+          # candidate legs do not depend on the runner having an unzip: the
+          # self-hosted arm64 runner has none.
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          const { zipContent, zipEntry } = await import(
+            new URL('.superman/ci/extract-zip.ts', `file://${process.cwd()}/`).href
+          );
+          for (const name of ['deno', 'denort']) {
+            const bytes = readFileSync(join(process.env.DENO_DIR, `${name}.zip`));
+            const entry = zipEntry(bytes, name);
+            if (!entry) throw new Error(`${name} is not in the downloaded archive`);
+            writeFileSync(join(process.env.DENO_DIR, name), zipContent(bytes, entry));
+          }
+          NODE
           node --input-type=module <<'NODE'
           import { createHash } from 'node:crypto';
           import { readFileSync } from 'node:fs';
