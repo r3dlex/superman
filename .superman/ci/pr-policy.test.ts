@@ -58,6 +58,15 @@ function fixture(t: TestContext, branch: string, kind = "behavior") {
   };
 }
 
+test("a post-merge run on main has no pull-request kind to decide", (t) => {
+  // The nightly is a run on main after the merge. There is no pull request
+  // and no pull-request kind, so the path policy has nothing to refuse.
+  const repo = fixture(t, "ticket/demo-01");
+  const result = repo.check(true, { HEAD_REF: "main" });
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /kind: main \(nightly\)/u);
+});
+
 test("ticket PRs can carry proposed candidate memories", (t) => {
   const repo = fixture(t, "ticket/demo-01");
   repo.write(".superman/vault/candidates/lesson.md", "---\ntype: note\nstatus: pending\n---\nProposed memory.\n");

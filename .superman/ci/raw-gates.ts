@@ -290,13 +290,14 @@ try {
   // A local run has no pull-request reference: it binds the local branch. The
   // staged scope needs it because a pre-commit run has no PR identity.
   receipt.branch = process.env.HEAD_REF || gitOptional("symbolic-ref", "--quiet", "--short", "HEAD") || "";
+  if (stage === "nightly" && receipt.branch !== "main")
+    throw new Error(`G9: the nightly stage runs on main, not ${receipt.branch}`);
   if (process.env.GITHUB_ACTIONS === "true" || process.env.GITHUB_EVENT_PATH) {
     if (stage === "nightly") {
       // The nightly runs on the schedule event, on main, against the previous
       // main. It is not a pull request and has no pull-request identity.
       if (process.env.GITHUB_ACTIONS === "true" && process.env.GITHUB_EVENT_NAME !== "schedule")
         throw new Error("G9: the nightly stage runs on the schedule event");
-      if (receipt.branch !== "main") throw new Error(`G9: the nightly stage runs on main, not ${receipt.branch}`);
     } else {
       if (process.env.GITHUB_EVENT_NAME !== "pull_request" || !process.env.GITHUB_EVENT_PATH)
         throw new Error("G9: missing CI pull-request identity evidence");

@@ -294,6 +294,8 @@ try {
   // A local run has no pull-request reference: it binds the local branch. The
   // staged scope needs it because a pre-commit run has no PR identity.
   receipt.branch = Deno.env.get("HEAD_REF") || gitOptional("symbolic-ref", "--quiet", "--short", "HEAD") || "";
+  if (stage === "nightly" && receipt.branch !== "main")
+    throw new Error(`G9: the nightly stage runs on main, not ${receipt.branch}`);
   if (Deno.env.get("GITHUB_ACTIONS") === "true" || Deno.env.get("GITHUB_EVENT_PATH")) {
     const eventPath = Deno.env.get("GITHUB_EVENT_PATH");
     if (stage === "nightly") {
@@ -301,7 +303,6 @@ try {
       // main. It is not a pull request and has no pull-request identity.
       if (Deno.env.get("GITHUB_ACTIONS") === "true" && Deno.env.get("GITHUB_EVENT_NAME") !== "schedule")
         throw new Error("G9: the nightly stage runs on the schedule event");
-      if (receipt.branch !== "main") throw new Error(`G9: the nightly stage runs on main, not ${receipt.branch}`);
     } else {
       if (Deno.env.get("GITHUB_EVENT_NAME") !== "pull_request" || !eventPath)
         throw new Error("G9: missing CI pull-request identity evidence");

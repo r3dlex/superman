@@ -516,6 +516,69 @@ test("a declared full stage that omits required work fails the full result", (t)
   assert.equal(result.receipt.verdict, "fail");
 });
 
+test("the nightly stage compares main against the previous main and replays nothing", (t) => {
+  const repo = fixture(t, ({ root, write }) => {
+    completePreCommitModel({ root, write });
+    write("tsconfig.json", cleanTypeScriptPolicy);
+    const bootstrap = JSON.parse(readFileSync(join(root, ".superman/ci/bootstrap.json"), "utf8"));
+    bootstrap.stages.nightly = {
+      feedback: "full",
+      scope: "full",
+      gates: ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11"],
+    };
+    write(".superman/ci/bootstrap.json", `${JSON.stringify(bootstrap, null, 2)}\n`);
+  });
+  // The nightly is a post-merge run: it is on main, and it compares main
+  // with the main before it, which is the parent it is checked out against.
+  const parent = repo.git("rev-parse", "HEAD").trim();
+  repo.git("switch", "--quiet", "main");
+  const result = repo.run(undefined, { HEAD_REF: "main" }, ["--stage", "nightly"]);
+  // The receipt carries the nightly's facts whatever the gates decided.
+  assert.equal(result.receipt.branch, "main");
+  assert.equal(result.receipt.baseSha, parent);
+  const g9 = result.receipt.results.find((entry: { gate: string }) => entry.gate === "G9");
+  assert.equal(g9.status, "n/a");
+  assert.match(String(g9.reason), /nightly on main/u);
+});
+
+test("the nightly stage refuses a branch that is not main", (t) => {
+  const repo = fixture(t, ({ root, write }) => {
+    completePreCommitModel({ root, write });
+    write("tsconfig.json", cleanTypeScriptPolicy);
+    const bootstrap = JSON.parse(readFileSync(join(root, ".superman/ci/bootstrap.json"), "utf8"));
+    bootstrap.stages.nightly = {
+      feedback: "full",
+      scope: "full",
+      gates: ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11"],
+    };
+    write(".superman/ci/bootstrap.json", `${JSON.stringify(bootstrap, null, 2)}\n`);
+  });
+  const result = repo.run(undefined, {}, ["--stage", "nightly"]);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /the nightly stage runs on main, not ticket\/demo-01/u);
+});
+
+test("the nightly stage refuses a pull-request event", (t) => {
+  const repo = fixture(t, ({ root, write }) => {
+    completePreCommitModel({ root, write });
+    write("tsconfig.json", cleanTypeScriptPolicy);
+    const bootstrap = JSON.parse(readFileSync(join(root, ".superman/ci/bootstrap.json"), "utf8"));
+    bootstrap.stages.nightly = {
+      feedback: "full",
+      scope: "full",
+      gates: ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11"],
+    };
+    write(".superman/ci/bootstrap.json", `${JSON.stringify(bootstrap, null, 2)}\n`);
+  });
+  repo.git("switch", "--quiet", "main");
+  const result = repo.run(undefined, { HEAD_REF: "main", GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request" }, [
+    "--stage",
+    "nightly",
+  ]);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /the nightly stage runs on the schedule event/u);
+});
+
 test("the full local pre-PR run and the CI run share one tool profile and gate inventory", (t) => {
   const repo = fixture(t, ({ root, write }) => {
     completePreCommitModel({ root, write });

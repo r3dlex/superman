@@ -255,6 +255,23 @@ test("forged baseline metrics and hashes are rejected before they become the rat
   assert.match(metric.output, /forged baseline metric/u);
 });
 
+test("the corpus lane measures the whole declared scope, not only the change", (t) => {
+  // The nightly's lane is the uncached full run: it measures the whole
+  // declared scope, where every other lane measures the change alone. The
+  // difference is visible in what the measurement covers.
+  const repo = reviewedMutationFixture(t);
+  const head = repo.git("rev-parse", "HEAD").trim();
+  const outcome = qualityGate("G6", repo.root, head, head, fixtureEnvironment(), {
+    scope: "full",
+    changedFiles: [],
+    mutation: "corpus",
+  });
+  assert.equal(outcome.status, "pass", JSON.stringify(outcome));
+  const metrics = outcome.metrics as { comparison?: { files: string[]; candidate: { totalMutants: number } } };
+  assert.deepEqual(metrics.comparison?.files, ["src/classify.ts", "src/weak.ts"]);
+  assert.equal(metrics.comparison?.candidate.totalMutants > 0, true);
+});
+
 test("a first-baseline follow-up cannot change measurement inputs", (t) => {
   const { repo, initial } = measuredDuplication(t);
   repo.git("switch", "--quiet", "-c", "spec/changed-inputs");
