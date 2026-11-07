@@ -74,8 +74,26 @@ function linkTools(root: string, path: string, binaries: Record<string, string>)
     if (!item.startsWith(".")) symlinkSync(realpathSync(join(root, "node_modules", item)), join(modules, item), "dir");
   }
   mkdirSync(join(modules, ".bin"));
-  for (const [command, file] of Object.entries(binaries))
-    symlinkSync(realpathSync(join(root, "node_modules", file)), join(modules, ".bin", command));
+  // Every command the reviewed tree's own bin directory carries is linked
+  // into the snapshot. A tool that runs inside the snapshot is found the way
+  // pnpm finds it there, and the declared critical cases run gates that
+  // probe tools the measurement itself never uses: a snapshot without them
+  // fails a case with a command that is "not found" although the reviewed
+  // tree carries it.
+  const bin = join(root, "node_modules", ".bin");
+  if (existsSync(bin)) {
+    for (const command of readdirSync(bin)) {
+      const link = join(modules, ".bin", command);
+      if (!existsSync(link)) symlinkSync(realpathSync(join(bin, command)), link);
+    }
+  }
+  // The declared binaries point at the tool's own entry point, which is what
+  // the gate's runner measures; they replace the reviewed tree's shim.
+  for (const [command, file] of Object.entries(binaries)) {
+    const link = join(modules, ".bin", command);
+    rmSync(link, { force: true });
+    symlinkSync(realpathSync(join(root, "node_modules", file)), link);
+  }
 }
 
 export function ownedSnapshot(

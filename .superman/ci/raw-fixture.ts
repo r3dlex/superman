@@ -33,7 +33,12 @@ const pins = {
   stryker: "10.1.1",
 };
 
-export function fixture(t: TestContext, branch = "ticket/demo-01", kind = "behavior") {
+export function fixture(
+  t: TestContext,
+  branch = "ticket/demo-01",
+  kind = "behavior",
+  modulesDir = modules,
+) {
   const root = mkdtempSync(join(tmpdir(), "superman-raw-fixture-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const write = (path: string, content: string) => {
@@ -52,6 +57,11 @@ export function fixture(t: TestContext, branch = "ticket/demo-01", kind = "behav
   git("config", "user.name", "Raw Gate Fixture");
   git("config", "user.email", "fixture@example.invalid");
   write(".gitignore", "node_modules\n.tools/\n");
+  // The fixture's node_modules is the reviewed tree's, reached by a symlink.
+  // A pnpm command that installed would rewrite that tree through the link,
+  // so the fixture installs nothing: the reviewed tree's own script and
+  // pnpmfile settings, and the dependency check that would start an install.
+  write(".npmrc", "ignore-scripts=true\nignore-pnpmfile=true\nverify-deps-before-run=false\n");
   // Native pnpm 12's offline version probe also needs the provisioning lock.
   write("pnpm-lock.yaml", readFileSync(resolve(import.meta.dirname, "../../pnpm-lock.yaml"), "utf8"));
   write(".scratch/demo/spec.md", "# Approved spec\n");
@@ -88,7 +98,7 @@ export function fixture(t: TestContext, branch = "ticket/demo-01", kind = "behav
   git("update-ref", "refs/remotes/origin/main", "HEAD");
   const baseSha = git("rev-parse", "HEAD").trim();
   git("switch", "--quiet", "-c", branch);
-  symlinkSync(modules, join(root, "node_modules"), "dir");
+  symlinkSync(modulesDir, join(root, "node_modules"), "dir");
   // A developer store is optional. CI puts the pinned pnpm on PATH; skipping the
   // shim left .tools absent and G11 died on ENOENT instead of the gate refusal.
   const preferred =
