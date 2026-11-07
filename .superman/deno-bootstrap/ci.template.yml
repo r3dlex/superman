@@ -205,7 +205,7 @@ jobs:
             mkdirSync(directory, { recursive: true });
             const archive = join(directory, 'asset.tar.gz');
             writeFileSync(archive, bytes);
-            plan.push([tool, tool.toUpperCase(), archive, directory].join('\t'));
+            plan.push([tool, `${tool.toUpperCase()}_BIN`, archive, directory].join('\t'));
           }
           writeFileSync(join(process.env.RUNNER_TEMP, 'superman-tool-plan.tsv'), `${plan.join('\n')}\n`);
           NODE

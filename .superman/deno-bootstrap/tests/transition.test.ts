@@ -1277,6 +1277,19 @@ test("both hosts' policy scan decide the same paths", () => {
   assert.deepEqual(findings(deno.stdout ?? ""), findings(node.stdout ?? ""));
 });
 
+test("the published candidate workflow exports the tool paths the gates read", () => {
+  // The gates read ARCHGATE_BIN and TRIVY_BIN. A workflow that exports
+  // ARCHGATE leaves the gate on the npm shim, which resolves a binary from
+  // a shared cache instead of the verified one — or, on the Deno host, no
+  // binary at all.
+  const source = readFileSync(join(repository, ".github/workflows/deno-candidate.yml"), "utf8");
+  assert.match(
+    source,
+    /\$\{tool\.toUpperCase\(\)\}_BIN/u,
+    "the tool paths are exported without the suffix the gates read",
+  );
+});
+
 test("a published workflow names only the contexts its level has", () => {
   // The published candidate workflow is GitHub's own parser's input, and the
   // runner context is a step context: a job-level environment that names it
