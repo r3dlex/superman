@@ -1331,6 +1331,12 @@ export function qualityGate(
           .split("\0")
           .filter((path) => path && inScope(path, mutationPatterns)),
       );
+      // The change's files, whatever the scope covers: a declared critical
+      // case is a test file, and a change to it is a change to the module it
+      // declares.
+      const touched = new Set(
+        git("diff", "--name-only", "-z", "--no-renames", baseSha, headSha).split("\0").filter(Boolean),
+      );
       // The nightly's corpus lane measures the whole declared scope, not only
       // the change: it is the uncached full run against the full-repository
       // baseline. Every other lane measures the change alone, at base and at
@@ -1362,40 +1368,23 @@ export function qualityGate(
       // A declared critical module is measured at the approved base and at the
       // candidate whenever the applied scope covers it. The scope is the
       // declared one, so a declared module outside `src/` is measured too.
+      // The pull-request leg measures the critical modules the change touches
+      // — the leg is incremental — and the nightly's full run measures the
+      // whole declared critical mapping.
       const criticalModules = [...new Set(critical.map((entry) => entry.module))].filter(
         (module) => inScope(module, mutationPatterns) && after.includes(module),
       );
-      let criticalOutcome:
-        | {
-            modules: string[];
-            base: Record<string, number>;
-            candidate: Record<string, number>;
-            introduced: Record<string, string[]>;
-          }
-        | undefined;
-      if (criticalModules.length) {
-        const measuredBase = criticalModules.filter((module) => before.includes(module));
-        const baseCritical = measuredBase.length ? mutate(ownedBase(), measuredBase) : undefined;
-        const candidateCritical = mutate(snapshot, criticalModules);
-        const baseSurvivors: Record<string, number> = {};
-        const candidateSurvivors: Record<string, number> = {};
-        const introduced: Record<string, string[]> = {};
-        for (const module of criticalModules) {
-          const baseRecords = (baseCritical?.survivors ?? []).filter((survivor) => survivor.file === module);
-          const candidateRecords = candidateCritical.survivors.filter((survivor) => survivor.file === module);
-          baseSurvivors[module] = baseRecords.length;
-          candidateSurvivors[module] = candidateRecords.length;
-          const new_ = introducedSurvivors(baseRecords, candidateRecords);
-          introduced[module] = new_.map((survivor) => survivor.identity);
-          if (new_.length)
-            throw new GateFailure(
-              "critical-survivor",
-              `${gate}: introduced critical survivor in ${module}: ${new_.length} survivor(s) the approved base does not have: ${new_.map((survivor) => survivor.identity).join(" | ")}`,
+      const measuredCritical =
+        lane === "corpus"
+          ? criticalModules
+          : criticalModules.filter(
+              (module) =>
+                touched.has(module) || critical.some((entry) => entry.module === module && touched.has(entry.case)),
             );
-        }
-        criticalOutcome = { modules: criticalModules, base: baseSurvivors, candidate: candidateSurvivors, introduced };
-      }
-      if (!existing.length && !added.length && !tightening)
+      // A critical module the change touches is measured even when the change
+      // touches no other source: a lost assertion is a change to the case,
+      // not to the module it declares.
+      if (!existing.length && !added.length && !tightening && !measuredCritical.length)
         return { gate, status: "n/a", reason: "no changed-existing or new product mutation scope", evidence };
       let comparison:
         | {
@@ -1414,6 +1403,55 @@ export function qualityGate(
             "policy-refusal",
             `${gate}: comparable-scope mutation regression ${comparison.candidate.mutationScore} < base ${comparison.base.mutationScore}; ${JSON.stringify(comparison)}`,
           );
+      }
+      let criticalOutcome:
+        | {
+            modules: string[];
+            base: Record<string, number>;
+            candidate: Record<string, number>;
+            introduced: Record<string, string[]>;
+          }
+        | undefined;
+      if (measuredCritical.length) {
+        // The nightly's critical comparison reads the scope's own two
+        // measurements: the critical modules are inside the scope it measured,
+        // so the full run does not measure them a second time.
+        const baseCritical =
+          lane === "corpus" && comparison
+            ? {
+                survivors: comparison.base.survivors.filter((survivor) =>
+                  measuredCritical.some((module) => module === survivor.file),
+                ),
+              }
+            : undefined;
+        const candidateCritical =
+          lane === "corpus" && comparison
+            ? {
+                survivors: comparison.candidate.survivors.filter((survivor) =>
+                  measuredCritical.some((module) => module === survivor.file),
+                ),
+              }
+            : mutate(snapshot, measuredCritical);
+        const measuredBase = measuredCritical.filter((module) => before.includes(module));
+        const ownBase =
+          baseCritical ?? (lane === "corpus" || !measuredBase.length ? undefined : mutate(ownedBase(), measuredBase));
+        const baseSurvivors: Record<string, number> = {};
+        const candidateSurvivors: Record<string, number> = {};
+        const introduced: Record<string, string[]> = {};
+        for (const module of measuredCritical) {
+          const baseRecords = (ownBase?.survivors ?? []).filter((survivor) => survivor.file === module);
+          const candidateRecords = candidateCritical.survivors.filter((survivor) => survivor.file === module);
+          baseSurvivors[module] = baseRecords.length;
+          candidateSurvivors[module] = candidateRecords.length;
+          const new_ = introducedSurvivors(baseRecords, candidateRecords);
+          introduced[module] = new_.map((survivor) => survivor.identity);
+          if (new_.length)
+            throw new GateFailure(
+              "critical-survivor",
+              `${gate}: introduced critical survivor in ${module}: ${new_.length} survivor(s) the approved base does not have: ${new_.map((survivor) => survivor.identity).join(" | ")}`,
+            );
+        }
+        criticalOutcome = { modules: measuredCritical, base: baseSurvivors, candidate: candidateSurvivors, introduced };
       }
       const initialization = added.length ? mutate(snapshot, added) : undefined;
       const ratchetTightening = tightening ? mutate(snapshot, after) : undefined;

@@ -33,7 +33,10 @@ jobs:
     # The nightly runs the full-corpus mutation measurement, which the
     # measured rate puts at about fifty minutes on a ten-core machine and
     # hours on a hosted runner; the pull-request legs keep the minute.
-    timeout-minutes: ${{ github.event_name == 'schedule' && 360 || 30 }}
+    # The pull-request leg works incrementally and must finish inside the
+    # fifteen minutes André set; the nightly is the uncached full run and
+    # gets two hours, in the steps below.
+    timeout-minutes: ${{ github.event_name == 'schedule' && 120 || 15 }}
     strategy:
       fail-fast: false
       matrix:
