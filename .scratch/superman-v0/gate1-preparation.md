@@ -2675,4 +2675,30 @@ The identity hash is **lane-independent**: it covers the *declared* scopes, not 
 
 **What the pull-request leg now costs.** In this repository the narrowed scope is empty (the product's `src/**` does not exist until ticket 01), so the pull-request G6 leg measures nothing and reports the declared critical cases' execution: about ten seconds, against the minute André set.
 
+### Two more defects the local clone's own gate run exposed
+
+The clone of the pushed branch ran the driver's own gates locally, and two things in that run were not what the suites had shown:
+
+1. **The quality tool runner killed every tool after two minutes.** `qualityRunner` gave every tool a 120-second budget ✗ — enough for the pull-request scope ✗ and nowhere near enough for the whole scope ✗. The full-corpus run was killed at the two-minute mark and produced no measurement at all ✗. The budget now follows what is measured: the change alone keeps the two minutes ✓, and the whole scope — the corpus lane ✓ and the initialization and first-baseline paths that measure it whole ✓ — is given the four hours the nightly's job allows ✓.
+2. **The pull-request leg was red over an unused export.** `MutationLane` was exported and imported by nobody ✗, and knip reports unused exports as issues ✗ — and the G3 gate refuses a run whose issues its model does not account for ✗. The type is internal now ✓.
+
+Neither was visible to the suites: the first needs the full scope to reach ✗, and the second was in a file the suites type-check but do not lint for dead exports ✗. The local clone's own gate run is what found both ✓ — the same acceptance object that the artefact rather than an inspection has to be ✓.
+
+### The CI's own cost, measured on the hosted runner
+
+Round eight's `bootstrap (ubuntu-24.04)` leg, from the hosted run's own step timings — the only measurement of the CI's cost that exists, because the leg had never reached its end:
+
+| Step | Time |
+| --- | --- |
+| checkout, node setup, the policy preflight | ~3 s |
+| `pnpm install --frozen-lockfile` | 18 s |
+| the checksum-locked tool install (Archgate, Deno, Trivy) | 37 s |
+| the Deno candidate surface measurement | 62 s |
+| **the overall coverage floor** | **6 min 0 s** |
+| **the raw G1–G11 run, Trivy included** | **71 s** |
+| the artefact upload | 35 s |
+| **the whole run** | **10 min 33 s** |
+
+The budget André set — the whole CI in at most fifteen minutes — is therefore already met, and the long pole is the **coverage collector**, not the mutation gate. The mutation leg, once it applies the pull-request scope, is the declared critical cases and nothing else.
+
 **Why a random mutant sample cannot serve the comparison.** A sample of the base's mutants and a sample of the candidate's mutants are different populations, so the introduced-survivor rule would measure sampling noise rather than introduced survivors. A deterministic sample (seeded by the mutant's identity) would be comparable, but the budget does not reach it: at the measured 12 seconds per mutant, a one-minute step buys about five mutants, and Stryker's own initial test run — the coverage analysis that precedes any mutant — is 24–38 seconds on its own, so no Stryker leg fits in a minute at any scope.
