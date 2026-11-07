@@ -150,6 +150,11 @@ jobs:
         if: always()
         with:
           name: bootstrap-${{ matrix.platform }}
-          path: .superman-ci/
+          # The evidence is the receipt, the merged report and the summary.
+          # The per-process coverage dumps are hundreds of megabytes that no
+          # receipt names and no reviewer reads.
+          path: |
+            .superman-ci/
+            !.superman-ci/**/v8/
           include-hidden-files: true
           if-no-files-found: warn

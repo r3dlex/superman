@@ -230,5 +230,6 @@ jobs:
           path: |
             .superman-ci/deno-bootstrap/
             .superman-ci/coverage-deno-*/
+            !.superman-ci/**/v8/
           include-hidden-files: true
           if-no-files-found: warn

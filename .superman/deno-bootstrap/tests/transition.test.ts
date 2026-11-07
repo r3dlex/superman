@@ -723,6 +723,23 @@ function toolIdentityFindings(job: WorkflowJob): string[] {
   return findings;
 }
 
+/**
+ * The raw per-process coverage dumps are not evidence: the receipt, the
+ * merged report and the summary are. An artifact that carries the dumps
+ * carries hundreds of megabytes that no receipt names and no reviewer
+ * reads.
+ */
+function rawDumpFindings(job: WorkflowJob): string[] {
+  const findings: string[] = [];
+  for (const step of job.steps) {
+    if (!(step.uses ?? "").startsWith("actions/upload-artifact@")) continue;
+    const path = step.with?.path ?? "";
+    if (!/!.*v8/u.test(path))
+      findings.push(`the artifact ${step.with?.name ?? "(unnamed)"} uploads the raw coverage dumps`);
+  }
+  return findings;
+}
+
 /** The candidate route records its artifacts in the candidate namespace. */
 function artifactFindings(job: WorkflowJob): string[] {
   const findings: string[] = [];
@@ -1182,6 +1199,15 @@ test("the candidate route binds the recorded tool identities", () => {
   const findings = toolIdentityFindings(parseWorkflow(swapped).jobs[0]);
   assert.equal(findings.length, 1);
   assert.match(findings[0], /deno_sha256/u);
+});
+
+test("neither route uploads the raw coverage dumps", () => {
+  // The hosted route and the candidate route both publish evidence; neither
+  // publishes the per-process dumps the collectors merge and leave behind.
+  const hosted = parseWorkflow(readFileSync(join(repository, ".github/workflows/ci.yml"), "utf8"));
+  const candidate = parseWorkflow(readFileSync(templatePath, "utf8"));
+  assert.deepEqual(rawDumpFindings(hosted.jobs[0]), []);
+  assert.deepEqual(rawDumpFindings(candidate.jobs[0]), []);
 });
 
 test("the candidate route binds the artifacts to the candidate namespace", () => {
