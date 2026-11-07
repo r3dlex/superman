@@ -93,7 +93,7 @@ jobs:
             const zipped = asset.url.endsWith('.zip');
             const archive = join(directory, zipped ? 'asset.zip' : 'asset.tar.gz');
             writeFileSync(archive, bytes);
-            if (zipped) execFileSync('unzip', ['-o', '-q', archive, '-C', directory], { shell: false });
+            if (zipped) execFileSync('unzip', ['-o', '-q', archive, '-d', directory], { shell: false });
             else execFileSync('tar', ['-xzf', archive, '-C', directory], { shell: false });
             const binary = join(directory, tool);
             if (asset.binarySha256) {

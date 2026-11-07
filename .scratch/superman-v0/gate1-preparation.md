@@ -2356,6 +2356,20 @@ The Deno collector's step tolerates exit 1 because the Deno surface's floor is u
 
 **What remains.** The three legs must run green on the new head; the `deno-candidate` legs are a **separate** publication (the template's file name under `.github/workflows/` is André's call); the three native candidate proof runs and the live forge evidence are the operator lanes; and the exact-head approval and the merge are André's.
 
+#### The first hosted result of the fix, and its own defect — 2026-11-07
+
+**The first fix attempt failed in the install step, not in the coverage step.** The head `6225698` produced:
+
+```text
+bootstrap (macos-15)          fail  46s   (the install step)
+Error: Command failed: unzip -o -q …/superman-deno/asset.zip -C …/superman-deno
+caution: filename not matched:  -C
+```
+
+**The cause was the fix's own typo, not the design.** `-C` is a `tar` destination flag; `unzip` has no `-C` and extracts to the current directory unless given `-d`. The candidate template already had it right — `unzip -o -q "$DENO_DIR/deno.zip" -d "$DENO_DIR"` — and the bootstrap step was changed to match the template rather than the other way round. The corrected invocation is `unzip -o -q <archive> -d <directory>`.
+
+This is recorded rather than smoothed over: the hosted run is the only thing that can catch an invocation that no local run exercised, because the install step's archive handling runs only on the runner.
+
 ### Step 12 — exact-source replacement and transition proof
 
 #### Step 12 local half record — 2026-11-04
