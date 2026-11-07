@@ -283,7 +283,10 @@ test("the declared scope excludes the test files it declares", (t) => {
   const config = JSON.parse(readFileSync(join(repo.root, ".superman/ci/bootstrap.json"), "utf8"));
   config.quality = { mutation: { scope: ["src/**/*.ts", ".superman/ci/**/*.ts", "!**/*.test.ts"] } };
   repo.write(".superman/ci/bootstrap.json", JSON.stringify(config));
-  repo.write("src/classify.ts", "export function classify(value: number) { return value > 0 ? 'positive' : 'other'; }\n");
+  repo.write(
+    "src/classify.ts",
+    "export function classify(value: number) { return value > 0 ? 'positive' : 'other'; }\n",
+  );
   repo.write(
     "test/classify.test.ts",
     "import { test, expect } from 'vitest'; import { classify } from '../src/classify.ts'; test('boundary', () => { expect(typeof classify(1)).toBe('string'); });\n",
