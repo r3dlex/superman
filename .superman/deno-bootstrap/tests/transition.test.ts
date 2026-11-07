@@ -1277,6 +1277,16 @@ test("both hosts' policy scan decide the same paths", () => {
   assert.deepEqual(findings(deno.stdout ?? ""), findings(node.stdout ?? ""));
 });
 
+test("the published candidate workflow tolerates the Deno collector's carried shortfall", () => {
+  // The Deno surface's own coverage floor is unmet, so its collector exits 1
+  // truthfully and the receipt carries the obligation. The hosted workflow
+  // binds that receipt rather than the exit status; the candidate's proof
+  // must do the same, or it never reaches its own gates.
+  const source = readFileSync(join(repository, ".github/workflows/deno-candidate.yml"), "utf8");
+  assert.match(source, /set \+e/u, "the candidate's proof aborts on the Deno collector's exit status");
+  assert.match(source, /"\$status" -ne 1/u, "the candidate's proof does not accept the collector's carried shortfall");
+});
+
 test("the published candidate workflow exports the tool paths the gates read", () => {
   // The gates read ARCHGATE_BIN and TRIVY_BIN. A workflow that exports
   // ARCHGATE leaves the gate on the npm shim, which resolves a binary from
