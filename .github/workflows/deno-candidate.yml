@@ -1,4 +1,13 @@
-# The Gate 1 candidate CI workflow — bisect probe.
+# The Gate 1 candidate CI workflow — the published copy.
+#
+# This file is the published copy of the Deno candidate's reviewed template.
+# The template itself stays outside `.github/workflows/`, so GitHub Actions
+# never discovers it. Publication was separately authorized on 2026-11-07.
+#
+# It adds the candidate proof legs. It does not touch the Node required
+# evaluation: the required check producers stay `bootstrap (macos-15)`,
+# `bootstrap (ubuntu-24.04)` and `bootstrap (ubuntu-24.04-arm)`, and no
+# candidate leg is ever a required check.
 #
 # What it declares, and where each fact comes from:
 #   - The three native platforms, their runner label sets and the candidate
@@ -56,53 +65,7 @@ env:
   BASE_SHA: ${{ github.event.pull_request.base.sha }}
 
 jobs:
-  deno-candidate:
-    name: deno-candidate (${{ matrix.os }})
-    runs-on: ${{ fromJSON(matrix.runner) }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-15
-            platform: darwin-arm64
-            runner: '["self-hosted","macOS","ARM64","r3dlex-org"]'
-            deno_archive: deno-aarch64-apple-darwin.zip
-            deno_archive_sha256: 9f0bf660393da2eaff044cdc7444cb08c73f235849b61d224d825a194ce7c98e
-            deno_sha256: d1e99265e5e6ee096c5780d88ff7d3e6cfdf33b1953a118b4889cab8ca6980ba
-            denort_archive: denort-aarch64-apple-darwin.zip
-            denort_archive_sha256: 0d44d476ffcb0406771ed62eca9da8a9bc12b2f0b4a2c7b477b5303809c5b483
-            denort_sha256: f0003b0441a483f4a88ef18342549ee38ff76d829b48c9f51b43df911e780cfb
-            deno_version: 2.9.8
-          - os: ubuntu-24.04
-            platform: linux-x64
-            runner: '["self-hosted","Linux","X64","r3dlex-org"]'
-            deno_archive: deno-x86_64-unknown-linux-gnu.zip
-            deno_archive_sha256: e890975bc2549807bbcc0b584ffafda72cc7c93349dd99c80483dd784f6c4609
-            deno_sha256: 368bca08999e02c6911b8f248167b582276b1f547db5712b6e736d7eda1dbda7
-            denort_archive: denort-x86_64-unknown-linux-gnu.zip
-            denort_archive_sha256: 1577df68c9fe13ec7b974d10d483e9f8974575a3d17f7c127489cf5032e14bd4
-            denort_sha256: 7b91d3d117804c0ebe05ac017a3430e0f09d9ab05b588ff0bda6f514dd0a4f2d
-            deno_version: 2.9.8
-          - os: ubuntu-24.04-arm
-            platform: linux-arm64
-            runner: '["self-hosted","Linux","ARM64","r3dlex-linux-arm64"]'
-            deno_archive: deno-aarch64-unknown-linux-gnu.zip
-            deno_archive_sha256: d49596c20b9788cf8f5d8ddf644103d4bde56ed239753f0bdb92ba9361d51905
-            deno_sha256: b484f780e5149ca05c673f1f79f7fb466f12a2295933bdad917af4a8a5c020e8
-            denort_archive: denort-aarch64-unknown-linux-gnu.zip
-            denort_archive_sha256: 1cf6a3b3e8c1f364c2b89fd08605e5c2d16ed1c670fed330fb5e370c2dbf6b3d
-            denort_sha256: bab7bc2f98ff656f335712f064b97bdedfa243d4a59ada40bd30b48e268db01b
-            deno_version: 2.9.8
-    env:
-      DENO_DIR: ${{ runner.temp }}/superman-deno
-      DENO_ARCHIVE_URL: https://github.com/denoland/deno/releases/download/v2.9.8/${{ matrix.deno_archive }}
-      DENO_ARCHIVE_SHA256: ${{ matrix.deno_archive_sha256 }}
-      DENO_BINARY_SHA256: ${{ matrix.deno_sha256 }}
-      DENORT_ARCHIVE_URL: https://github.com/denoland/deno/releases/download/v2.9.8/${{ matrix.denort_archive }}
-      DENORT_ARCHIVE_SHA256: ${{ matrix.denort_archive_sha256 }}
-      DENORT_BINARY_SHA256: ${{ matrix.denort_sha256 }}
-      DENO_VERSION: ${{ matrix.deno_version }}
-      CANDIDATE_RECEIPT_DIR: .superman-ci/deno-bootstrap/${{ matrix.platform }}
+  probe:
+    runs-on: ubuntu-24.04
     steps:
       - run: echo probe
