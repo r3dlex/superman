@@ -539,6 +539,9 @@ test("the nightly stage compares main against the previous main and replays noth
   const g9 = result.receipt.results.find((entry: { gate: string }) => entry.gate === "G9");
   assert.equal(g9.status, "n/a");
   assert.match(String(g9.reason), /nightly on main/u);
+  // The nightly's G6 is the critical acceptance, not a mutation measurement.
+  const g6 = result.receipt.results.find((entry: { gate: string }) => entry.gate === "G6");
+  assert.match(String(g6.reason), /declared critical cases executed fresh/u);
 });
 
 test("the nightly stage refuses a branch that is not main", (t) => {
