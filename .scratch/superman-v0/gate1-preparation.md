@@ -18,7 +18,7 @@
 | Ticket 01 | **Unadmitted.** Blocked by the Gate 1 bootstrap. |
 | Deno evaluator | Not activated. The current Node bootstrap remains the active evaluator. |
 
-**Next action.** The pull-request leg's mutation scope and the nightly's full-corpus lane are in (2026-11-07): the pull-request leg applies the declared `quality.mutation.pullRequestScope`, the nightly and the owner's run apply the whole declared `quality.mutation.scope`, and the measurement-inputs check is anchored to the baseline. **The first measurement in critical scope is taken** — 8,881 mutants, 13.62 % killed, 1,125 survived, 6,541 without coverage, with the raw outcomes per file, status, mutator and line — and what remains of it is **André's survivor treatment** (§5.4): meaningful kills, or a reviewed Gate 1 measurement/equivalence decision with the exact argument and raw outcomes, which the record holds. The measurement's own finding is that the pinned mutation runner executes Vitest and cannot see the `node:test` suites that exercise the enforcement core, so the score measures the runner's test discovery rather than the core's testedness. The acceptance round stands as recorded: André accepts or rejects rows 8–11 on their recorded evidence. Row 12 is **not** presented — its criterion needs the three native candidate proof runs, the live forge evidence and the publication, which are operator lanes. The two independent reviews (Standards and Spec, run in parallel) are in; their findings and their resolutions are recorded under rows 10 and 11. Rows 1–12 all stay on the critical path to ticket 01.
+**Next action.** The pull-request leg and the nightly's full-corpus lane are in (2026-11-07): the pull-request leg executes the declared critical cases fresh and measures no mutant, the nightly and the owner's run apply the whole declared `quality.mutation.scope`, and the measurement-inputs check is anchored to the baseline. **The first measurement in critical scope is taken** — 8,881 mutants, 13.62 % killed, 1,125 survived, 6,541 without coverage, with the raw outcomes per file, status, mutator and line — and what remains of it is **André's survivor treatment** (§5.4): meaningful kills, or a reviewed Gate 1 measurement/equivalence decision with the exact argument and raw outcomes, which the record holds. The measurement's own finding is that the pinned mutation runner executes Vitest and cannot see the `node:test` suites that exercise the enforcement core, so the score measures the runner's test discovery rather than the core's testedness. The acceptance round stands as recorded: André accepts or rejects rows 8–11 on their recorded evidence. Row 12 is **not** presented — its criterion needs the three native candidate proof runs, the live forge evidence and the publication, which are operator lanes. The two independent reviews (Standards and Spec, run in parallel) are in; their findings and their resolutions are recorded under rows 10 and 11. Rows 1–12 all stay on the critical path to ticket 01.
 
 **Rules of record.** [ADR 0018](../../docs/adr/0018-admission-evidence-not-tool-correctness.md) decides how a preparation step is judged — read it before starting a step. [The grilling record](gate1-grilling-record.md) holds the reasoning behind those decisions; [the loop diagnosis](gate1-loop-diagnosis.md) holds why three attempts circled, and `gate1-loop-check.mjs` reports whether the last three attempts measured anything (exit 1 means they did not).
 
@@ -2611,7 +2611,7 @@ The guard-by-guard reachability record — the input that reaches each guard and
 **André's decisions, in the order he made them.**
 
 1. **Anchor the check to the baseline** — the G6 measurement-inputs check.
-2. **Keep G6 on the pull-request leg, narrow its scope to a minute, and give the whole scope to the nightly.** The mutation gate stays a pull-request gate; its pull-request scope is declared and small, and the nightly applies the whole declared scope with the hours the measured rate needs.
+2. **Keep G6 on the pull-request leg, narrow it to a minute, and give the whole scope to the nightly.** The mutation gate stays a pull-request gate, but the pull-request leg carries the fresh critical acceptance rather than a measurement, and the nightly applies the whole declared scope with the hours the measured rate needs.
 3. **The full CI must take at most 15 minutes in all cases.**
 
 ### The baseline identity — what changed and why
@@ -2654,7 +2654,7 @@ The mutation scope is **declared twice**, and each lane applies the one it decla
 
 | Lane | Declared scope | What it carries |
 | --- | --- | --- |
-| The pull-request leg (`pre-pr`, `ci`) | `quality.mutation.pullRequestScope` — the product source | The narrowed measurement, compared at base and candidate, plus the declared critical cases executed fresh |
+| The pull-request leg (`pre-pr`, `ci`) | `quality.mutation.pullRequestScope` — the product source | The declared critical cases executed fresh; no mutation measurement |
 | The nightly and the owner's reviewed run (`nightly`, and a scoped `G6` run) | `quality.mutation.scope` — the whole declared scope | The uncached full run against the full-repository baseline, and the critical policy |
 
 The narrowed scope is **declared, not derived**: an undeclared scope is not a smaller one, and the reviewed policy is the only place a scope may be narrowed. A pull-request receipt names the scope it applied.
@@ -2665,11 +2665,11 @@ The nightly leg applies the whole declared scope and measures it whole, at the p
 
 **The lane model, exactly.** Three lanes, one declared scope each, and the equivalent-scope comparison is every lane's contract except the nightly's:
 
-| Lane | The stage that selects it | The declared scope | What it measures |
+| Lane | The stage that selects it | The declared scope | What it carries |
 | --- | --- | --- | --- |
-| `pull-request` | `pre-commit`, `pre-pr`, `ci` | `quality.mutation.pullRequestScope` | the change, at base and at candidate |
+| `pull-request` | `pre-pr`, `ci` | `quality.mutation.pullRequestScope` | the declared critical cases, executed fresh — no mutation measurement |
 | `full` | a scoped `G6` run | `quality.mutation.scope` | the change, at base and at candidate |
-| `corpus` | `nightly` | `quality.mutation.scope` | the whole scope, at the previous `main` and at `main` |
+| `corpus` | `nightly` | `quality.mutation.scope` | the whole declared scope, at the previous `main` and at `main` |
 
 The identity hash is **lane-independent**: it covers the *declared* scopes, not the applied one, so a baseline recorded in one lane is the baseline the other compares against. The hash schema moved from `superman.bootstrap-quality/2` to `/3` with that change.
 

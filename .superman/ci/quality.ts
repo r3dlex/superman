@@ -479,6 +479,48 @@ function executeCriticalCases(
 }
 
 /**
+ * The pull-request form of the critical gate: the declared critical cases
+ * execute fresh, outside affected selection and result caches.
+ *
+ * The mutation measurement is not part of this form. §5.4's G6 row gives the
+ * per-pull-request column the fresh critical acceptance and gives the nightly
+ * column the uncached full run, and the measurement is too expensive to carry
+ * in a pull-request leg: the declared mutation scope is the enforcement core,
+ * 8,881 mutants, and the whole-scope measurement takes about twenty-four
+ * minutes on a ten-core machine with four workers and hours on a hosted
+ * runner. The result names the form it is, so a receipt is never read as a
+ * mutation result it is not.
+ */
+export function criticalAcceptanceGate(
+  gate: string,
+  root: string,
+  headSha: string,
+  env: NodeJS.ProcessEnv,
+): QualityResult {
+  const gitEnv = hermeticGitEnv(env);
+  const git = hermeticGit(root, gitEnv);
+  const config = JSON.parse(readFileSync(join(root, ".superman/ci/bootstrap.json"), "utf8"));
+  const declaredMutation = config.quality?.mutation ?? {};
+  // A declared critical module or case the candidate does not carry blocks:
+  // an unresolved critical case is never a pass.
+  const critical = assertCriticalCases(declaredMutation.critical, gate, git, headSha);
+  if (!critical.length)
+    return {
+      gate,
+      status: "n/a",
+      reason: "no declared critical cases",
+      evidence: { headSha },
+    };
+  const criticalCases = executeCriticalCases(critical, gate, root, env);
+  return {
+    gate,
+    status: "pass",
+    reason: "declared critical cases executed fresh; the mutation measurement is the full-corpus run's, not this leg's",
+    evidence: { headSha, criticalCases },
+  };
+}
+
+/**
  * The staged form of G5: the changed files in the declared duplication corpus.
  *
  * §5.4's pre-commit cell for G5 is "changed files, partial feedback". The
@@ -1090,6 +1132,8 @@ export function qualityGate(
             "false",
             "--mutate",
             after.join(","),
+            "--concurrency",
+            String(declaredMutation.concurrency ?? 3),
           ],
           snapshot,
         );
