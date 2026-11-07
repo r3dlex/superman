@@ -2684,6 +2684,12 @@ The clone of the pushed branch ran the driver's own gates locally, and two thing
 
 Neither was visible to the suites: the first needs the full scope to reach ✗, and the second was in a file the suites type-check but do not lint for dead exports ✗. The local clone's own gate run is what found both ✓ — the same acceptance object that the artefact rather than an inspection has to be ✓.
 
+### The coverage floor caught the nightly's untested paths
+
+The first hosted round with the new gate code failed in the coverage step, not in the gates: **the node inventory's branch coverage fell to 89.83 % against the 90 % floor**. The new nightly paths — the corpus lane, the nightly's base and branch, the post-merge path policy, the replay exemption — were behaviour with no test, and the floor refused them.
+
+That is the floor working as ADR 0014 intends: *"improve meaningful tests instead"*. The remedy was four tests, one per behaviour — the nightly compares main against the previous main and refuses any other branch, refuses a pull-request event, replays nothing because there is no pull request, measures the whole declared scope where every other lane measures the change, and the path policy decides no pull-request kind on main. The nightly's branch is now checked wherever the nightly runs, not only inside the continuous-integration identity block, which is where a local nightly run had slipped through.
+
 ### The CI's own cost, measured on the hosted runner
 
 Round eight's `bootstrap (ubuntu-24.04)` leg, from the hosted run's own step timings — the only measurement of the CI's cost that exists, because the leg had never reached its end:
