@@ -484,6 +484,18 @@ function failureLine(reason: string | undefined): string {
   return (reason ?? "").split("\n")[0];
 }
 
+/**
+ * The terminal's colour escapes, removed.
+ *
+ * A test runner that writes to a terminal colours its output, so the same
+ * failure text arrives with escape codes between the words on a runner and
+ * without them in a captured pipe. The text is the claim; the colour is the
+ * terminal's.
+ */
+function stripAnsi(text: string): string {
+  return text.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "gu"), "");
+}
+
 test("a staged run refuses a tracked modification that was not staged", (t) => {
   // The input that reaches the guard: a tracked file the working tree carries
   // a modification of and the index does not. The outcome it produces: the
@@ -671,6 +683,16 @@ test("a staged G9 passes when the staged test file is green", (t) => {
   );
 });
 
+test("the parity assertion reads the tool's text, not the terminal's colour", () => {
+  // The captured output of a test runner that wrote to a terminal: the same
+  // failure text, with the terminal's colour escape interleaved. A CI runner
+  // gives its steps a terminal, so this is the shape the assertion really
+  // meets there — and the shape that must still match.
+  const coloured = "AssertionError\u001b[22m: expected 1 to be 2";
+  assert.doesNotMatch(coloured, /AssertionError: expected 1 to be 2/u);
+  assert.match(stripAnsi(coloured), /AssertionError: expected 1 to be 2/u);
+});
+
 test("a staged G9 fails when the staged test file is red", (t) => {
   // The input that reaches the staged G9: a staged test file whose staged
   // content is red. The outcome it produces: both hosts fail with the same
@@ -696,7 +718,7 @@ test("a staged G9 fails when the staged test file is red", (t) => {
   assert.match(deno.checked ?? "", /staged test files were run against the staged content/u);
   assert.equal(failureLine(deno.reason), failureLine(node.reason));
   assert.match(failureLine(deno.reason), /vitest run .* failed \(1\)/u);
-  assert.match(observed.deno.output, /AssertionError: expected 1 to be 2/u);
+  assert.match(stripAnsi(observed.deno.output), /AssertionError: expected 1 to be 2/u);
   assert.equal(observed.deno.receipt?.verdict, "fail");
 });
 

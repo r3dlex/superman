@@ -2370,6 +2370,61 @@ caution: filename not matched:  -C
 
 This is recorded rather than smoothed over: the hosted run is the only thing that can catch an invocation that no local run exercised, because the install step's archive handling runs only on the runner.
 
+#### The three hosted failures, diagnosed with three tight loops — 2026-11-07
+
+**Outcome:** the three red runs are diagnosed, each with a command that goes red on the broken form and green on the fixed one, and each fix is committed. **This is not an acceptance of the merge:** nothing here accepts a hosted merge or ticket 01.
+
+**The diagnosis discipline.** No failure was diagnosed by reading the diff. Each one has a loop that produces the runner's *own* symptom locally, and each loop was shown red on the broken code and green on the fixed code.
+
+| # | Failure | The loop | Red on the broken form | Green on the fixed form |
+| --- | --- | --- | --- | --- |
+| 1 | `Coverage Deno measurement receipt is absent` | `node .superman/ci/coverage.ts --mode full` in a tree with no Deno receipt | `Coverage Deno measurement receipt is absent: .superman-ci/coverage-deno-*/coverage-receipt.json` — and it refuses **before** measuring, so the loop is seconds | the workflow produces the receipt first, so the collector binds it |
+| 2 | `unzip: caution: filename not matched: -C` | `unzip -o -q asset.zip -C <dir>` against a zip | `caution: filename not matched:  -C`, and nothing is extracted | `unzip -o -q asset.zip -d <dir>` extracts the binary |
+| 3 | the parity assertion could not match the runner's failure text | the runner's own captured bytes, `AssertionError\x1b[22m: expected 1 to be 2` | the raw text does **not** match `/AssertionError: expected 1 to be 2/` — the terminal's escape sits between the words | stripping the escapes matches it |
+
+**What the loops could not do, stated plainly.** Failure 3's loop could not be reproduced *in situ*: the runner gives its steps a pseudo-terminal, and neither `FORCE_COLOR=1`, nor `CI=true`, nor `TERM=xterm-256color`, nor running the test under a pty, made the local child colour — Vitest 5.0.5 colours only on a TTY, and the child's stdout is piped on both hosts. The loop is therefore a **replay of the captured runner output**, which is the artefact that carries the signal.
+
+**The fix that came out of it.** The assertion now reads the tool's *text* rather than the terminal's colour, and the captured runner bytes are a regression test in their own right:
+
+```text
+const coloured = "AssertionError\u001b[22m: expected 1 to be 2";
+assert.doesNotMatch(coloured, /AssertionError: expected 1 to be 2/u);
+assert.match(stripAnsi(coloured), /AssertionError: expected 1 to be 2/u);
+```
+
+That test was shown to be red-capable by mutating `stripAnsi` into a no-op — it failed — and the file was then restored byte-for-byte and re-verified green.
+
+**The Matt prompt that carried the fix**, in the form the record keeps for every executed step:
+
+```text
+/implement Work only on the three failures the hosted legs reported on the
+published head, and on nothing else. Each failure has a red-capable local
+loop; use it, do not reason from the diff.
+
+1. "Coverage Deno measurement receipt is absent" — the published workflow
+   never runs the Deno collector, so the Node collector has nothing to bind.
+   Register the pinned Deno 2.9.8 for all three platforms in
+   .superman/ci/tool-assets.json with its archive digest and its extracted
+   executable's digest; install it in the checksum-locked step beside
+   Archgate and Trivy; and run the Deno collector before the coverage floor.
+   The collector's truthful exit 1 is tolerated — the binding is by receipt,
+   not by exit status — and a missing receipt is still refused.
+2. "unzip: caution: filename not matched: -C" — `-C` is tar's destination
+   flag; unzip has no -C and extracts to the current directory unless given
+   -d. Use -d, matching the candidate template, which already had it right.
+3. The parity assertion matched the literal text "AssertionError: expected
+   1 to be 2" against output a CI runner renders with ANSI colour. Read the
+   tool's text, not the terminal's colour, and pin the runner's captured
+   bytes as a regression test.
+
+Do not stage, commit, push or publish anything in this invocation beyond the
+two policy files and the one test file; do not change a threshold, a floor, a
+pin or the candidate workflow template; do not accept the merge. Re-run the
+three loops and report each one's red and green.
+```
+
+**What the loops show now.** Loops 2 and 3 are green locally. **Loop 1 still shows the refusal, and that is correct** — the refusal is the gate working; the fix is that the workflow now produces the receipt, which only the hosted run can show. That run is the next step.
+
 ### Step 12 — exact-source replacement and transition proof
 
 #### Step 12 local half record — 2026-11-04
