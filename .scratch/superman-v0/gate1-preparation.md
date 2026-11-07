@@ -2690,6 +2690,8 @@ The first hosted round with the new gate code failed in the coverage step, not i
 
 That is the floor working as ADR 0014 intends: *"improve meaningful tests instead"*. The remedy was four tests, one per behaviour — the nightly compares main against the previous main and refuses any other branch, refuses a pull-request event, replays nothing because there is no pull request, measures the whole declared scope where every other lane measures the change, and the path policy decides no pull-request kind on main. The nightly's branch is now checked wherever the nightly runs, not only inside the continuous-integration identity block, which is where a local nightly run had slipped through.
 
+**The Deno candidate's own coverage moved, and why.** The Deno inventory's four metrics are carried, not met, and they bind at the merge-bound cutover. Round twelve measured them at **45.88 % lines, 45.92 % statements, 35.90 % branches, 52.66 % functions** on the arm64 and macOS legs, against the 46.96 / 47.03 / 35.94 / 51.52 the record carried before this slice. The Deno sibling's new lane paths are not covered by the Deno twin's own suites — the corpus lane has no Deno twin case yet — so the inventory fell by about a point. It is a carried obligation either way, and it is named here rather than left to be discovered at the cutover.
+
 ### The CI's own cost, measured on the hosted runner
 
 Round eight's `bootstrap (ubuntu-24.04)` leg, from the hosted run's own step timings — the only measurement of the CI's cost that exists, because the leg had never reached its end:
