@@ -2753,3 +2753,23 @@ Round eight's `bootstrap (ubuntu-24.04)` leg, from the hosted run's own step tim
 The budget André set — the whole CI in at most fifteen minutes — is therefore already met, and the long pole is the **coverage collector**, not the mutation gate. The mutation leg, once it applies the pull-request scope, is the declared critical cases and nothing else.
 
 **Why a random mutant sample cannot serve the comparison.** A sample of the base's mutants and a sample of the candidate's mutants are different populations, so the introduced-survivor rule would measure sampling noise rather than introduced survivors. A deterministic sample (seeded by the mutant's identity) would be comparable, but the budget does not reach it: at the measured 12 seconds per mutant, a one-minute step buys about five mutants, and Stryker's own initial test run — the coverage analysis that precedes any mutant — is 24–38 seconds on its own, so no Stryker leg fits in a minute at any scope.
+
+## The owner's first full-corpus run — three defects, and the lane model it settles
+
+The owner's reviewed full-corpus run (`node .superman/ci/raw-gates.ts --gate G6`) is the lane that carries the first-measurement survivor treatment. It had never produced a receipt: the first attempt died in the measurement's own first test run, and the three defects behind that are now fixed.
+
+**1. The measurement's snapshot carried three commands.** The declared critical cases execute *inside* the mutation measurement, and a critical case that runs a gate probes the tools that gate uses. The measurement's snapshot linked three commands into its bin directory — the ones the measurement itself runs — and the gate's own probes resolve their tools the same way a critical case's do. So the case that runs G2 probed for `tsrs`, the snapshot did not carry it, and the run died with `Command "tsrs" not found` although the reviewed tree carried it. The snapshot now carries every command the reviewed tree's bin directory carries, and the declared binaries still point at the tool's own entry point, which is what the gate's runner measures. The regression test builds a snapshot and runs the probe from it.
+
+**2. The shared fixture reached the reviewed tree's `node_modules` by a symlink.** A pnpm command that installs would rewrite that tree through the link. It is not hypothetical: a reproduction on this machine pruned the reviewed tree's `node_modules` — the bin directory empty and the packages gone — and the tree was rebuilt offline from the local store. The fixture now installs nothing (`verify-deps-before-run=false`, and the reviewed tree's script and pnpmfile settings), and a test holds the property.
+
+**3. The dispatch that sent every non-scoped G6 to the fresh critical acceptance took two things with it.** The staged scope's refusal went with it: a staged run must refuse a gate that declares no staged form, and the staged scope is not a pull-request leg. The nightly's measurement went with it: the nightly is the uncached full run, and §5.4's Nightly column says so. The Deno twin's staged-scope case caught the first; the Node twin's nightly routing case caught the second.
+
+### The lane model, exactly
+
+| Lane | Scope | Compared | Carries |
+| --- | --- | --- | --- |
+| the pull-request leg (`pre-pr`, `ci`) | the declared `quality.mutation.pullRequestScope` | at base and candidate | the fresh critical acceptance and the narrowed measurement; the recorded ratchet is not compared with a narrowed scope |
+| the nightly | the whole declared scope | at base and candidate, measured whole | the recorded ratchet and the full-corpus critical-survivor comparison |
+| the owner's reviewed run (`--gate G6`) | the whole declared scope | the change at base and candidate | the first-measurement survivor treatment and the baseline record |
+
+André's decision on 2026-11-07 settles the pull-request leg: it **keeps** the mutation gate, at the declared narrowed scope. The earlier reading — that the pull-request leg carries only the fresh critical acceptance — would have left the declared pull-request scope unused and would have stopped the pull-request leg from blocking an introduced survivor at all.
