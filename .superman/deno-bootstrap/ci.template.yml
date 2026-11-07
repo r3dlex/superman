@@ -1,10 +1,9 @@
 # The Gate 1 candidate CI workflow — a template, not a workflow.
 #
 # This file lives outside `.github/workflows/`, so GitHub Actions never
-# discovers it. It is inert: this slice does not copy it into the workflow
-# directory, does not publish it, and changes no published workflow.
-# Publication is a separately authorized operation, and this file is the
-# artifact that operation would publish.
+# discovers it. It is inert: it changes no published workflow.
+# Publication was separately authorized on 2026-11-07: the published copy
+# is `.github/workflows/deno-candidate.yml`.
 #
 # What it declares, and where each fact comes from:
 #   - The three native platforms, their runner label sets and the candidate
