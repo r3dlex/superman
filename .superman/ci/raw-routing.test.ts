@@ -526,6 +526,12 @@ test("the nightly stage compares main against the previous main and replays noth
       scope: "full",
       gates: ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11"],
     };
+    // The nightly's G6 is the uncached full run, so it takes the measurement
+    // path. The fixture declares no critical cases and no mutation scope, so
+    // that path reports its own n/a and not the acceptance's.
+    bootstrap.quality.mutation.critical = [];
+    bootstrap.quality.mutation.scope = [];
+    bootstrap.quality.mutation.pullRequestScope = [];
     write(".superman/ci/bootstrap.json", `${JSON.stringify(bootstrap, null, 2)}\n`);
   });
   // The nightly is a post-merge run: it is on main, and it compares main
@@ -539,9 +545,12 @@ test("the nightly stage compares main against the previous main and replays noth
   const g9 = result.receipt.results.find((entry: { gate: string }) => entry.gate === "G9");
   assert.equal(g9.status, "n/a");
   assert.match(String(g9.reason), /nightly on main/u);
-  // The nightly's G6 is the critical acceptance, not a mutation measurement.
+  // The nightly's G6 is the mutation measurement, not the critical acceptance:
+  // the measurement path reports the empty scope, the acceptance path reports
+  // the absence of declared cases.
   const g6 = result.receipt.results.find((entry: { gate: string }) => entry.gate === "G6");
-  assert.match(String(g6.reason), /declared critical cases executed fresh/u);
+  assert.match(String(g6.reason), /no TypeScript source/u);
+  assert.doesNotMatch(String(g6.reason), /no declared critical cases/u);
 });
 
 test("the nightly stage refuses a branch that is not main", (t) => {

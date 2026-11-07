@@ -24,10 +24,7 @@ test("the snapshot carries the reviewed tree's whole tool surface", (t) => {
   const commands = readdirSync(join(repo.root, "node_modules", ".bin"));
   assert.ok(commands.includes("tsrs"), "the reviewed tree carries no tsrs command");
   for (const command of commands)
-    assert.ok(
-      existsSync(join(snapshot, "node_modules", ".bin", command)),
-      `${command} is missing from the snapshot`,
-    );
+    assert.ok(existsSync(join(snapshot, "node_modules", ".bin", command)), `${command} is missing from the snapshot`);
   // And the command runs from the snapshot, the way a gate's tool probe
   // runs it: the fixture's own pnpm, so the probe needs no network.
   const probe = spawnSync(join(repo.root, ".tools", "pnpm"), ["exec", "tsrs", "--version"], {

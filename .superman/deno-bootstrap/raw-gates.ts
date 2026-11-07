@@ -37,7 +37,7 @@ import {
 // inventory, the failure kinds and the publication rules are unchanged.
 import { execFileSync } from "./exec.ts";
 import { fixtureEnvironment } from "./fixture-env.ts";
-import { criticalAcceptanceGate, qualityGate } from "./quality.ts";
+import { qualityGate } from "./quality.ts";
 import { nodeRuntimeVersion, replayBehavior } from "./replay.ts";
 
 const { values } = parseArgs({
@@ -482,19 +482,17 @@ try {
               ? { gate, status: "n/a", reason: "spec/chore kind (no ticket traceability)" }
               : gate === "G4" || gate === "G8"
                 ? { gate, status: "pass", sharedCheck: "G4/G8 policy preflight" }
-                : gate === "G6" && context.stage !== "scoped"
-                  ? // The per-pull-request form of the critical gate: the
-                    // declared critical cases execute fresh. The mutation
-                    // measurement is the full-corpus run's, and a stage run is
-                    // not one.
-                    await criticalAcceptanceGate(gate, context.root, context.headSha, context.env)
-                  : gate === "G5" || gate === "G6"
-                    ? await qualityGate(gate, context.root, context.baseSha, context.headSha, context.env, {
-                        scope: context.scope,
-                        changedFiles: context.scope === "staged" ? stagedFiles() : [],
-                        mutation: mutationLane(context.stage),
-                      })
-                    : await directGate(gate, context);
+                : gate === "G5" || gate === "G6"
+                  ? await qualityGate(gate, context.root, context.baseSha, context.headSha, context.env, {
+                      scope: context.scope,
+                      changedFiles: context.scope === "staged" ? stagedFiles() : [],
+                      // The lane the stage applies: the pull-request leg
+                      // measures the declared pull-request scope, the nightly
+                      // measures the whole declared scope, and the owner's
+                      // scoped run compares the change at base and candidate.
+                      mutation: mutationLane(context.stage),
+                    })
+                  : await directGate(gate, context);
       results.push(result);
       console.log(`${gate}: ${result.status}`);
     } catch (error) {

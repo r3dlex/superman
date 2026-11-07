@@ -33,12 +33,7 @@ const pins = {
   stryker: "10.1.1",
 };
 
-export function fixture(
-  t: TestContext,
-  branch = "ticket/demo-01",
-  kind = "behavior",
-  modulesDir = modules,
-) {
+export function fixture(t: TestContext, branch = "ticket/demo-01", kind = "behavior", modulesDir = modules) {
   const root = mkdtempSync(join(tmpdir(), "superman-raw-fixture-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const write = (path: string, content: string) => {
