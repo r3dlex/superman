@@ -18,11 +18,24 @@ import { type ExecOptions, execFileSync, runOwned as spawnOwned } from "./exec.t
 /** The environment a child receives, as the Node originals' `ProcessEnv`. */
 export type ProcessEnv = Record<string, string | undefined>;
 
-export async function runOwned(command: string, args: string[], options: ExecOptions = {}) {
+/**
+ * An owned child is always bounded: an unbounded child outlives the run that
+ * started it, and the run cannot finish while it is alive. The bound is part
+ * of the caller's contract, so every owned child is given one.
+ */
+export async function runOwned(command: string, args: string[], options: ExecOptions & { timeout: number }) {
   // The child owns its process group, so a descendant that outlives it is
   // removed with the group. The timeout process fixture verifies this POSIX
   // process-group boundary.
-  return await spawnOwned(command, args, { ...options, detached: true, killSignal: "SIGKILL" });
+  const ownedOptions: ExecOptions = {
+    ...options,
+    detached: true,
+    killSignal: "SIGKILL",
+  };
+  // The bound is applied to the owned options and not to the spawn call: the
+  // owned child stays bounded even when the options object is replaced.
+  ownedOptions.timeout = options.timeout;
+  return await spawnOwned(command, args, ownedOptions);
 }
 
 /**
