@@ -144,15 +144,17 @@ function buildTemplate(kind: string): Template {
   git("add", "--all");
   git("commit", "--quiet", "-m", "approved base");
   git("update-ref", "refs/remotes/origin/main", "HEAD");
-  return { root, baseSha: git("rev-parse", "HEAD").trim() };
+  const built: Template = { root, baseSha: git("rev-parse", "HEAD").trim() };
+  templates.set(kind, built);
+  return built;
 }
 
 export function fixture(t: TestContext, branch = "ticket/demo-01", kind = "behavior", modulesDir = modules) {
-  let template = templates.get(kind);
-  if (!template) {
-    template = buildTemplate(kind);
-    templates.set(kind, template);
-  }
+  // The template is built once per ticket kind and kept. The miss builds it
+  // and keeps it: a scan that never hits the cache costs the build again,
+  // and a scan that never keeps it costs it again too, so neither a dropped
+  // lookup nor a dropped store turns the setup into a slow one.
+  const template = templates.get(kind) ?? buildTemplate(kind);
   const root = mkdtempSync(join(tmpdir(), "superman-raw-fixture-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   // The copy is the approved base: the same commit, the same tree and the
