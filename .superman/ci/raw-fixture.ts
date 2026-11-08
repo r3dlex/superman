@@ -109,6 +109,11 @@ function buildTemplate(kind: string): Template {
   const write = (path: string, content: string) => writeIn(root, path, content);
   const git = (...args: string[]) => gitIn(root, ...args);
   git("init", "--quiet", "--initial-branch=main");
+  // The identity belongs to the repository, not to the commands the fixture
+  // runs: a commit made inside a fixture by any other means needs an author
+  // too, and it finds one here.
+  git("config", "user.name", "Raw Gate Fixture");
+  git("config", "user.email", "fixture@example.invalid");
   write(".gitignore", "node_modules\n.tools/\n");
   // The fixture's node_modules is the reviewed tree's, reached by a symlink.
   // A pnpm command that installed would rewrite that tree through the link,
@@ -154,10 +159,9 @@ function buildTemplate(kind: string): Template {
 }
 
 export function fixture(t: TestContext, branch = "ticket/demo-01", kind = "behavior", modulesDir = modules) {
-  // The template is built once per ticket kind and kept. The miss builds it
-  // and keeps it: a scan that never hits the cache costs the build again,
-  // and a scan that never keeps it costs it again too, so neither a dropped
-  // lookup nor a dropped store turns the setup into a slow one.
+  // The template is built once per ticket kind and kept for the rest of the
+  // run. A miss builds it and stores it, so the second fixture of a kind
+  // copies a repository instead of building one.
   const template = templates.get(kind) ?? buildTemplate(kind);
   const root = mkdtempSync(join(tmpdir(), "superman-raw-fixture-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));

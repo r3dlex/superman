@@ -249,9 +249,18 @@ function safeReceipt(input: string): string {
   const destination = existsSync(requested)
     ? realpathSync(requested)
     : resolve(realpathSync(parent), relative(parent, requested));
-  const gitDir = realpathSync(git("rev-parse", "--absolute-git-dir"));
-  const commonDir = realpathSync(resolve(git("rev-parse", "--git-common-dir")));
-  const project = realpathSync(git("rev-parse", "--show-toplevel"));
+  // The repository's identity is three answers to one question, and the
+  // question does not change while the run does. One Git invocation answers
+  // all three, so a receipt check does not spend a process on each answer.
+  const [gitDirPath, commonDirPath, projectPath] = git(
+    "rev-parse",
+    "--absolute-git-dir",
+    "--git-common-dir",
+    "--show-toplevel",
+  ).split("\n");
+  const gitDir = realpathSync(gitDirPath);
+  const commonDir = realpathSync(resolve(commonDirPath));
+  const project = realpathSync(projectPath);
   const marker = resolve(project, ".git");
   const within = (directory: string) => {
     const path = relative(directory, destination);
