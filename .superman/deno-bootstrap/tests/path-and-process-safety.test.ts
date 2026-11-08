@@ -49,6 +49,15 @@ async function gone(pid: number, milliseconds = 5_000): Promise<boolean> {
   return !alive(pid);
 }
 
+/** End a process that is still running, whoever started it. */
+function reap(pid: number): void {
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // The process is already gone, which is the state this is called for.
+  }
+}
+
 /**
  * The twin's own `safeReceipt` declaration, read out of the shipped module.
  *
@@ -226,7 +235,13 @@ test("an owned child that outlives its timeout is killed with its whole process 
     // And nothing it started outlives it.
     const pid = Number(readFileSync(join(root, "grandchild.pid"), "utf8"));
     assert.ok(pid > 0, "the grandchild did not report its pid");
-    assert.equal(await gone(pid), true, "the grandchild outlived the cancelled child");
+    // The grandchild is reaped whatever the assertion finds, so a run in
+    // which the group kill does not work leaves no process behind.
+    try {
+      assert.equal(await gone(pid), true, "the grandchild outlived the cancelled child");
+    } finally {
+      reap(pid);
+    }
     assert.equal(
       existsSync(join(root, "descendant.txt")),
       false,

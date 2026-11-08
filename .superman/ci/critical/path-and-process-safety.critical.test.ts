@@ -35,6 +35,15 @@ async function gone(pid: number, milliseconds = 5_000): Promise<boolean> {
   return !alive(pid);
 }
 
+/** End a process that is still running, whoever started it. */
+function reap(pid: number): void {
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // The process is already gone, which is the state this is called for.
+  }
+}
+
 describe("the owned child process", () => {
   test("a child that outlives its timeout is killed with its whole process group", async () => {
     const repo = fixture(fixtureContext(), "spec/demo");
@@ -71,6 +80,12 @@ describe("the owned child process", () => {
     // And nothing it started outlives it.
     const pid = Number(JSON.parse(readFileSync(pidPath, "utf8")));
     expect(pid).toBeGreaterThan(0);
+    // The grandchild is reaped whatever the assertion finds. A run in which
+    // the group kill does not work would otherwise leave the process behind
+    // for the rest of the measurement, and a machine full of them measures
+    // more slowly than one without — which turns a slow run into a timeout
+    // in a place that has nothing to do with the mutant under test.
+    onTestFinished(() => reap(pid));
     expect(await gone(pid)).toBe(true);
   }, 120_000);
 });
