@@ -15,10 +15,15 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import type { TestContext } from "node:test";
+import { fileURLToPath } from "node:url";
 import { fixtureEnvironment } from "./fixture-env.ts";
 
-const entrypoint = join(import.meta.dirname, "raw-gates.ts");
-const modules = resolve(import.meta.dirname, "../../node_modules");
+// The fixture's own directory, read the way both runtimes read it: the
+// Deno twin loads this module too, and under Deno the dirname is optional.
+// The value is the same one the Node idiom names.
+const here = dirname(fileURLToPath(import.meta.url));
+const entrypoint = join(here, "raw-gates.ts");
+const modules = resolve(here, "../../node_modules");
 const isolated = fixtureEnvironment();
 /**
  * The bound a fixture's gate child runs under. It is below the suite's own
@@ -111,7 +116,7 @@ function buildTemplate(kind: string): Template {
   // pnpmfile settings, and the dependency check that would start an install.
   write(".npmrc", "ignore-scripts=true\nignore-pnpmfile=true\nverify-deps-before-run=false\n");
   // Native pnpm 12's offline version probe also needs the provisioning lock.
-  write("pnpm-lock.yaml", readFileSync(resolve(import.meta.dirname, "../../pnpm-lock.yaml"), "utf8"));
+  write("pnpm-lock.yaml", readFileSync(resolve(here, "../../pnpm-lock.yaml"), "utf8"));
   write(".scratch/demo/spec.md", "# Approved spec\n");
   write(".scratch/demo/issues/01-feature.md", `# Ticket\n\n**Kind:** ${kind}\n`);
   write(
@@ -119,8 +124,7 @@ function buildTemplate(kind: string): Template {
     JSON.stringify({
       type: "module",
       packageManager: "pnpm@12.16.1",
-      devDependencies: JSON.parse(readFileSync(resolve(import.meta.dirname, "../../package.json"), "utf8"))
-        .devDependencies,
+      devDependencies: JSON.parse(readFileSync(resolve(here, "../../package.json"), "utf8")).devDependencies,
     }),
   );
   write(

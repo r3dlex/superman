@@ -1,6 +1,3 @@
-// @ts-nocheck
-// These suites carry type errors that predate this branch; the directive keeps
-// them runnable under `deno test`, which type-checks what it loads.
 // Public process suite for the Deno operational root's launch boundary and its
 // policy process foundation.
 //

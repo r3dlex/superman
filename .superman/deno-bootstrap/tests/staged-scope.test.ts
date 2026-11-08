@@ -1,6 +1,3 @@
-// @ts-nocheck
-// These suites carry type errors that predate this branch; the directive keeps
-// them runnable under `deno test`, which type-checks what it loads.
 // The staged scope parity suite for the Deno sibling.
 //
 // The Node original gained a staged scope for the pre-commit stage, so the

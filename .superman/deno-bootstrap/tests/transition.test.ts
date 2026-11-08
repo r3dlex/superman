@@ -1,6 +1,3 @@
-// @ts-nocheck
-// These suites carry type errors that predate this branch; the directive keeps
-// them runnable under `deno test`, which type-checks what it loads.
 /// <reference path="../../../.archgate/rules.d.ts" />
 // The Gate 1 row 12 transition fixture.
 //

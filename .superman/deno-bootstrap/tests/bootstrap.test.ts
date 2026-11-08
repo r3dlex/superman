@@ -1,6 +1,3 @@
-// @ts-nocheck
-// These suites carry type errors that predate this branch; the directive keeps
-// them runnable under `deno test`, which type-checks what it loads.
 // Public process suite for the operational Deno root's gate, replay, quality
 // and helper boundary.
 //
@@ -140,7 +137,7 @@ type Observed = {
 
 /** Run both hosts over the same fixture and collect what each observed. */
 function observe(
-  repo: { root: string },
+  repo: ReturnType<typeof fixture>,
   gate: string,
   branch: string,
   extra: Record<string, string | undefined> = {},
@@ -292,12 +289,15 @@ test("the Deno replay distinguishes a completed behavior assertion from an appro
   repo.commit();
   const observed = observe(repo, "G9", "ticket/demo-01");
   assertParity(observed);
-  assert.deepEqual(observed.denoEvidence?.behaviorReplay?.baseOutcome, {
+  const replay = observed.denoEvidence?.behaviorReplay as
+    | { baseOutcome?: unknown; candidateOutcome?: unknown }
+    | undefined;
+  assert.deepEqual(replay?.baseOutcome, {
     status: "fail",
     category: "assertion",
     testsCompleted: 1,
   });
-  assert.deepEqual(observed.denoEvidence?.behaviorReplay?.candidateOutcome, { status: "pass", testsCompleted: 1 });
+  assert.deepEqual(replay?.candidateOutcome, { status: "pass", testsCompleted: 1 });
 });
 
 test("the Deno replay confirms a missing product symbol with the compiler evidence", (t) => {
@@ -340,7 +340,7 @@ test("the parity harness rejects a diverged Deno receipt", (t) => {
  * runtime's own version and not a literal that could drift.
  */
 function denoVersion(): string {
-  const result = runOwned(explicitDeno(), ["--version"], { encoding: "utf8", shell: false });
+  const result = runOwned(explicitDeno(), ["--version"], { encoding: "utf8", shell: false, timeout: 60_000 });
   assert.ifError(result.error);
   return /^deno (\d+\.\d+\.\d+)/mu.exec(result.stdout)?.[1] ?? "";
 }
@@ -540,11 +540,7 @@ test("the Deno sibling refuses an operational graph it cannot cover", (t) => {
  * The reviewed policy is committed at the approved base, so the gate reads the
  * declared policy from the base tree, exactly as the Node original does.
  */
-function qualityFixture(
-  t: { after: (fn: () => void) => void },
-  quality: Record<string, unknown>,
-  extra?: Record<string, string>,
-) {
+function qualityFixture(t: TestContext, quality: Record<string, unknown>, extra?: Record<string, string>) {
   const repo = fixture(t, "ticket/demo-01");
   const policy = JSON.parse(readFileSync(join(repo.root, ".superman/ci/bootstrap.json"), "utf8")) as Record<
     string,
@@ -645,6 +641,7 @@ test("the Deno coverage collector refuses a missing and an extra inventory membe
       env: isolated,
       encoding: "utf8",
       shell: false,
+      timeout: 60_000,
     });
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stderr);
@@ -842,6 +839,7 @@ function driveHelpers(): Record<string, unknown>[] {
     const archived = runOwned("tar", ["-czf", archive, "-C", toolDirectory, "archgate"], {
       encoding: "utf8",
       shell: false,
+      timeout: 120_000,
     });
     assert.ifError(archived.error);
     assert.equal(archived.status, 0, archived.stderr);
@@ -926,6 +924,7 @@ function collectorTree(t: { after: (fn: () => void) => void }): string {
       env: isolated,
       encoding: "utf8",
       shell: false,
+      timeout: 60_000,
     });
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stderr);
@@ -1023,6 +1022,7 @@ test("the scope module is exercised completely", () => {
       env: isolated,
       encoding: "utf8",
       shell: false,
+      timeout: 60_000,
     });
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stderr);
@@ -1077,6 +1077,7 @@ function commitTree(root: string, message: string): void {
       env: isolated,
       encoding: "utf8",
       shell: false,
+      timeout: 60_000,
     });
     assert.equal(result.status, 0, result.stderr);
   }
@@ -1116,11 +1117,23 @@ test("the coverage receipts have the same shape in both hosts", (t) => {
     2,
     `the two collectors did not both write a receipt: ${nodeOutput}${deno.stdout}${deno.stderr}`,
   );
-  const nodeReceipt = receipts.find((receipt) => receipt.schema === "superman.coverage/1" && receipt.inventories?.node);
+  type CoverageReceipt = {
+    schema?: string;
+    inventories?: { node?: unknown };
+    collector?: { file?: string };
+    total?: Record<string, Record<string, unknown>>;
+    tools?: object;
+    denoMeasurement?: unknown;
+    carriedObligations?: unknown;
+  };
+  const nodeReceipt = receipts.find(
+    (receipt) => receipt.schema === "superman.coverage/1" && (receipt as CoverageReceipt).inventories?.node,
+  ) as CoverageReceipt | undefined;
   const denoReceipt = receipts.find(
     (receipt) =>
-      receipt.schema === "superman.coverage/1" && receipt.collector?.file?.endsWith("deno-bootstrap/coverage.ts"),
-  );
+      receipt.schema === "superman.coverage/1" &&
+      (receipt as CoverageReceipt).collector?.file?.endsWith("deno-bootstrap/coverage.ts"),
+  ) as CoverageReceipt | undefined;
   assert.ok(nodeReceipt, "the Node collector wrote no Node receipt");
   assert.ok(denoReceipt, "the Deno collector wrote no Deno receipt");
   // The two receipts are distinct: a comparison of one receipt with itself
@@ -1129,9 +1142,9 @@ test("the coverage receipts have the same shape in both hosts", (t) => {
   assert.deepEqual(Object.keys(denoReceipt).sort(), Object.keys(nodeReceipt).sort());
   assert.deepEqual(Object.keys(denoReceipt.tools as object).sort(), Object.keys(nodeReceipt.tools as object).sort());
   for (const metric of ["lines", "statements", "branches", "functions"]) {
-    const denoCounts = (denoReceipt.total as Record<string, Record<string, unknown>>)[metric];
-    const nodeCounts = (nodeReceipt.total as Record<string, Record<string, unknown>>)[metric];
-    assert.deepEqual(Object.keys(denoCounts).sort(), Object.keys(nodeCounts).sort());
+    const denoCounts: Record<string, unknown> | undefined = denoReceipt.total?.[metric];
+    const nodeCounts: Record<string, unknown> | undefined = nodeReceipt.total?.[metric];
+    assert.deepEqual(Object.keys(denoCounts ?? {}).sort(), Object.keys(nodeCounts ?? {}).sort());
   }
   assert.deepEqual(
     Object.keys(Object.values(denoReceipt.inventories as object)[0] as object).sort(),
