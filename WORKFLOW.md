@@ -30,7 +30,296 @@ The skills run configured for this repository: the tracker is `.scratch/<slug>/`
 
 **Once `superman` exists**, every command runs through it. superman invokes the skills — `ship` runs `implement`, `tdd`, `code-review` and `pr`, and planning stays `grill-with-docs` → `to-spec` → `to-tickets` — and keeps their configuration current through `superman init` and `superman skills lock|sync|verify`.
 
-**Authority stays with superman's rules.** A commit, push, publication, label or merge that a skill would make by default happens only under the authority the preparation record or the ticket names. One ticket is one PR with one human approval, so `implement-spec` stays outside the flow (spec §5.6). Upstream skill files stay byte-identical to the pin; this repository's configuration carries every adaptation.
+**Authority stays with superman's rules.** A commit, push, publication, label or merge that a skill would make by default happens only where [the three flows](#the-three-flows) or the preparation record allow it. One ticket is one PR with one human approval, so `implement-spec` stays outside the flow (spec §5.6). Upstream skill files stay byte-identical to the pin; this repository's configuration carries every adaptation.
+
+## The three flows
+
+Every piece of work follows one of three flows. Each flow shows today's form, run with Matt skills, and then its form with superman, which is specified, not implemented ([spec §5.2](.scratch/superman-v0/spec.md#52-cli-commands), §6.1 and §7). GitHub renders the diagrams; agents read their source and follow the numbered steps.
+
+| The work | Flow |
+| --- | --- |
+| Changes nothing a user or the spec can observe: tool pins, CI, configs, documents, the skill lock, the wiki | [Chore](#chore) |
+| Behaves differently from what the spec or a ticket already accepted | [Bugfix](#bugfix) |
+| Changes the accepted behavior, new or different, or restructures code without changing behavior (a refactor) | [Change request](#change-request) |
+
+When it is unclear which flow applies, run `grill-with-docs` first.
+
+**Every flow keeps these rules.**
+
+- **TDD is the only way to implement.** Every change to code, tests, config, workflows or policy goes red → green → refactor through `tdd`, directly or inside `implement`, with the red at the public seam that observes the change. Prose-only changes (records, WORKFLOW/README/GLOSSARY, ADR text) and evidence-only steps carry no red step.
+- **André decides five things:** his grilling answers, `to-spec`'s test seams, `to-tickets`' breakdown, the exact-head approval and the merge. The agent pushes and opens PRs as the App identity, so main's last-push rule always finds an approver other than the pusher.
+- **Gates are named by stage:** `pre-commit` on every commit, `pre-pr` before the push, `ci` on the PR. [Today's bootstrap](#todays-bootstrap--what-actually-runs) holds each stage's command; with superman each becomes `superman gate <stage>`.
+- **A bugfix or a small change request brings its own ticket.** Small means one ticket's worth that changes no spec section, ADR, Archgate rule or protected path. The branch is `ticket/<slug>-<nn>` with a new `<nn>`, and the PR adds exactly that ticket file under `.scratch/`; G8 reads the ticket from the PR's head and G9 applies by its `Kind:`. This route is live once the policy PR after Gate 1 merges. Until then the ticket lands first in a spec PR, and the ticket PR follows that merge.
+- **Each superman command replaces today's steps in the PR that makes it real.** When every step of a flow runs through superman, its superman diagram becomes the flow and today's is deleted.
+
+Optional in every flow:
+
+| Skill | Take it when |
+| --- | --- |
+| `research` | a fact needs primary sources |
+| `handoff` | the session or the harness changes |
+| `wait-what` | a message is unclear |
+| `diagnosing-bugs` | a gate goes red unexpectedly |
+| `retro` | the PR has merged, to improve the setup |
+
+### Chore
+
+```mermaid
+sequenceDiagram
+    actor A as André
+    participant Ag as Agent
+    participant G as Gates
+    participant GH as GitHub
+    opt the scope is unclear
+        Ag->>A: /grill-with-docs questions
+        A-->>Ag: answers
+    end
+    alt skill lock or catalog
+        Ag->>Ag: branch chore/skills-NAME
+    else wiki content
+        Ag->>Ag: branch chore/wiki-NAME
+    else protected file or root document
+        Ag->>Ag: branch spec/SLUG
+    else anything else
+        Ag->>Ag: leave for the change-request flow, Kind refactor
+    end
+    opt an agent-read document or skill changes
+        Ag->>Ag: /writing-for-agents
+    end
+    opt a human-only step, such as a secret or a setting
+        Ag->>A: /wizard script, kept outside the repository
+        A-->>Ag: done
+    end
+    Ag->>Ag: /tdd for each code, config, workflow or policy change
+    loop each commit
+        Ag->>G: pre-commit
+    end
+    Ag->>G: pre-pr
+    G-->>Ag: green receipt
+    Ag->>Ag: /pr writes the body
+    Ag->>GH: push and open the PR as the App
+    GH->>G: ci
+    G-->>GH: required checks green
+    A->>GH: approve the exact head
+    A->>GH: merge
+```
+
+1. **Route** the change by what it touches: the skill lock or catalog goes on `chore/skills-<name>`, wiki content on `chore/wiki-<name>`, a protected file or a root document on `spec/<slug>`. Anything else takes the [change request](#change-request) flow with a `Kind: refactor` ticket. *Done when* every changed path is one the branch kind allows.
+2. **Implement** each code, config, workflow or policy change with `tdd`. *Done when* each red was seen at its seam and is green now.
+3. **Check** with `pre-commit` on each commit and `pre-pr` on the head. *Done when* both receipts are green.
+4. **Propose**: `pr` writes the body, and the agent pushes and opens the PR as the App. *Done when* `ci`'s required checks pass on the exact head.
+5. **André** approves the exact head and merges.
+
+Optional: `grill-with-docs` when the scope is unclear; `writing-for-agents` when an agent-read document or skill changes; `wizard` for a human-only step such as a secret or a setting, with its script kept outside the repository.
+
+With superman (specified, not implemented):
+
+```mermaid
+sequenceDiagram
+    actor A as André
+    participant Ag as Agent
+    participant S as superman
+    participant GH as GitHub
+    alt skill lock or catalog
+        Ag->>S: skills lock --pocock SHA
+    else wiki content
+        Note over Ag,S: the nightly wiki-lint opens chore/wiki-NAME as a draft
+    else protected file or root document
+        Ag->>Ag: branch spec/SLUG
+    end
+    Ag->>Ag: /tdd for each code, config, workflow or policy change
+    loop each commit
+        Ag->>S: gate pre-commit, through the hook
+    end
+    Ag->>S: gate pre-pr
+    Ag->>Ag: /pr writes the body
+    Ag->>GH: push and open the PR as the App
+    GH->>S: gate ci
+    A->>GH: approve the exact head
+    A->>S: merge-ready PR
+    S-->>A: the merge command, pinned to the head
+    A->>GH: merge
+```
+
+### Bugfix
+
+```mermaid
+sequenceDiagram
+    actor A as André
+    participant Ag as Agent
+    participant G as Gates
+    participant GH as GitHub
+    opt the report comes raw from someone else
+        Ag->>Ag: /triage, local tracker only
+    end
+    Ag->>Ag: /diagnosing-bugs, a unit test at the exported function
+    Note over Ag: red before any diagnosis or fix
+    opt the bug cannot show at that seam
+        Ag->>Ag: move the test to the process seam, record why
+    end
+    Ag->>Ag: diagnose the cause from the red loop
+    Ag->>A: /to-tickets, a Kind behavior ticket naming the red test
+    A-->>Ag: approved
+    Ag->>Ag: branch ticket/SLUG-NN, the PR brings its ticket
+    Ag->>Ag: /implement, tdd turns the test green, then code-review
+    loop each commit
+        Ag->>G: pre-commit
+    end
+    Ag->>G: pre-pr
+    G-->>Ag: green receipt
+    Ag->>Ag: /pr writes the body
+    Ag->>GH: push and open the PR as the App
+    GH->>G: ci, G9 replays the test red on the base and green on the head
+    G-->>GH: required checks green
+    A->>GH: approve the exact head
+    A->>GH: merge
+```
+
+1. **Reproduce** with `diagnosing-bugs`: a unit test at the exported function of the module where the bug lives. *Done when* it is red for the bug itself (an assertion or a missing behavior, not a syntax, fixture or tool failure), before any diagnosis or fix.
+2. **Climb** only when the bug cannot show at that seam: move the test to the process seam and record why. *Done when* that test is red.
+3. **Diagnose** from the red loop. *Done when* the cause is named with the loop's evidence.
+4. **Ticket**: `to-tickets` writes a `Kind: behavior` ticket whose acceptance criterion is the red test. *Done when* André approves it.
+5. **Fix** with `implement`, which runs `tdd` and then `code-review`, on `ticket/<slug>-<nn>`, the PR bringing its ticket. *Done when* the red test is green, stays as the regression test, and code-review has no open finding.
+6. **Check** with `pre-commit` on each commit and `pre-pr` on the head. *Done when* both receipts are green.
+7. **Propose**: `pr` writes the body, and the agent pushes and opens the PR as the App. *Done when* `ci` passes, with G9 replaying the regression test red on the base and green on the head.
+8. **André** approves the exact head and merges.
+
+Optional: `triage` when the report comes raw from someone else, with the local tracker only.
+
+With superman (specified, not implemented):
+
+```mermaid
+sequenceDiagram
+    actor A as André
+    participant Ag as Agent
+    participant S as superman
+    participant GH as GitHub
+    Ag->>Ag: /diagnosing-bugs, a unit test red first
+    Ag->>A: /to-tickets, the ticket
+    A-->>Ag: approved
+    Note over Ag,S: ship drives the steps below, the PR bringing its ticket
+    Ag->>Ag: /implement, tdd, then code-review
+    loop each commit
+        Ag->>S: gate pre-commit, through the hook
+    end
+    Ag->>S: gate pre-pr
+    Ag->>Ag: /pr writes the body
+    Ag->>S: pr open TICKET
+    S->>GH: push and open the PR as the App
+    GH->>S: gate ci, G9 replays the test
+    A->>GH: approve the exact head
+    A->>S: merge-ready PR
+    S-->>A: the merge command, pinned to the head
+    A->>GH: merge
+```
+
+### Change request
+
+```mermaid
+sequenceDiagram
+    actor A as André
+    participant Ag as Agent
+    participant G as Gates
+    participant GH as GitHub
+    opt a refactor
+        Ag->>Ag: /improve-codebase-architecture picks the candidate
+    end
+    Ag->>A: /grill-with-docs questions
+    A-->>Ag: answers, with the size, glossary and ADRs settled
+    opt a design question needs a throwaway answer
+        Ag->>Ag: /prototype, its branch stays local
+    end
+    opt a module interface is being designed
+        Ag->>Ag: /codebase-design
+    end
+    opt the work is too foggy for one spec
+        Ag->>A: /wayfinder decision map
+        A-->>Ag: decisions
+    end
+    opt someone else holds the knowledge
+        Ag->>A: /to-questionnaire for that person
+        A-->>Ag: their answers
+    end
+    alt small
+        Ag->>A: /to-tickets, one ticket, Kind behavior or refactor
+        A-->>Ag: approved, the ticket PR brings it
+    else larger
+        Ag->>A: /to-spec, the test seams
+        A-->>Ag: confirmed
+        Ag->>A: /to-tickets, the breakdown
+        A-->>Ag: approved
+        Ag->>G: pre-pr
+        Ag->>GH: spec/SLUG PR as the App
+        GH->>G: ci
+        A->>GH: approve the exact head, merge
+    end
+    loop each ticket
+        Ag->>Ag: branch ticket/SLUG-NN, /implement, tdd, then code-review
+        Ag->>G: pre-commit on each commit, pre-pr on the head
+        G-->>Ag: green receipts
+        Ag->>Ag: /pr writes the body
+        Ag->>GH: push and open the PR as the App
+        GH->>G: ci, G9 by Kind
+        A->>GH: approve the exact head, merge
+    end
+```
+
+1. **Grill** with `grill-with-docs`. *Done when* André confirms the shared understanding, including the size: **small** is one ticket's worth that changes no spec section, ADR, Archgate rule or protected path; anything else, and anything unsure, is **larger**.
+2. **Small**: `to-tickets` writes one ticket, `Kind: behavior`, or `Kind: refactor` when no behavior changes. *Done when* André approves it; the ticket PR brings it.
+3. **Larger**: `to-spec` amends `.scratch/<slug>/spec.md` in place, then `to-tickets` writes the tickets. *Done when* André has confirmed the test seams and approved the breakdown, and the `spec/<slug>` PR, with `pre-pr` green, pushed as the App and `ci` green, is approved on its exact head and merged.
+4. **Implement** each ticket with `implement`, which runs `tdd` and then `code-review`, on `ticket/<slug>-<nn>`. *Done when* every acceptance criterion has a test that went red first and is green now, and code-review has no open finding. A refactor adds no assertion and keeps the suite green at every commit.
+5. **Check** with `pre-commit` on each commit and `pre-pr` on the head. *Done when* both receipts are green.
+6. **Propose**: `pr` writes the body, and the agent pushes and opens the PR as the App. *Done when* `ci` passes: G9 replays a behavior ticket's tests red on the base and green on the head, and a refactor keeps the suite green and the mutation score from dropping.
+7. **André** approves the exact head and merges.
+
+Optional: `improve-codebase-architecture` as the way into a refactor; `prototype` when a design question needs a throwaway answer, with its branch kept local; `codebase-design` when a module interface is being designed; `wayfinder` when the work is too foggy for one spec, its tracker writes under the authority rule; `to-questionnaire` when someone else holds the knowledge.
+
+With superman (specified, not implemented):
+
+```mermaid
+sequenceDiagram
+    actor A as André
+    participant Ag as Agent
+    participant S as superman
+    participant GH as GitHub
+    Ag->>A: /grill-with-docs questions
+    A-->>Ag: answers, with the size settled
+    opt a plan worth a second opinion
+        Ag->>Ag: plan-critic, at most two rounds, then André
+    end
+    alt small
+        Ag->>A: /to-tickets, one ticket
+        A-->>Ag: approved, the ticket PR brings it
+    else larger
+        Ag->>A: /to-spec, then /to-tickets
+        A-->>Ag: seams confirmed, breakdown approved
+        opt a decision is mechanically checkable
+            Ag->>Ag: adr-rule, an Archgate rule and its fixture
+        end
+        Ag->>GH: spec/SLUG PR as the App
+        A->>GH: approve the exact head, merge
+    end
+    loop each ticket
+        opt the ticket is already on main
+            Ag->>S: next, then claim TICKET
+        end
+        Note over Ag,S: ship drives the steps below
+        Ag->>Ag: /implement, tdd, then code-review
+        Ag->>S: gate pre-commit through the hook, on each commit
+        Ag->>S: pr open TICKET --draft
+        opt the ticket taught something worth keeping
+            Ag->>Ag: wiki-ingest
+        end
+        Ag->>S: gate pre-pr
+        Ag->>Ag: /pr writes the body
+        S->>GH: push the final head as the App, ready for review
+        GH->>S: gate ci
+        A->>GH: approve the exact head
+        A->>S: merge-ready PR
+        S-->>A: the merge command, pinned to the head
+        A->>GH: merge
+    end
+```
 
 ## The workflows
 
