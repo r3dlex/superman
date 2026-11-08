@@ -51,12 +51,17 @@ describe("the owned child process", () => {
         "setInterval(() => {}, 1000);\n",
     );
 
+    // The bound is short because the case costs what the bound costs: the
+    // child has to hang long enough to be killed, and the whole point is
+    // that the group kill ends it. A longer bound proves the same thing
+    // more slowly — and the mutation budget this case's mutants are given
+    // is derived from how long these tests take.
     const result = runOwned(process.execPath, [script], {
       cwd: repo.root,
       env: fixtureEnvironment(),
       encoding: "utf8",
       shell: false,
-      timeout: 5_000,
+      timeout: 2_000,
     });
 
     // The bounded process ends at its timeout and says so.
