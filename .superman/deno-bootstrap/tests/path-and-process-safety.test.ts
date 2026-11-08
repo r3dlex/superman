@@ -202,7 +202,7 @@ test("the receipt's parent walk stops at the filesystem root when the existence 
   assert.equal(stop, parse(stop).root, `the walk stopped at ${stop}, not at the filesystem root`);
 });
 
-test("an owned child that outlives its timeout is killed with its whole process group", async (t) => {
+test("an owned child that outlives its timeout is killed with its whole process group", async () => {
   const root = mkdtempSync(join(tmpdir(), "superman-deno-owned-"));
   try {
     const seam = `file://${join(denoRoot, "exec.ts")}`;
@@ -230,19 +230,6 @@ test("an owned child that outlives its timeout is killed with its whole process 
         timeout: 60_000,
       },
     );
-    // The grandchild is reaped whatever the assertion finds, and the
-    // registration comes before the first assertion that can fail. A run in
-    // which the group kill does not work would otherwise leave the process
-    // behind, and a machine full of them measures more slowly than one
-    // without — which turns a slow run into a timeout in a place that has
-    // nothing to do with the mutant under test.
-    t.after(() => {
-      try {
-        reap(Number(readFileSync(join(root, "grandchild.pid"), "utf8")));
-      } catch {
-        // The pid was never written, so there is no grandchild to end.
-      }
-    });
     assert.equal(result.error, undefined, `the owned-child driver did not finish: ${result.error?.message ?? ""}`);
     assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
     const observed = JSON.parse(result.stdout.trim().split("\n").at(-1) ?? "") as {
@@ -264,6 +251,14 @@ test("an owned child that outlives its timeout is killed with its whole process 
       "the descendant of a cancelled child outlived the cancellation",
     );
   } finally {
+    // The grandchild is reaped whatever the assertion finds. The reap reads
+    // the pid before the root is removed, so the process ends even when an
+    // earlier assertion failed and never reached the check below.
+    try {
+      reap(Number(readFileSync(join(root, "grandchild.pid"), "utf8")));
+    } catch {
+      // The pid was never written, so there is no grandchild to end.
+    }
     rmSync(root, { recursive: true, force: true });
   }
 });
