@@ -986,7 +986,7 @@ test("the scope module is exercised completely", () => {
       "--allow-run",
       join(scope, "measured.ts"),
     ],
-    { cwd: scope, env: { ...process.env }, encoding: "utf8", shell: false },
+    { cwd: scope, env: { ...process.env }, encoding: "utf8", shell: false, timeout: 600_000 },
   );
   assert.equal(result.status, 0, \`\${result.stdout}\${result.stderr}\`);
 });

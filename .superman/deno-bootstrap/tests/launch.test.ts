@@ -144,7 +144,7 @@ if (mode === "env") {
   });
 } else if (mode === "concurrent") {
   const results = await Promise.all(
-    [1, 2, 3].map((n) => runOwned(deno, ["eval", "console.log(" + n + ")"])),
+    [1, 2, 3].map((n) => runOwned(deno, ["eval", "console.log(" + n + ")"], { timeout: 60_000 })),
   );
   report({ results: results.map((result) => result.stdout.trim()) });
 } else {
