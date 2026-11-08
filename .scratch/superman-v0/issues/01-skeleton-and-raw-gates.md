@@ -2,9 +2,9 @@
 
 **Milestone:** M2
 
-**What to build:** The first usable CLI skeleton and process-boundary tests, evaluated before merge by the raw checks already installed at Gate 1. Policy configs/pins, G9 replay scripts and the CI matrix are prerequisites in spec §17, not code that this ticket adds and activates after its own merge. Measure first-source duplication/mutation baselines for review; do not invent a repository floor or require a red commit. Run Pocock's repo setup without changing upstream skill files.
+**What to build:** The first usable CLI skeleton and process-boundary tests, evaluated before merge by the raw checks already installed at Gate 1. Policy configs/pins, G9 replay scripts and the CI matrix are prerequisites in spec §17, not code that this ticket adds and activates after its own merge. Measure first-source duplication/mutation baselines for review; do not invent a repository floor or require a red commit. Pocock's repo setup is the earlier policy and Matt-skills setup follow-up (spec §17).
 
-**Blocked by:** Gate 1 bootstrap
+**Blocked by:** Gate 1 bootstrap; the policy and Matt-skills setup follow-up (spec §17)
 
 **Status:** blocked
 
@@ -34,7 +34,6 @@ The [completed SUP-005 slice](../gate1-preparation.md) supplies bounded current-
 - [ ] Chosen existing self-hosted routes have §8's actual approval/platform/tool/access evidence. Each required leg enforces §5.4's independent 90% overall coverage floors (100% target); nightly remains uncached full on all three platforms. Missing capacity/evidence blocks without hosted substitution or a new VM project. Runner activation is earlier Gate 1 work, not part of this ticket.
 - [ ] First measured full-corpus duplication/equivalent-scope mutation scores, scopes, tool/config identities and raw survivors are reviewed on this head and recorded for the baseline follow-up. Critical first measurements follow André's reviewed survivor treatment; unresolved introduced critical Survived/NoCoverage outcomes cannot hide behind initialization or aggregate gains. No nonexistent prior baseline or universal new floor is invented.
 - [ ] Measurements execute instrumented Deno source under the already-proved mutation/coverage mechanism, bind actual source/runtime/profile/tool identities, and include the complete current Deno/retained-Node/rule inventory. An old Node score or direct Node import test cannot satisfy this evidence.
-- [ ] `AGENTS.md` and `docs/agents/` exist as written by `setup-matt-pocock-skills`, with no Pocock file modified.
 - [ ] This PR edits no protected policy input; any tightening obeys metric direction. Full local pre-PR and initial raw CI enforce the same already-proved quality contract, including required Trivy, fresh critical cases and complete result accounting. Missing tools, skipped required work or incomplete reports block; neither old two-job results nor partial pre-commit feedback are a full pass.
 
 Start only after the Gate 1 checklist is evidenced; then write the CLI version fixture before implementation.

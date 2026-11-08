@@ -20,3 +20,4 @@ Start by walking the outline against a claimed ticket fixture and a normal green
 - [ ] The next ticket after this one is shipped end-to-end through `ship` and merged via `merge-ready` (evidence linked in that PR).
 - [ ] **(M1 amendment 4)** Preserve the later M7c handoff slot: ticket 29 adds draft-PR identity→wiki-ingest→final pre-pr/review inside the same ≤150-line ship budget; until activation report wiki ingestion as not installed, not completed. No placeholder wiki skill implementation in this ticket.
 - [ ] `adr-rule` on a sample decision produces a rule whose fixture fails before and passes after (shown in the PR).
+- [ ] **(2026-11-08)** This PR replaces every today-step that `ship` and `adr-rule` take over in [WORKFLOW.md](../../../WORKFLOW.md#the-three-flows)'s three flows. Once every step of a flow runs through superman, that flow's superman diagram becomes the flow and today's is deleted.

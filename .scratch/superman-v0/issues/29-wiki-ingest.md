@@ -17,5 +17,6 @@
 - [ ] No useful memory yields a considered no-promotion log outcome, not fabricated content. Stale/conflicting sources are rechecked/reported; raw/policy/secrets/personal data remain off-limits.
 - [ ] Ship uses the same draft PR number, runs G12/final pre-pr before review and pushes the final head under verified bot authority; no future merge identities, approval, merge or direct main write.
 - [ ] Packed/harness smoke fixtures resolve the installed skill handoff; no assumption that user-only skills auto-trigger.
+- [ ] **(2026-11-08)** This PR replaces every today-step that `wiki-ingest` takes over in [WORKFLOW.md](../../../WORKFLOW.md#the-three-flows)'s three flows. Once every step of a flow runs through superman, that flow's superman diagram becomes the flow and today's is deleted.
 
 Start with a draft ticket PR containing one promotable and one unresolved candidate, then a no-promotion case.

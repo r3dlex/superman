@@ -21,5 +21,6 @@
 - [ ] The printed command pins H only; public strict-up-to-date settings and private best-effort limits are represented accurately in evidence.
 - [ ] `audit` flags a fixture merge done by the App after approval and a direct push to `main`.
 - [ ] The first real ticket PR after this one is merged through `merge-ready`.
+- [ ] **(2026-11-08)** This PR replaces every today-step that `superman merge-ready` takes over in [WORKFLOW.md](../../../WORKFLOW.md#the-three-flows)'s three flows. Once every step of a flow runs through superman, that flow's superman diagram becomes the flow and today's is deleted.
 
 Start with a passing head approval paired with a stale or unrelated tested merge; admission must fail.

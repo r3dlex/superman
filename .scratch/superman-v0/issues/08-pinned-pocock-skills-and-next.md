@@ -22,5 +22,6 @@
 - [ ] No skill file is ever edited by superman (test asserts files are byte-identical after sync).
 - [ ] Lock updates preserve actual runtime/tool/profile identities (§5.10) and the one canonical release-tree skill hashes. A planning-complete spec or existing ready label does not satisfy Gate 1/named activation blockers; unknown evidence remains ineligible.
 - [ ] Two concurrent process fixtures attempting one claim yield exactly one winner across worktrees, including a worktree with a `.git` file; live claims cannot be silently stolen and stale recovery is explicit.
+- [ ] **(2026-11-08)** This PR replaces every today-step that `superman skills lock`, `superman next` and `superman claim` take over in [WORKFLOW.md](../../../WORKFLOW.md#the-three-flows)'s three flows. Once every step of a flow runs through superman, that flow's superman diagram becomes the flow and today's is deleted.
 
 Start with competing claim processes sharing one clone's Git common directory.

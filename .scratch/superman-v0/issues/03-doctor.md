@@ -25,5 +25,6 @@ App mode verifies JWT-authenticated App/installation metadata, issued-token gran
 - [ ] Wrong App/installation/token permissions, excess/missing repo coverage, wrong App ID/bot identity and an unverifiable independently supplied token each fail alone.
 - [ ] Fake git/gh process fixtures prove `pr open` uses the selected agent remote/credentials, rejects a conflicting ticket PR/claim and never approves, merges or leaks credentials.
 - [ ] **(M1 amendment 4)** `pr open --draft` returns the repository/PR identity without requesting human review early; the later completed head can be pushed to that same PR. CodeGraph-specific warning-only diagnostics land in ticket 31, not a new mandatory doctor dependency here.
+- [ ] **(2026-11-08)** This PR replaces every today-step that `superman pr open` takes over in [WORKFLOW.md](../../../WORKFLOW.md#the-three-flows)'s three flows. Once every step of a flow runs through superman, that flow's superman diagram becomes the flow and today's is deleted.
 
 Start with the fixture that makes `/user` unsupported for an otherwise valid installation token.
