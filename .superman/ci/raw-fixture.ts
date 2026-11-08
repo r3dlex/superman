@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -40,24 +41,69 @@ const pins = {
   stryker: "10.1.1",
 };
 
-export function fixture(t: TestContext, branch = "ticket/demo-01", kind = "behavior", modulesDir = modules) {
-  const root = mkdtempSync(join(tmpdir(), "superman-raw-fixture-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const write = (path: string, content: string) => {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), content);
-  };
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", ...args], {
+/**
+ * The approved-base repository a fixture starts from.
+ *
+ * Every fixture begins from the same repository: the approved base commit, its
+ * files and its Git identity. It is built once per ticket kind and copied into
+ * each fixture, so a fixture costs a copy and a branch instead of a Git
+ * process for every step of its setup. The copy is exact — the same commit,
+ * the same tree and the same identity — under a fresh working directory.
+ */
+type Template = { root: string; baseSha: string };
+const templates = new Map<string, Template>();
+const templateRoots: string[] = [];
+process.on("exit", () => {
+  for (const root of templateRoots) rmSync(root, { recursive: true, force: true });
+});
+
+/** Write a file into a repository root, creating the directories it needs. */
+function writeIn(root: string, path: string, content: string): void {
+  mkdirSync(dirname(join(root, path)), { recursive: true });
+  writeFileSync(join(root, path), content);
+}
+
+/**
+ * Run a Git command in a repository root.
+ *
+ * The fixture's Git identity and its empty template directory are given to
+ * every invocation. A commit needs an author, and an empty template keeps
+ * `git init` from copying sample hooks the fixture never runs, so neither
+ * costs a process of its own.
+ */
+function gitIn(root: string, ...args: string[]): string {
+  return execFileSync(
+    "git",
+    [
+      "-c",
+      "core.hooksPath=/dev/null",
+      "-c",
+      "commit.gpgsign=false",
+      "-c",
+      "init.templateDir=",
+      "-c",
+      "user.name=Raw Gate Fixture",
+      "-c",
+      "user.email=fixture@example.invalid",
+      ...args,
+    ],
+    {
       cwd: root,
       env: isolated,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       shell: false,
-    });
+    },
+  );
+}
+
+/** Build the approved-base repository a fixture of this ticket kind starts from. */
+function buildTemplate(kind: string): Template {
+  const root = mkdtempSync(join(tmpdir(), "superman-raw-template-"));
+  templateRoots.push(root);
+  const write = (path: string, content: string) => writeIn(root, path, content);
+  const git = (...args: string[]) => gitIn(root, ...args);
   git("init", "--quiet", "--initial-branch=main");
-  git("config", "user.name", "Raw Gate Fixture");
-  git("config", "user.email", "fixture@example.invalid");
   write(".gitignore", "node_modules\n.tools/\n");
   // The fixture's node_modules is the reviewed tree's, reached by a symlink.
   // A pnpm command that installed would rewrite that tree through the link,
@@ -98,7 +144,23 @@ export function fixture(t: TestContext, branch = "ticket/demo-01", kind = "behav
   git("add", "--all");
   git("commit", "--quiet", "-m", "approved base");
   git("update-ref", "refs/remotes/origin/main", "HEAD");
-  const baseSha = git("rev-parse", "HEAD").trim();
+  return { root, baseSha: git("rev-parse", "HEAD").trim() };
+}
+
+export function fixture(t: TestContext, branch = "ticket/demo-01", kind = "behavior", modulesDir = modules) {
+  let template = templates.get(kind);
+  if (!template) {
+    template = buildTemplate(kind);
+    templates.set(kind, template);
+  }
+  const root = mkdtempSync(join(tmpdir(), "superman-raw-fixture-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  // The copy is the approved base: the same commit, the same tree and the
+  // same identity, under this fixture's own working directory.
+  cpSync(template.root, root, { recursive: true, verbatimSymlinks: true });
+  const write = (path: string, content: string) => writeIn(root, path, content);
+  const git = (...args: string[]) => gitIn(root, ...args);
+  const baseSha = template.baseSha;
   git("switch", "--quiet", "-c", branch);
   symlinkSync(modulesDir, join(root, "node_modules"), "dir");
   // A developer store is optional. CI puts the pinned pnpm on PATH; skipping the
