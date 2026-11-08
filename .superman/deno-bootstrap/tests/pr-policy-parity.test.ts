@@ -18,12 +18,11 @@
 // newline after it, a trailing escape, an unterminated comment, and a
 // comment marker inside a string.
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const nodePolicy = join(repository, ".superman/ci/pr-policy.ts");
@@ -47,48 +46,51 @@ function declaration(path: string, name: string): string {
 /**
  * The result of running one declaration over a corpus.
  *
- * The declaration is written into a module of its own and run by the Node
- * runtime, which reads the types away, so the corpus exercises the shipped
- * source rather than a transcription of it.
+ * The declaration is written into a module of its own and imported, so the
+ * corpus exercises the shipped source rather than a transcription of it:
+ * both runtimes read the types away. The module is named after the policy
+ * it came from, because a module is imported once per URL.
  */
-function overCorpus(path: string, name: string, corpus: unknown, driver: string): unknown {
+async function overCorpus(
+  path: string,
+  name: string,
+  label: string,
+  corpus: unknown,
+  driver: string,
+): Promise<unknown> {
   const root = mkdtempSync(join(tmpdir(), "superman-deno-parity-"));
   try {
-    const probe = join(root, "probe.mts");
+    const probe = join(root, `probe-${label}.ts`);
     writeFileSync(probe, `${declaration(path, name)}\n${driver}\n`);
-    const result = spawnSync(process.execPath, [probe], {
-      cwd: root,
-      input: JSON.stringify(corpus),
-      encoding: "utf8",
-      shell: false,
-      timeout: 60_000,
-    });
-    assert.equal(result.error, undefined, `the probe did not finish: ${result.error?.message ?? ""}`);
-    assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
-    return JSON.parse(result.stdout.trim());
+    const module = (await import(pathToFileURL(probe).href)) as {
+      results: (corpus: string) => string;
+    };
+    return JSON.parse(module.results(JSON.stringify(corpus)));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 }
 
 /** The driver that reports what a glob matches. */
-const GLOB_DRIVER = `import { readFileSync } from "node:fs";
-const corpus = JSON.parse(readFileSync(0, "utf8")) as { globs: string[]; files: string[] };
-console.log(JSON.stringify(corpus.globs.map((glob) => {
-  const pattern = globToRegExp(glob);
-  return { glob, pattern: pattern.source, flags: pattern.flags, matches: corpus.files.filter((file) => pattern.test(file)) };
-})));`;
+const GLOB_DRIVER = `export function results(corpus: string): string {
+  const { globs, files } = JSON.parse(corpus) as { globs: string[]; files: string[] };
+  return JSON.stringify(globs.map((glob) => {
+    const pattern = globToRegExp(glob);
+    return { glob, pattern: pattern.source, flags: pattern.flags, matches: files.filter((file) => pattern.test(file)) };
+  }));
+}`;
 
 /** The driver that reports what a policy file reads as. */
-const JSONC_DRIVER = `import { readFileSync } from "node:fs";
-const corpus = JSON.parse(readFileSync(0, "utf8")) as { texts: string[] };
-console.log(JSON.stringify(corpus.texts.map((text) => {
-  try {
-    return { ok: true, value: readJSONC(text) };
-  } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : String(error) };
-  }
-})));`;
+const JSONC_DRIVER = `export function results(corpus: string): string {
+  const { texts } = JSON.parse(corpus) as { texts: string[] };
+  return JSON.stringify(texts.map((text) => {
+    try {
+      return { ok: true, value: readJSONC(text) };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
+  }));
+}`;
 
 /** Every glob the policy declares, in the order it declares them. */
 const GLOBS = [
@@ -158,10 +160,10 @@ const TEXTS = [
   "[1, 2]",
 ];
 
-test("the twin's glob reader matches the Node original's on every glob the policy declares", () => {
+test("the twin's glob reader matches the Node original's on every glob the policy declares", async () => {
   const corpus = { globs: GLOBS, files: FILES };
-  const node = overCorpus(nodePolicy, "globToRegExp", corpus, GLOB_DRIVER);
-  const twin = overCorpus(twinPolicy, "globToRegExp", corpus, GLOB_DRIVER);
+  const node = await overCorpus(nodePolicy, "globToRegExp", "node", corpus, GLOB_DRIVER);
+  const twin = await overCorpus(twinPolicy, "globToRegExp", "twin", corpus, GLOB_DRIVER);
 
   assert.deepEqual(twin, node);
   // The corpus is not vacuous: the policy's own globs do match, and the
@@ -178,10 +180,10 @@ test("the twin's glob reader matches the Node original's on every glob the polic
   assert.deepEqual(matched("**/.gitignore"), []);
 });
 
-test("the twin's policy reader matches the Node original's on every policy file shape", () => {
+test("the twin's policy reader matches the Node original's on every policy file shape", async () => {
   const corpus = { texts: TEXTS };
-  const node = overCorpus(nodePolicy, "readJSONC", corpus, JSONC_DRIVER);
-  const twin = overCorpus(twinPolicy, "readJSONC", corpus, JSONC_DRIVER);
+  const node = await overCorpus(nodePolicy, "readJSONC", "node", corpus, JSONC_DRIVER);
+  const twin = await overCorpus(twinPolicy, "readJSONC", "twin", corpus, JSONC_DRIVER);
 
   assert.deepEqual(twin, node);
   // The corpus is not vacuous: the shapes it must survive are survived, and
