@@ -5,6 +5,8 @@
   "vitest": { "configFile": "vitest.config.ts", "pool": "forks" },
   "mutate": ["src/**/*.ts", "!src/**/*.test.ts"],
   "incremental": false,
+  "timeoutFactor": 2,
+  "timeoutMS": 10000,
   "reporters": ["clear-text", "json"],
   "jsonReporter": { "fileName": ".superman-ci/mutation.json" }
 }
