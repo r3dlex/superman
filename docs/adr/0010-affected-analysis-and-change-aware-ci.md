@@ -22,7 +22,7 @@ André retained all M7b work in the first usable v0 release on 2026-10-30. Chang
 | Own zero-runtime-dependency TS/JS import parser | Explains test selection without adopting a build system; uncertain resolution broadens the package/full selection rather than claiming exactness. |
 | Elixir module-name hints | Q16 supersedes the earlier accepted heuristic omission: hints alone cannot narrow required tests. Complete-app/full selection remains available until conservative coverage is demonstrated; no `mix test --stale` assumption. |
 | Full-corpus PR duplication | Q11 supersedes the accepted cross-scope/total-percentage blind spot. Enforce the complete approved corpus before merge; incremental replacement needs equivalent-detection proof. Nightly discovery cannot retroactively prevent a merge. |
-| Full selection on main, uncached full nightly | Main may reuse eligible passes; nightly supplies fresh execution for selection and cache correctness checks. |
+| Full applicable selection on main, uncached nightly | Main may reuse eligible passes; nightly supplies fresh selection/cache correctness evidence. The 2026-11-08 mutation amendment (ADR 0017) has its own weekly/release audit schedule and fresh PR scope; a force-full trigger broadens required mutation rather than waiving it to fit the normal budget. |
 
 Other providers remain in v0: Rust, C#, Python and package-level Haskell, plus moon/Nx/Turborepo adapters. Go and affected deploy execution remain post-v0. Runtime `superman` stays a selector/runner, not a build scheduler.
 

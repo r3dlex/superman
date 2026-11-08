@@ -15,6 +15,7 @@
 - [ ] Against an in-process HTTP stub, a `pull_request` run never sends PUT, even with write credentials present in its environment (test-first).
 - [ ] A dedicated verified main writer writes a signed entry and matches the SigV4 test vector; a main build/test job with planted credentials still does not PUT.
 - [ ] An entry with a wrong key, a tampered `result` or a signature from another key is treated as a miss and the gate runs.
+- [ ] Reader/writer fixtures apply ticket 21's shared eligibility contract: a G6 pass is neither published nor consumed as a reusable remote cache entry, even with matching inputs, valid provenance and signature. Required mutation and triggered fault controls execute fresh under §5.4.
 - [ ] A network error or 5xx is a miss, never a failure of the gate.
 - [ ] `doctor` reports the remote tier as `read-only`, `read-write` or `off`.
 - [ ] Missing private read credentials skip remote without exposing data; wrong source run/attempt/ref/SHA/digest blocks signing/upload, and project hooks never execute in the privileged writer.

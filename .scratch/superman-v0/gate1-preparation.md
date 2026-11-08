@@ -4,7 +4,7 @@
 
 ## Current state
 
-**Updated 2026-11-05.** This is the only part of this record that must stay current. Everything under [History](#history) is a dated record and is not edited; the closure checklist and the execution prompts above it are the plan.
+**Updated 2026-11-09.** This is the live status. Existing material under [History](#history) retains its original bytes, verdicts and scope; new dated records are appended. The [mutation-policy decision record](#mutation-policy-decisions-and-preparation-delta--2026-11-08) adds a confirmed, unimplemented preparation delta. The earlier closed criteria/acceptances remain records of their own slices, not evidence that this delta passed.
 
 | | |
 | --- | --- |
@@ -13,12 +13,16 @@
 | Step 7's overlap clause | Not met at the declared profile — carried, not waived. It feeds row 10's conformance decision, not row 8. |
 | Row 8, current-Node inventory/measurement expansion | **Accepted 2026-11-06** at preparation scope. The shipped `node` inventory clears every floor (96.03 / 95.29 / 90.32 / 96.86 %, receipt `verdict: "pass"`); the candidate inventory's floor is carried to the merge-bound cutover. |
 | Row 9, governing Deno rules/input closure | **Accepted 2026-11-06** at preparation scope. All six clauses met; the repository's strict Archgate run is green at `"total": 16`, and the four bypasses are re-tested and rejected. |
-| Row 10, full raw quality contract | **Accepted 2026-11-06** at preparation scope. Clauses 1–5 met, and clause 6's **mechanism** is in place — eight declared critical cases, Vitest-visible, mutation-selected and fixture-proved — with the survivor rule now identity-based. The enforcement core's *first* mutation baseline stays not due, by the row's carried limits; **the lane that carries it is now named (2026-11-07): the nightly's uncached full run and the owner's reviewed run**, while the pull-request leg applies the declared pull-request mutation scope and the declared critical cases. §5.4's pre-commit scope is closed; G2's affected-target selection waits for §5.7's change model. |
+| Row 10, full raw quality contract | **Accepted 2026-11-06** at its recorded preparation scope: the eight-case mechanism and identity-based survivor comparison are not acceptance of an enforcement-core baseline. The November 7 lane implementation remains historical/current executable work; the November 8 mutation amendment needs the separate M01–M08 evidence in spec §17 before activation. |
 | Row 11, incremental parallel operational port | **Accepted 2026-11-06** at preparation scope. Staged-scope parity with the Node original, 79 Deno tests green; clause 6 **resolved by a stated scope** now written into spec §5.4 with its date; and the sibling's G2 runs its own `deno check` over the Deno graph. |
 | Ticket 01 | **Unadmitted.** Blocked by the Gate 1 bootstrap. |
 | Deno evaluator | Not activated. The current Node bootstrap remains the active evaluator. |
+| Per-mutant timeout declaration | **Already confirmed 2026-11-08 and implemented** in `3543554`, with retained scalar/refreshed hash in `e498403`. The Node-hosted declaration-test seam and score retention were explicitly approved in the parallel session; G6 subsequently verified that scalar. [Recovered confirmations](#prior-g6-confirmations-recovered--2026-11-09) are carried forward; the failed overall receipt remains separate evidence. |
+| Mutation-policy amendment | **Planning confirmed 2026-11-08; seams and M01–M08 reconfirmed 2026-11-09; unimplemented/unadmitted.** Bounded critical evidence before 01; risk-affected PR mutation with normal/slow budgets; weekly/release broad audits and fourteen-day freshness stop; scope-bound baseline/disposition read-back. Canonical requirements are spec §§5.3–5.4, 13, 16 and 17; [the finalization record](#mutation-policy-spec-finalization--2026-11-09) records the latest confirmation. |
+| Concurrent G6 reconciliation | **Reconciled 2026-11-09.** The terminal `e498403`/`57bcaba` receipt records **G6 pass, overall fail, exit 1**: the shared-checkout Markdown edits failed input integrity. Its 9,004 raw outcomes include zero Timeouts. [The terminal record](#terminal-result-and-integration--2026-11-09) preserves the bytes, counts and limitations; D1–D14 remain unchanged. |
+| Mutation backlog reconciliation | **Approved and reconciled 2026-11-09.** Thirteen existing tickets now consume the amended policy; [MP1–MP7](#approved-mutation-backlog-reconciliation--2026-11-09) organize M01–M08 with dependencies and observable verification. The existing 01–33 IDs and readiness states are retained. Preparation execution and ticket 01 admission remain outstanding. |
 
-**Next action.** The pull-request leg and the nightly's full-corpus lane are in (2026-11-07): the pull-request leg executes the declared critical cases fresh and measures no mutant, the nightly and the owner's run apply the whole declared `quality.mutation.scope`, and the measurement-inputs check is anchored to the baseline. **The first measurement in critical scope is taken** — 8,881 mutants, 13.62 % killed, 1,125 survived, 6,541 without coverage, with the raw outcomes per file, status, mutator and line — and what remains of it is **André's survivor treatment** (§5.4): meaningful kills, or a reviewed Gate 1 measurement/equivalence decision with the exact argument and raw outcomes, which the record holds. The measurement's own finding is that the pinned mutation runner executes Vitest and cannot see the `node:test` suites that exercise the enforcement core, so the score measures the runner's test discovery rather than the core's testedness. The acceptance round stands as recorded: André accepts or rejects rows 8–11 on their recorded evidence. Row 12 is **not** presented — its criterion needs the three native candidate proof runs, the live forge evidence and the publication, which are operator lanes. The two independent reviews (Standards and Spec, run in parallel) are in; their findings and their resolutions are recorded under rows 10 and 11. Rows 1–12 all stay on the critical path to ticket 01.
+**Next action.** Select the exact source/test/file/command scope for [MP1](#mp1--map-the-campaign-and-prove-one-operational-deno-control), obtain its narrow execution authorization and review M01's concrete eight-group map before measurement. The existing seams, timeout declaration and D1–D14 remain confirmed. The [parallel G6 reconciliation](#terminal-result-and-integration--2026-11-09) changes the evidence record, not those prerequisites: its scoped Node measurement passed while the whole receipt failed input integrity. The earlier 8,881-mutant run with five Timeouts and 9,004-mutant run with 25 remain failed evidence at their original scope. Preserve rows 1–11's accepted preparation scopes; row 12's operator/live-authority requirements and exact-head Gate 1 approval remain outstanding.
 
 **Rules of record.** [ADR 0018](../../docs/adr/0018-admission-evidence-not-tool-correctness.md) decides how a preparation step is judged — read it before starting a step. [The grilling record](gate1-grilling-record.md) holds the reasoning behind those decisions; [the loop diagnosis](gate1-loop-diagnosis.md) holds why three attempts circled, and `gate1-loop-check.mjs` reports whether the last three attempts measured anything (exit 1 means they did not).
 
@@ -117,7 +121,7 @@ These Q numbers belong to this closure interview, not the earlier Deno or qualit
 
 ### One finite closure checklist
 
-Step identifiers below are preparation steps, not numbered product tickets. All execution rows remain open. The order is recommended execution order; the dependency column defines actual blocking edges. Each implementation slice closes with scoped checks and independent Standards + Spec review, preserving failed attempts and source identities.
+Step identifiers below are preparation steps, not numbered product tickets. This is the original closure plan; [Current state](#current-state) records subsequent acceptances. The November 8 mutation delta in spec §17 M01–M08 governs the changed mutation requirements alongside the remaining closure work, without rewriting earlier fixed criteria. The dependency column defines original blocking edges. Each new implementation slice closes with scoped checks and independent Standards + Spec review, preserving failed attempts and source identities.
 
 | Step | Missing work/category | Depends on | Observable completion |
 | --- | --- | --- | --- |
@@ -2923,3 +2927,238 @@ The first four are the enforcement core's own unbounded loops: their termination
 | `deno-candidate.yml` (published) | `42392884848` | `deno-candidate (macos-15)`, `deno-candidate (ubuntu-24.04)`, `deno-candidate (ubuntu-24.04-arm)` — all pass |
 
 The published candidate workflow's three native legs now run the Deno candidate's own proof under the reviewed permission profile. Getting there took five defects, each with a test that fails without its fix: the workflow file named a step-only context at job level (GitHub rejected the file whole), the Deno twin's allowed paths did not match the Node original's, the tool paths were exported without the suffix the gates read, the proof aborted on the Deno collector's carried coverage shortfall, and the candidate installed pnpm into the same directory as the hosted workflow on the same runner at the same time.
+
+## Mutation-policy decisions and preparation delta — 2026-11-08
+
+**Position: interview and existing public seams confirmed; document synthesis only.** Skills: `grilling` for the one-decision-at-a-time interview, then `to-spec`, `domain-modeling` and `agent-doc-discipline` for this reconciliation. The local tracker remains this scratch tree. No readiness label, ticket status or historical verdict is promoted by the synthesis. Spec §§5.3–5.4 own the new baseline/gate rules, §13 the pilot and §17 M01–M08 the closed admission evidence list; this dated record captures the choices and their rationale rather than a second operational policy.
+
+### Intake and evidence boundaries
+
+The research was written against `24123ae77f5367f877a124bb98cd738d38641510`. Its requested path was absent at interview intake. A preserved `/private/tmp/mutation-testing-roi-research.md.keep`, SHA-256 `5fdfa4a0852df189d1c6795a6407d48136d09753e3bfbf592af968d404c47db5`, was read and restored byte-for-byte as [mutation-testing-roi-research.md](mutation-testing-roi-research.md) after André confirmed synthesis. Its local claims stay attributed to its original snapshot; restoration is not new execution evidence.
+
+During the interview the clean checkout advanced from ahead-20 to ahead-23, reaching `e498403cab21ccd7a6cb1426fa08a5b8110a75fc`. The intervening twin-test change (`87608ce`), per-mutant timeout policy/test (`3543554`) and baseline-hash refresh (`e498403`) are inherited work. Their executable bytes are outside this documentation delta. The spec retains the contention/concurrency-based per-mutant sizing rule while distinguishing it from new aggregate lane deadlines and the proposed timeout disposition. No later baseline-hash change accepts the earlier failed receipt retroactively.
+
+| Evidence | Preserved verdict/scope and present limitation |
+|---|---|
+| November 2 bridge pilot | Step 4 was accepted at **local darwin-arm64 fixture scope**: 7 Killed / 4 Survived / 4 NoCoverage; four probe tests; overlapping workers, activation/attribution/isolation/cleanup. Reuse that feasibility evidence at its stated scope; it does not prove the operational graph, equivalent base/candidate comparison or all native platforms |
+| First broad measurement | Recovered raw report: **8,881 = 1,210 Killed + 1,125 Survived + 6,541 NoCoverage + 5 Timeout**; 23m40s, four workers. The earlier summary omitted the five Timeouts. Preserve that summary as history and record this correction here; the diagnostic ratio is not valid completed G6 evidence under the then-applicable policy |
+| Failed 9,004-mutant run | **1,438 Killed / 1,288 Survived / 6,253 NoCoverage / 25 Timeout**, other error statuses zero, failed. Research records original receipt SHA-256 `75c947fde2804274c17a9715fa5aa6b38e5a2be749398ccd1225b884de930da9`; retained `/private/tmp/g6-acc5.log` corroborates the counts and exit 1. The original receipt bytes were not found at their referenced pathname during this inspection |
+| Reused receipt pathname | The inspected `.superman-ci/g6-full.json` held a different CI-stage receipt: overall failure, G6 `n/a` for empty PR mutation scope and eight critical cases passed. That is not the research's raw full measurement or a replacement mutation pass. Artifact names do not establish identity |
+| Legacy baseline | The research's `15.97067969791204` diagnostic ratio equals 1,438/9,004. The current scalar/hash format cannot carry the new profiles/dispositions or complete source/test/platform binding. Preserve existing bytes; a new profile needs its own accepted record and reader migration, not inferred acceptance from matching arithmetic |
+| Discovery/coverage | At the research snapshot, Vitest discovered eight critical suites while twelve top-level `node:test` suites ran separately. Historical high Node coverage measures that other population. It neither proves unseen mutants equivalent nor proves the repository has no tests |
+| Loop findings in older records | A mutation making a terminating loop nonterminating is not by itself evidence that the original loop is defective. Earlier interpretations remain historical; future dispositions require the positive/negative attribution evidence in the amended spec |
+
+### Confirmed decisions
+
+These D numbers identify this interview only. Each acceptance pointer names requirements to prove, not tests executed by the interview.
+
+| Decision | Choice, rationale and tradeoff | Acceptance home |
+|---|---|---|
+| D1 — runtime prerequisite | Retain actual-Deno mutation proof before 01. Upfront integration work is accepted because a fast runner that misses the intended runtime/assertion is misleading; the existing local pilot is narrower evidence | M02–M03; healthy/known-kill/assertion-removal controls and native integration |
+| D2 — initial breadth | Use a bounded campaign over all eight critical-contract groups instead of requiring a whole-bootstrap baseline. Explicitly accept unselected-fault risk; six whole critical modules would still contain about 84% of observed mutants | M01, M03, M08; actual decisions/operators/assertions, omissions and read-back |
+| D3 — PR scope | Include risk-affected product and operational gate functions, with enclosing-file fallback and test/fixture/dependency/runtime/policy invalidation. This costs more than an empty product-only lane but avoids blanket critical-module work | §5.4 profile/evaluation rules; M06 scope fixtures |
+| D4 — normal budget | A 2m p95 mutation target and 5m aggregate deadline fit within the 12m normal-leg target / 15m cap. These are calibration bounds, not claimed measurements; target misses are performance debt and deadlines fail | §5.4 budget table; M06 representative timing/deadline proof |
+| D5 — slow lane | Permit justified 60m mutation / 120m job pre-merge execution of the same required scope. Accept a longer wait instead of silent sampling or post-merge completion; record all attempts and cost | §5.4 slow entry/H/B/M/accounting; M06–M07 |
+| D6 — broad audits | Weekly plus every release; first audit within seven days, 30m mutation target / 60m deadline / 120m job cap. Accept delayed discovery outside PR scope. Changed broad models are remeasured before replacement-baseline use, not added back as an initial whole-bootstrap prerequisite | §5.4 cadence and §5.3 profile transitions; M07 |
+| D7 — platforms | Broad measurement on approved existing Linux-x64; native bridge and relevant boundary faults on all three platforms. Save duplicated pure-logic work while accepting classification maintenance; identical source alone does not justify delegation | §5.4 platform proof; M01–M02, M07 |
+| D8 — critical findings | Unresolved mandatory critical outcomes block first and later admission, irrespective of aggregate gains. Ordinary noncritical comparable-scope non-regression stays blocking without a universal percentage. The smaller mandatory scope cannot also carry unexplained critical debt | §5.4 dispositions; M03–M04 |
+| D9 — NoCoverage | A genuine unexecuted mutant is undetected after declared discovery/activation is proved; a broken chain invalidates the measurement. This requires honest population accounting rather than treating unrelated coverage as a pass | §5.4 validity; M03 |
+| D10 — equivalence | Individual protected semantic decisions retain raw status and denominator, bind the observable domain and reopen on invalidated assumptions. Accept human review and scores below 100% rather than brittle implementation-detail assertions | §5.3 read-back and §5.4 dispositions; M04–M05 |
+| D11 — mutant hangs | Permit positively attributed nontermination as a separate resolved temporal-fault disposition; preserve Timeout and Killed/total. At most two diagnostic replays, inside the lane budget. Accept classification work instead of changing correct loops to satisfy a status filter | §5.4 timeout controls; M04, M06 |
+| D12 — audit consequences | Critical findings block affected work; unbounded attribution affects all source work. André triages other failed/missed audits within two working days. Fourteen days without successful required broad evidence stops source merges; fresh accepted evidence is the recovery | §5.4 explicit-clock/freshness rules; M07 |
+| D13 — baseline model | Separate bounded, product and broad scope-bound records; compare ordinary PRs freshly at equivalent scope. Reader migration is required and no absent baseline is invented. A narrowed result cannot tighten the broad floor | §5.3 and §17 initialization order; M05, M08 |
+| D14 — useful ROI | Use the existing pilot window, deduplicated retained behavioral improvements, assurance and human/machine cost. Earlier review on missed normal p95, >10% slow incidence or >5% infrastructure failures; no automatic policy removal. Missing data is unmeasured value | §13 metric/sample/review contract; M08 recording proof |
+
+**Decision corrections and final confirmation.** André temporarily chose broad audits only at releases and removed the fourteen-day stop, then explicitly restored **weekly audits and the fourteen-day source-merge stop**. The restored D6/D12 choice is final. André subsequently confirmed the complete D1–D14 summary, existing testing seams, scope-bound timing and in-place document synthesis. A changed full profile must be remeasured before its baseline is used; the bounded initial profile can be admitted without that broad baseline. Every historical failure stays failed.
+
+### Preparation and verification handoff
+
+1. **Declare the bounded campaign (M01).** Review the eight actual contract decisions, mutation operators/locations, required test populations, role-based helper inventory and platform classification. **Done:** the declared scope and omissions are reviewable without relying on filename membership or a preselected successful score.
+2. **Prove and record the amendment (M02–M08).** Use the existing raw-gate process/receipt/baseline seam, actual Deno/Vitest/Stryker execution and native boundary fixtures. The closed criteria live in spec §17. **Done:** required positive/negative outcomes, timing and read-back evidence bind the proposed source/profile; generic recorder correctness is not added as a prerequisite.
+3. **Reconcile implementation admissions.** Align affected existing ticket criteria through `to-tickets` before their execution, preserving IDs, dependencies and blocked state until evidence exists. Relevant areas include first-source initialization, gate replacement, affected selection/cache eligibility and CI/audit activation. **Done:** tickets consume the amended policy rather than implementing the policy that must govern their own merge.
+
+The synthesis changes Markdown only. Its verification is document consistency, local links, preservation of pre-existing historical text and byte identity of the restored research; it is not a mutation test, TDD cycle, baseline acceptance or gate run. The active evaluator and all execution/host/approval evidence retain their original scope.
+
+**Documentation verification:** `git diff --check` passed; all 99 checked local Markdown links/heading anchors resolve; the restored research matches the SHA-256 above and its preserved source bytes. All 404,945 bytes of the pre-existing preparation text from `## History` through the prior end of file remain an identical prefix of the history section. The nine-file delta is Markdown only. No executable gate or mutation job was run by this synthesis.
+
+**Next action:** review spec §17 M01 and select the exact source/test mapping slice for separate implementation authorization.
+
+## Parallel G6 reconciliation — 2026-11-08
+
+**Intake:** André flagged a background Claude Code G6 run and requested that its results and changes be reconciled with the mutation interview. Skill: `grilling`, with read-only delegated evidence inspection. The confirmed D1–D14 decisions remain the starting point; a factual correction is recorded here, while a changed policy decision returns to André one question at a time.
+
+**Recovery snapshot:** `/private/var/folders/r6/yb6jhjqs3_xf1l3zwhdcnr6m0000gn/T/opencode/superman-g6-reconciliation-ll1myir8/` holds the nine pre-reconciliation Markdown files, their hashes and staged/unstaged patches, captured at **22:50:54 UTC**. HEAD was still `e498403cab21ccd7a6cb1426fa08a5b8110a75fc`; the twin-test, timeout-policy and baseline-hash commits already belong to this branch and are accounted for in the synthesis. The artifact copies below are in this snapshot's `evidence/` directory with a path/hash/size manifest, captured at **22:57:06 UTC**. They matched the delegated inspection's hashes and were stable during copying. These local copies preserve observed evidence, not portable baseline acceptance.
+
+### Observed run and shared-checkout boundary
+
+The Claude-owned evaluator, PID 91750 under shell PID 91749, started at **22:25:24 UTC** with `--gate G6 --base 57bcaba --receipt .superman-ci/g6-full.json`. Its candidate snapshot named `e498403cab21ccd7a6cb1426fa08a5b8110a75fc`; the base resolves to `57bcaba55ccd94f81f4362b0e4b3f8be6af31b7a`. This is the default local `pre-pr` stage with **scoped G6**, using the full mutation lane and candidate-first baseline initialization because that base has no ratchet file. It is not a completed base/candidate comparison or a full-stage quality evaluation.
+
+The inspected scope contains twelve Node enforcement/helper sources, including the six historically mapped critical modules. The run uses Node 26.5.0, pnpm 12.16.1, Stryker/core and its Vitest plugin 10.1.1, Vitest 5.0.5 and TypeScript 7.1.0-beta, on local Darwin arm64/macOS 27.0.1. Stryker used `--inPlace --force --concurrency 4`; the committed timeout factor/floor are 2 / 10,000 ms. This is neither the new bounded critical-decision population nor actual-Deno/native-matrix evidence. A snapshot's named Git head is not, by itself, complete source/test provenance.
+
+At **22:57:06 UTC**, the evaluator and shell were still present after about 31m42s, and `/private/tmp/g6-policy.log` remained empty. No current-run counts or terminal verdict were available. Buffered output prevents interpreting silence as failure or computing progress. Its duration is a supporting observation about this old full-Node profile, not a normal-lane calibration or a failure under the unactivated new budgets.
+
+The nine Markdown changes were dirty in the same checkout after this run began. The active evaluator's final check in `.superman/ci/raw-gates.ts` rejects dirty full/scoped inputs and sets `inputIntegrity.status` and the receipt verdict to `fail`, even if the recorded G6 subresult passes. The earlier `g6-acc6.log` demonstrates that distinction. **If the observed dirty state persists, the run cannot produce accepted committed-head evidence.** That is a code-backed consequence, not an observed terminal verdict. Preserve the actual terminal verdict and its reason; a clean rerun on the eventual integrated revision would be separate evidence.
+
+### Artifact identities and chronology correction
+
+All SHA-256 values below identify the captured bytes. Receipt filenames have been reused; each interpretation applies only to its digest.
+
+| Artifact | Captured identity | What it establishes |
+|---|---|---|
+| `.superman-ci/g6-full.json` | `1abae91a63e8425c1bdd255f3f2b9e03f361c4eedd245c9215ed92ddcfa3d1c9` | CI-stage receipt at `87608ce32ecf89e3e19e77f77943fe2d1de2983e`, **overall pass, G6 `n/a`**, empty applied PR mutation scope and eight ordinary critical cases passed. Correction to the earlier current-artifact description: these bytes say overall pass, not failure. They still establish no mutation completion and are not the running head's receipt |
+| `/private/tmp/g6-acc7.log` | `49dbb6907f858b100958bfcc90ddc66a8eaf9d79725499af3b0d2e171011daa1` | Sixteen bytes: `G6: pass` and `EXIT=0`. Later terminal success text exists, but no retained matching receipt binds its revision, population, counts, tools or platform |
+| `/private/tmp/g6-acc6.log` | `b63df6bd38924319165ded9c84cfafb35bfba68a22268f87fdbec7b472a262dd` | `G6: pass`, then input-integrity refusal and `EXIT=1`. A subgate result and overall admission are separate observations |
+| `.superman-ci/g6-scope.json` | `96e3ed7f0dae34f971ec0724bbb9e7fd88196b3dea135e18e6524f0067c772f1` | Earlier pre-pr/scoped failure at `2d7d02c06c10d2f60e46a1f3cd9bd03c1227e201`, base `57bcaba55ccd94f81f4362b0e4b3f8be6af31b7a`: **9,004 = 1,433 Killed + 1,306 Survived + 6,253 NoCoverage + 12 Timeout**. Its empty tool map does not bind actual tools/platform |
+| `.superman-ci/mutation.json` | `6c7f768ff9c3751e8edc1c7892e0b730c0d6dc528be7cc8ded1639857e9d99f6` | Separate single-source report over `raw-gates.ts`: **917 = 275 Killed + 210 Survived + 432 NoCoverage**, seven test identities. It carries no evaluated revision or gate verdict and is not the twelve-source result |
+| `/private/tmp/g6-acc5.log` | `9a5358d94e74dc98dc1b9f5df9d4c1cb55cda3c36771d85ee72a21c8ee3a5021` | Preserved corroboration of the historical **1,438 Killed / 1,288 Survived / 6,253 NoCoverage / 25 Timeout**, exit-1 run. The original receipt digest recorded by the research remains unlocated; this log is not that receipt |
+| `/private/tmp/g6-policy.log` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | Empty, nonterminal log snapshot associated with the active process. It proves no outcome |
+
+### Decision frontier and reconciliation completion
+
+The observed commits and artifacts require a chronology/provenance correction, **no change to D1–D14**. In particular, the per-mutant wait remains distinct from aggregate lane budgets and reviewed timeout dispositions; the active reader still refuses every Timeout. The scoped Node run cannot by itself close M01–M08 or accept a new scope-bound baseline. Historical failures retain their own counts, verdicts and identities.
+
+Completion needs the existing run's terminal log/receipt captured together, its G6 and input-integrity results distinguished, and the final Git delta compared with the preserved policy files. Integrate compatible factual changes into this record; refer an actual policy conflict back to the interview. The current shared branch already contains the inspected concurrent commits. Ticket 01 and policy activation remain unadmitted.
+
+### Terminal result and integration — 2026-11-09
+
+**Result:** the parallel attempt finished before the terminal capture at **2026-11-08 22:58:38 UTC**. Its receipt records **G6 `pass`**, reason `verified first-baseline initialization`, but **overall `fail`**, `inputIntegrity.status: fail`, `satisfiesFullBar: false` and `mergeAuthority: none`. The log ends with `EXIT=1`. The nine planning Markdown changes were dirty in the same checkout; this session's concurrent document edits therefore prevented accepted committed-snapshot evidence. The evaluated head remains `e498403cab21ccd7a6cb1426fa08a5b8110a75fc`, base `57bcaba55ccd94f81f4362b0e4b3f8be6af31b7a`.
+
+The completed artifacts are preserved under the recovery snapshot's `completion-uf0ux7gj/` directory, with a capture manifest and independently recounted `verified-summary.json`:
+
+| Artifact | SHA-256 |
+|---|---|
+| Terminal `.superman-ci/g6-full.json` (12,820,930 bytes) | `26f81efa0f7a9e640ad999105acabc9521c2f16af74d3704d2afed60459af4ac` |
+| Terminal `/private/tmp/g6-policy.log` (128 bytes) | `b63df6bd38924319165ded9c84cfafb35bfba68a22268f87fdbec7b472a262dd` |
+
+The terminal log happens to have the same bytes as the older `g6-acc6.log`; identical diagnostic text is not a unique run identity. Here its process/path observation and paired revision-bearing receipt establish the association. The earlier `g6-full.json` bytes remain preserved separately under `evidence/`; the new terminal receipt does not overwrite their historical interpretation.
+
+**Recounted raw outcomes:** **9,004 = 1,438 Killed + 1,313 Survived + 6,253 NoCoverage**; Timeout, CompileError, RuntimeError, Ignored and Pending are all zero. The conservative ratio is **15.97067969791204%**, matching the recorded scalar; all eight ordinary critical cases passed. The receipt names the twelve-source Node population and tool versions described above, with `qualityInputsHash` **`150fd1b305877012fe7f2c3e87c0680633dd1097ede1cba3df7177c3ecaacca1`**. Its legacy scalar format still does not implement the new source/test/runtime-bound profile records. This is useful scoped measurement evidence inside a failed receipt, not a new accepted baseline or whole-stage pass.
+
+**Interview reconciliation:** D1–D14 remain unchanged. Zero Timeouts in this measurement removes that outcome from this attempt; it does not explain each earlier Timeout, establish a reviewed temporal-fault disposition or change old verdicts. The unchanged conservative score likewise supplies no evidence of a retained behavioral improvement. The result does not cover the bounded actual-Deno campaign, native controls or the M01–M08 policy implementation. No new policy question is required by these facts.
+
+**Source integration:** the post-completion comparison still found HEAD at `e498403`, no new committed delta and no change to the eight other preserved policy files. The inspected concurrent commits were already incorporated when the spec was synthesized. Reconciliation therefore updates this record's current state and appends evidence/chronology; the agreed spec, ADRs, glossary and restored research retain their preserved bytes. Any later clean evaluation of the integrated revision is a separate attempt, with its own receipt and verdict.
+
+**Reconciliation verification:** `git diff --check` passed; all 101 local Markdown links/anchors resolve. The 416,586 intake-history bytes remain an identical prefix, including all 404,945 original historical bytes. The other eight policy files, restored research identity and captured artifact hashes are unchanged. Independent recount matches the terminal receipt's status counts, total, score and distinct G6/overall verdicts. The working delta remains nine Markdown files, uncommitted.
+
+## Mutation-policy spec finalization — 2026-11-09
+
+**Position: test seams and closed acceptance criteria confirmed; documentation finalized, execution outstanding.** André requested an in-place `to-spec` amendment using the grilling decisions, reconciliation of affected ADRs/preparation, preservation of history/section IDs and explicit confirmation of the testing contract. Skills: `to-spec`, `domain-modeling` and `agent-doc-discipline`. The pre-finalization nine-file state is preserved with hashes/patches at `/private/var/folders/r6/yb6jhjqs3_xf1l3zwhdcnr6m0000gn/T/opencode/superman-mutation-spec-finalization-ic3n_600/`, at HEAD `e498403cab21ccd7a6cb1426fa08a5b8110a75fc`.
+
+**Confirmation:** André selected **Confirm and finalize** after reviewing the three existing seams: raw-gate process/receipt/baseline read-back in temporary Git repositories; actual Deno operational source through Vitest/Stryker; and native process/conformance/fault controls with canonical-audit delegation. He confirmed every M01–M08 criterion, including failed overall receipts despite G6 pass, dependency-only scope invalidation, all three lanes' aggregate bounds, audit triage/freshness and read-back on the **proposed** admission head. Spec §16 and §17 are the authoritative seam/acceptance homes; their criteria are not asserted complete by this confirmation.
+
+**Reconciled policy:** spec §5.3 owns scope-bound baselines; §5.4 owns the bounded/PR/broad profiles, raw-status dispositions, budgets, platforms and weekly/release consequences; §13 owns useful-outcome/cost ROI. ADR 0017 records the tradeoffs and evidence boundary. ADRs 0010/0011 retain the matching selection/freshness/cache eligibility, ADR 0015 the execution classes/platform allocation, and ADR 0016 actual-Deno admission. D1–D14 and the separately timed first product/broad baselines remain unchanged. All existing spec section headings and IDs are retained.
+
+**Evidence boundary:** the [terminal G6 record](#terminal-result-and-integration--2026-11-09) remains G6 pass / overall fail / exit 1 at its exact scope and digest. Its zero Timeouts neither rewrite older failures nor complete a bounded actual-Deno campaign. All preparation history preceding this finalization remains byte-identical; current-state pointers are updated above. The local tracker remains this existing scratch spec, with `Status: blocked`; the confirmation grants document synthesis, not readiness, implementation, activation or merge authority.
+
+**Verification:** `git diff --check` passed; all 107 local Markdown links/anchors resolve. All 63 spec headings, M01–M08 IDs, existing ADR headings/statuses and 427,050 intake-history bytes are preserved. The restored research still matches SHA-256 `5fdfa4a0852df189d1c6795a6407d48136d09753e3bfbf592af968d404c47db5`. HEAD remains `e498403`; the working delta is the same nine Markdown files, uncommitted. This finalization changes the spec, ADR 0017 and preparation record relative to intake; the other reconciled documents retain their bytes.
+
+**Next action:** review the bounded eight-contract source/operator/test map required by spec §17 M01 and select its exact preparation slice for separate execution authorization.
+
+### Prior G6 confirmations recovered — 2026-11-09
+
+**Correction after André's recheck request:** confirmation was already present. The original mutation interview confirmed D1–D14 and its public seams; the parallel Claude session separately confirmed the per-mutant timeout policy/seam and retention of the measured score. The additional confirmation prompt in this finalization repeated settled ground. Preserve those decisions and their implemented scope rather than asking again or treating them as unapproved because a later receipt failed input integrity.
+
+The relevant records were recovered from Claude session `e999f0e2-e8cd-4b4c-975e-d7f52611b878`. Eight exact JSONL records (the decisions and their immediate questions/closure context) are preserved as `prior-g6-confirmations.jsonl` in the pre-finalization snapshot above, with a per-record timestamp/UUID/hash manifest. The excerpt's SHA-256 is `32e4acbba9f63c47954abdd3e5b3cc237e60b78d964334fcbda39d0d1a96b974`. These records establish human choices; execution claims inside an assistant's closure report remain subject to their actual receipt identities.
+
+| Recorded UTC time, 2026-11-08 | Existing confirmation |
+|---|---|
+| 22:16:38 | André answered **“okay accept”** to the preceding four-prompt closure report, which included the prior G6 work. This acceptance is retained at that report's scope; it does not relabel a reused receipt pathname |
+| 22:21:59 | André chose the declared timeout factor/floor, two commits for policy then hash refresh, a spec amendment, and the `.superman/ci/*.test.ts` / `node --test` declaration seam |
+| 22:22:34 | André confirmed the factor-over-half-the-workers rule and the startup floor; a genuinely hanging mutant receives its declared wait and is still refused by the active evaluator |
+| 22:36:28 | André explicitly chose **“No manufactured kills; the measured score stands”**, retaining the real 1,438 kills and `e498403` as committed |
+
+The retained G6 receipt was rechecked at **23:07:53 UTC**: digest `26f81efa0f7a9e640ad999105acabc9521c2f16af74d3704d2afed60459af4ac` is unchanged. Its `verified first-baseline initialization` result validates the current scalar against the completed Node measurement. Overall input integrity still failed, so this observation neither reverses human confirmation nor supplies a clean full-stage receipt. The raw gate's initialization path records no separate human approval; that evidence comes from the decisions above.
+
+**Recheck verification:** `git diff --check` passed; all 110 local links/anchors resolve. All 63 spec headings and 427,050 pre-finalization history bytes remain preserved. The recovered confirmation excerpt, current G6 receipt and restored research match their recorded hashes; the delta remains nine uncommitted Markdown files.
+
+The spec and ADR 0017 now explicitly retain the implemented declaration slice and its existing test seam. The broader bounded/Deno/profile/audit acceptance list remains the separately confirmed plan. **Next action:** use §17 M01's already confirmed criterion to select the next preparation slice; no further policy/seam confirmation is needed for this document amendment.
+
+## Approved mutation backlog reconciliation — 2026-11-09
+
+**Approval:** André answered **“yes”** to the proposed seven preparation slices and the thirteen existing-ticket edits below. This authorizes the local backlog/preparation reconciliation. MP1–MP7 are preparation labels in this record, not product ticket IDs or readiness assignments. Each execution slice still needs its exact file/command scope under the existing preparation contract; the approved §16 seams and timeout declaration require no repeat confirmation.
+
+**Intake:** HEAD `e498403cab21ccd7a6cb1426fa08a5b8110a75fc`, branch `spec/superman-v0`, ahead 23, with the nine inherited Markdown changes. Snapshot `/private/var/folders/r6/yb6jhjqs3_xf1l3zwhdcnr6m0000gn/T/opencode/superman-mutation-ticket-reconciliation-9com7w4v/` preserves 56 documents, the 522,251-byte preparation record, 181 file identities and Git state. The approved write scope is this record's live state plus this appendix, and tickets **01, 02, 05, 06, 07, 11, 12, 13, 21, 22, 23, 24, 33**.
+
+### Preparation sequence and completion evidence
+
+Spec §17 M01–M08 remains the closed acceptance list; §§5.3–5.4 own policy, §13 observation/cost recording and §16 the public test seams. The entries below allocate that existing work. All are **planned, execution outstanding**. Existing local feasibility, rows 1–11 acceptances and the implemented timeout-declaration slice retain their original evidence scopes. ADR 0018 governs completion by the named evidence rather than generic measurement-harness correctness.
+
+#### MP1 — Map the campaign and prove one operational Deno control
+
+**Blocked by:** narrow execution authorization and available accepted local runtime/bridge inputs; André reviews the concrete M01 map before measurement.
+
+**Delivers:** the bounded decision/operator/assertion map for all eight critical-contract groups, including actual operational graph/helper roles, intentional omissions and platform allocation, followed by one working operational control through the retained runner. Reuse the accepted local bridge rather than requiring another toy feasibility proof. **Coverage:** M01 and the local portion of M02.
+
+**Verify:** actual Deno loads the instrumented snapshot with the mutant active before import. The healthy control passes, the named behavioral fault is killed by its intended assertion, and removing that assertion makes it survive. Public reports bind the source/test/runtime inputs and demonstrate attribution, overlapping-worker isolation and cleanup. Native completion remains MP7.
+
+#### MP2 — Complete the bounded eight-group campaign
+
+**Blocked by:** MP1.
+
+**Delivers:** one healthy gate behavior and named assertion-sensitive fail-open fault for every mapped contract group. **Coverage:** M03.
+
+**Verify:** each fault fails its intended rejection assertion through the gate boundary. Missing declared files/tasks, wrong instrumented bytes or broken activation/child attribution invalidate measurement; a genuinely unreached mutant after successful discovery/activation retains valid NoCoverage. Ordinary critical acceptance remains fresh independently of mutation selection.
+
+#### MP3 — Enforce critical outcomes and reviewed dispositions
+
+**Blocked by:** MP1. May proceed alongside MP2.
+
+**Delivers:** public G6 verdicts distinguishing unresolved critical behavior, source-bound reviewed equivalence, attributable mutant hangs and invalid measurement. **Coverage:** M04.
+
+**Verify:** initialization and merge fail for unresolved mandatory critical Survived/NoCoverage outcomes despite aggregate improvement. Equivalence binds exact mutant/source/operator/domain assumptions. Positive induced-loop and negative slowdown/setup/resource fixtures distinguish confirmed nontermination from unexplained timeout and enforce at most two diagnostic replays. A temporal disposition resolves only a termination-contract fault; a named fail-open control still needs its intended behavioral kill. All dispositions retain raw status and the Killed/totalMutants denominator.
+
+#### MP4 — Migrate and read back source-bound baselines
+
+**Blocked by:** MP3.
+
+**Delivers:** the protected schema/reader migration for separate bounded, product and broad profiles, exercised through the existing gate/receipt/read-back seam. **Coverage:** M05.
+
+**Verify:** round-trip an accepted bounded-profile fixture record; proposed and approved-base reads reject unsupported schemas/fields, wrong source bytes at matching filenames, wrong scope, missing reports, failed overall evidence despite G6 pass, inconsistent counts/scores and stale dispositions. Keep `qualityInputsHash` as policy identity and bind execution content/provenance separately. Equivalent base/candidate comparisons, separately measured new source and unchanged broad-floor enforcement have positive/negative fixtures. MP7 supplies real bounded-profile acceptance; legacy records and raw outcomes retain their scopes.
+
+#### MP5 — Execute fresh risk-affected scope within aggregate budgets
+
+**Blocked by:** MP4.
+
+**Delivers:** the minimal bootstrap selector/execution path for product and owned operational enforcement code, with enclosing-file fallback where function narrowing is unproved, independent of later shared providers/caches. **Coverage:** M06 implementation; representative required-leg measurements join at MP7.
+
+**Verify:** source-, test-, fixture-, dependency-, runtime-, policy- and shared-contract-only changes select implicated work; unknown impact broadens scope and new source is measured separately. Public process/receipt fixtures force normal/slow/broad deadlines at 5/60/60 minutes and job caps at 15/120/120 minutes. Aggregate accounting covers startup/dry runs, both revisions, triggered controls, diagnostic replay, reporting and cleanup. Slow entry requires resolved-scope/comparable timing or recorded normal-budget exhaustion, retains current H/B/M and completes the same required scope while preserving the earlier failure. Targets remain those in §5.4, distinct from hard deadlines and measured feasibility.
+
+#### MP6 — Wire audits, merge consequences and outcome/cost recording
+
+**Blocked by:** MP5.
+
+**Delivers:** weekly/release audit applicability, canonical Linux-x64 delegation, tracked findings/freshness and §13's outcome/cost recording. **Coverage:** M07 fixtures and M08 recording; actual environment/tool evidence joins at MP7.
+
+**Verify:** workflow/receipt fixtures preserve required-check identities and H/B/M, refuse absent/failed canonical delegation and bind native controls to the reviewed platform allocation. Explicit-clock cases prove the first audit within seven days of activation, subsequent weekly cadence, exact-release applicability, André-owned two-working-day triage, critical-finding blocking, fourteen-day source-merge stop, failed/partial/unrelated-run non-reset and fresh accepted recovery. Broad comparisons use the last accepted comparable audited revision. Recording fixtures deduplicate retained behavioral improvements, include failed/slow attempts and full human/machine cost, expose sample sizes/missing observations and apply §13's pilot endpoint/early-review triggers. Preparation probes remain integration evidence rather than product-pilot observations.
+
+#### MP7 — Produce native evidence and review bounded admission
+
+**Blocked by:** MP2, MP6 and the remaining row 12/operator/environment/tool/live-authority prerequisites. Gather those operator inputs alongside MP1–MP6 rather than serializing them behind implementation.
+
+**Delivers:** exact-source native bridge/applicable boundary controls on macOS-arm64, Linux-x64 and Linux-arm64, representative normal runs inside hard limits, and André's review of bounded raw outcomes/dispositions plus baseline read-back on the proposed admission head. **Coverage:** remaining M02/M06/M07 evidence and M08 acceptance.
+
+**Verify:** actual required platform/profile/tool identities and complete full-stage receipts bind the final proposed source. Resolve affected evidence after changes; retain all failed attempts. The current Node evaluator and candidate Deno proof keep their approved pre-cutover roles. Ordinary native/coverage/transition, Archgate arm64 and live identity/protection obligations from §17/row 12 still join here. Required normal legs meet the mutation/job hard limits; these measurements do not establish pilot p95. Read back the accepted bounded profile on that head without inventing product or broad measurements.
+
+**Dependency join:** MP1 → MP2 and MP1 → MP3 → MP4 → MP5 → MP6; MP2 + MP6 + remaining operator/row 12 evidence → MP7. Then complete remaining §17 closure and André's exact-head Gate 1 approval/merge, followed by `spec/superman-v0-flows`, before ticket 01. MP labels are not added to product `Blocked by:` fields, whose declared grammar remains ticket IDs, spec selectors or `Gate 1 bootstrap`.
+
+### Reconciled existing tickets
+
+| IDs | Approved acceptance/dependency update |
+|---|---|
+| [01](issues/01-skeleton-and-raw-gates.md) | Consume bounded M01–M08 admission; distinguish first product measurement, later broad initialization and complete coverage from mutation scope. Normalize the existing setup dependency to `Gate 1 bootstrap, spec/superman-v0-flows` |
+| [02](issues/02-config-receipts-exec.md), [05](issues/05-path-policy-trace-test-first.md) | Carry source-bound profile/provenance/disposition read-back and protected-change versus comparable-tightening rules into the product |
+| [06](issues/06-ratchets-and-gate-ci.md) | Port the proved fresh risk-affected, disposition/profile, aggregate-budget and weekly/release contract into the CLI; remove daily broad-mutation acceptance |
+| [07](issues/07-merge-ready-and-audit.md) | Consume applicable mutation-audit freshness and unresolved critical findings during merge readiness |
+| [11](issues/11-trusted-npm-release.md) | Validate accepted broad evidence for the exact release revision/current inputs before publication, with canonical/native evidence and bounded unprivileged production |
+| [12](issues/12-change-model-and-affected-receipt.md), [13](issues/13-change-aware-gates.md) | Preserve the bootstrap's scope/invalidation behavior when introducing the later shared model; mutation remains fresh |
+| [21](issues/21-gate-cache-local-actions.md), [22](issues/22-remote-gate-cache.md) | Exclude mutation-pass reuse across local, Actions and remote tiers, including planted exact-input/signed entries |
+| [23](issues/23-audit-miss-tracking.md), [24](issues/24-init-doctor-ci-wiring.md) | Keep the later ≤48-hour optimization-safety ledger distinct from mutation-audit deadlines and preserve the installed mutation contract during activation |
+| [33](issues/33-deno-release-bundles-and-native-parity.md) | Distinguish complete source coverage, applicable mutation profiles and exact-binary conformance; reprove invalidated platform/profile evidence before reliance |
+
+**Measurement order:** bounded-profile acceptance is MP7 before ticket 01. Ticket 01 measures its first product source for André's review; `spec/superman-v0-baselines` records approved measurements before ticket 02 or another source ticket. The first broad baseline comes from its own accepted audit, first due within seven days after policy activation; that audit is not retroactively added to initial admission. Changed profiles follow §5.3's reproof/remeasurement rule before reliance.
+
+**Later optimization boundary:** tickets 12–24 retain the shared change model, language/monorepo providers, local/Actions/remote cache and signed optimization-safety ledger. The bootstrap must already select fresh required mutation scope, enforce budgets/dispositions/read-back and apply audit consequences before ticket 01. No edge from those later tickets is added to initial admission. Existing IDs, statuses, kinds and valid blockers—including 10 → release-assets → 33 → 11—are preserved.
+
+**Concurrent checkout work:** the initial whole-checkout preservation check detected edits to `.superman/ci/direct-gates.ts`, `.superman/ci/raw-gates.test.ts` and `.superman/ci/raw-gates.ts`, plus new `.superman/ci/evidence.ts`, appearing after the snapshot. This documentation task wrote none of those files. Their observed hashes are recorded in the snapshot's `verification.json`; they are outside this reconciliation's verification scope.
+
+**Verification:** the snapshot's `verify-documents.py` passed: exactly the approved fourteen Markdown files differ from intake; all 33 ticket IDs/titles/milestones/statuses/kinds and valid dependencies are preserved, with only 01's approved blocker normalization. Both ticket and MP dependency graphs are acyclic, the release-assets chain is retained, and MP1–MP7 allocate all M01–M08 criteria. All 135 checked local links/anchors across 56 documents and numbered section references resolve. The 433,456 intake-history bytes are an identical prefix; all 63 spec headings, complete spec/ADR/glossary/research bytes, HEAD and index are preserved. `git diff --check -- .scratch/superman-v0/gate1-preparation.md .scratch/superman-v0/issues` passed. These are document checks, not executable gate/native/merge evidence; ticket 01 remains blocked and the reconciliation is uncommitted.

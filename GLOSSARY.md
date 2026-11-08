@@ -75,7 +75,7 @@ A path protected as a whole, rather than only selected fields. A ticket PR may c
 _Avoid_: locked file, frozen file
 
 **Ratchet**:
-A quality baseline that ticket work may only tighten: mutation scores may rise or hold, and duplication percentages may fall or hold. Mutation regressions are judged over equivalent file scopes.
+A quality baseline that ticket work may only tighten: mutation scores may rise or hold, and duplication percentages may fall or hold. Mutation regressions are judged over equivalent source scopes.
 _Avoid_: threshold (a ratchet moves), budget
 
 **Receipt**:

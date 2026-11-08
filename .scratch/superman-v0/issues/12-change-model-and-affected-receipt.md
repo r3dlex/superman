@@ -12,6 +12,8 @@
 
 **Protected-path follow-up:** None (config wiring is ticket 24's follow-up; fixtures carry their own config).
 
+Raw bootstrap completion of §17 M01–M08 is a prerequisite to ticket 01. This later shared model supplies ticket 13's replacement for that proved risk selector; provider/cache activation follows its existing dependencies.
+
 - [ ] A fixture repo where a glob-mapped file changes yields `mode: "affected"` with one target, its provider `glob` and a reason naming the file; the test is written first and fails before the change model exists.
 - [ ] Changing a file under each built-in force-full group (a protected path, a lockfile, `tsconfig.json`, `.moon/workspace.yml`, a configured `global` path) yields `mode: "full"` and `forceFull` naming the file and group.
 - [ ] An unclaimed non-ignored input forces full. Declared runtime Markdown and protected/global inputs still select targets or force full even if a documentation ignore matches; blanket `**/*.md` is not emitted.
@@ -24,5 +26,6 @@
 - [ ] A declared CLI-process target is affected by any source change unless a narrower explicit dependency map applies; changing a packaged skill selects its declared consumers.
 - [ ] Deno runtime/channel/content, launch/config/lock/import-map/declaration/capability/env policy and compile/denort/build/asset inputs participate in ownership/global/force-full and receipt identities (§5.10). Profile/runtime changes cannot reuse an old selection model; unknown ownership broadens fully. Bootstrap/process targets retain declared non-import inputs, not just the Node test import graph.
 - [ ] Required-check narrowing follows §5.7's conservative supported-profile contract: missing ownership/graph/input evidence selects all required targets, not a heuristic subset. Fixtures distinguish selection from result reuse and complete G5/coverage scope. Owner-governed critical acceptance remains outside ordinary selection, including when the provider returns no ordinary tests; its policy/mapping inputs stay protected.
+- [ ] For G6's consumer, the model retains risk-affected product and owned operational enforcement inputs plus test/fixture/dependency/runtime/policy/shared-contract invalidation, including changes with no source diff. Fixtures expose selection reasons and unknown-impact broadening; function narrowing requires proof, otherwise enclosing files are selected. The model preserves equivalent base/candidate populations and separate new-source measurement; mutation execution remains fresh under §5.4.
 
 Start with one test target and one complete compiler-project target in a fixture; neither consumer recomputes the diff.
