@@ -74,6 +74,25 @@ function bootstrap(): string {
 /** What the coverage collector decided about a fixture repository. */
 type Decision = { exitCode: number | string | null | undefined; output: string };
 
+/** What the coverage receipt the collector published binds. */
+type CoverageReceipt = {
+  sources?: string[];
+  inventories?: Record<string, { files?: number }>;
+  verdict?: string;
+};
+
+/**
+ * The receipt the collector published, read from the directory it reported.
+ *
+ * The receipt is the collector's own account of what it measured: the files it
+ * inventoried and the metrics it computed for each declared inventory.
+ */
+function coverageReceipt(output: string): CoverageReceipt {
+  const reported = output.match(/Coverage reports: (.+)/u)?.[1]?.trim();
+  if (!reported) throw new Error(`The collector reported no coverage directory: ${output}`);
+  return JSON.parse(readFileSync(join(reported, "coverage-receipt.json"), "utf8")) as CoverageReceipt;
+}
+
 /**
  * Whether this worker may resolve the module's inputs against a working
  * directory. A worker pool that cannot change the working directory runs the
@@ -180,5 +199,60 @@ describe("the reviewed coverage inventory", () => {
 
     expect(decision.exitCode).toBe(1);
     expect(decision.output).toContain("Coverage scope does not model source file: src/unmodeled.ts");
+  }, 120_000);
+});
+
+describe("the runtime import closure of a measured module", () => {
+  test("an excluded module a measured module imports at runtime joins the measured inventory", async () => {
+    const repo = fixture(fixtureContext(), "spec/demo");
+    // The collector writes its own reports under the measured root while it
+    // measures, and it compares the inputs it found before and after the
+    // measurement. Its output is not an input, so the output is ignored.
+    repo.write(".gitignore", "node_modules\n.tools/\n.superman-ci/\n");
+    repo.write(".superman/ci/bootstrap.json", bootstrap());
+    repo.write(
+      ".superman/ci/coverage.json",
+      coveragePolicy({
+        node: [".superman/ci/*.ts", "src/*.ts"],
+        product: [],
+        // The Deno surface is declared and empty here: this host cannot
+        // execute it, and a Node measurement of it would be a false one.
+        deno: {
+          root: ".superman/ci",
+          patterns: [".superman/deno/**/*.ts"],
+          members: [],
+          collector: ".superman/ci/coverage.ts",
+          receipt: ".superman-ci/coverage-deno-*/coverage-receipt.json",
+        },
+      }),
+    );
+    // The measured module reaches an excluded module through a runtime
+    // import. The exclusion list names test-only files, and a test filename is
+    // not a runtime exclusion: the imported module is runtime code, so the
+    // collector measures it with the module that reaches it.
+    repo.write(
+      ".superman/ci/main.ts",
+      'import { helper } from "./helper.test.ts";\n\nexport function main(): number {\n  return helper();\n}\n',
+    );
+    repo.write(
+      ".superman/ci/helper.test.ts",
+      'import assert from "node:assert/strict";\nimport { test } from "node:test";\n\nexport function helper(): number {\n  return 42;\n}\n\ntest("the runtime helper answers", () => {\n  assert.equal(helper(), 42);\n});\n',
+    );
+    // The fixture's own test exercises the measured module and the product
+    // file, so every file the collector inventories is covered by it.
+    repo.write(
+      ".superman/ci/case.test.ts",
+      'import assert from "node:assert/strict";\nimport { test } from "node:test";\nimport { value } from "../../src/value.ts";\nimport { main } from "./main.ts";\n\ntest("the measured module answers through its runtime closure", () => {\n  assert.equal(main(), 42);\n  assert.equal(value, 0);\n});\n',
+    );
+    repo.commit();
+
+    const decision = await measure(repo);
+
+    expect(decision.exitCode ?? 0).toBe(0);
+    expect(decision.output).toContain("Coverage: pass");
+    const receipt = coverageReceipt(decision.output);
+    expect(receipt.sources).toContain(".superman/ci/helper.test.ts");
+    expect(receipt.inventories?.node?.files).toBe(3);
+    expect(receipt.verdict).toBe("pass");
   }, 120_000);
 });
