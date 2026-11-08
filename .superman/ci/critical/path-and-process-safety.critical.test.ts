@@ -83,6 +83,20 @@ describe("the owned child process", () => {
       timeout: 2_000,
     });
 
+    // The grandchild is reaped whatever the assertion finds, and the
+    // registration comes before the first assertion that can fail. A run in
+    // which the group kill does not work would otherwise leave the process
+    // behind for the rest of the measurement, and a machine full of them
+    // measures more slowly than one without — which turns a slow run into a
+    // timeout in a place that has nothing to do with the mutant under test.
+    onTestFinished(() => {
+      try {
+        reap(Number(JSON.parse(readFileSync(pidPath, "utf8"))));
+      } catch {
+        // The pid was never written, so there is no grandchild to end.
+      }
+    });
+
     // The bounded process ends at its timeout and says so.
     expect(result.status).toBeNull();
     expect(result.signal).toBe("SIGKILL");
@@ -90,12 +104,6 @@ describe("the owned child process", () => {
     // And nothing it started outlives it.
     const pid = Number(JSON.parse(readFileSync(pidPath, "utf8")));
     expect(pid).toBeGreaterThan(0);
-    // The grandchild is reaped whatever the assertion finds. A run in which
-    // the group kill does not work would otherwise leave the process behind
-    // for the rest of the measurement, and a machine full of them measures
-    // more slowly than one without — which turns a slow run into a timeout
-    // in a place that has nothing to do with the mutant under test.
-    onTestFinished(() => reap(pid));
     expect(await gone(pid)).toBe(true);
   }, 120_000);
 });
