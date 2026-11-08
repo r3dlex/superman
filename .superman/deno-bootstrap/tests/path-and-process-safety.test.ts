@@ -42,10 +42,19 @@ function alive(pid: number): boolean {
   }
 }
 
-/** Wait for a process to disappear, and report whether it did. */
-async function gone(pid: number, milliseconds = 5_000): Promise<boolean> {
+/**
+ * Wait for a process to disappear, and report whether it did.
+ *
+ * The wait is a second, not the suite's whole timeout. The group kill is
+ * issued before the child returns, so a kill that works ends the grandchild
+ * within milliseconds — six of them on an idle machine — and the wait only
+ * ever runs out when the kill did not happen at all. That is the assertion
+ * failing, and the mutant that removes the kill is killed for it; the wait
+ * before that verdict is what the measurement is spent on.
+ */
+async function gone(pid: number, milliseconds = 1_000): Promise<boolean> {
   const deadline = Date.now() + milliseconds;
-  while (alive(pid) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+  while (alive(pid) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
   return !alive(pid);
 }
 
