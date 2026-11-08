@@ -75,8 +75,15 @@ function writeIn(root: string, path: string, content: string): void {
  * every invocation. A commit needs an author, and an empty template keeps
  * `git init` from copying sample hooks the fixture never runs, so neither
  * costs a process of its own.
+ *
+ * The repository the command belongs to travels in the arguments, not only in
+ * the working directory: `--git-dir` and `--work-tree` name the fixture's own
+ * repository whichever directory the process happens to be in. A command that
+ * lost its working directory would otherwise write into the repository under
+ * test, which is the one repository a fixture must never touch.
  */
 function gitIn(root: string, ...args: string[]): string {
+  const repository = join(root, ".git");
   return execFileSync(
     "git",
     [
@@ -90,6 +97,10 @@ function gitIn(root: string, ...args: string[]): string {
       "user.name=Raw Gate Fixture",
       "-c",
       "user.email=fixture@example.invalid",
+      "--git-dir",
+      repository,
+      "--work-tree",
+      root,
       ...args,
     ],
     {
