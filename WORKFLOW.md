@@ -6,6 +6,32 @@
 
 Every command exits `0` (ok), `1` (a gate failed) or `2` (misconfigured or a tool error). Every gate command writes a [receipt](GLOSSARY.md).
 
+## Matt skills first, then superman
+
+André's rule (2026-11-08) for every implementation and activity in this repository.
+
+**Until the `superman` CLI exists** — the Gate 1 preparation and the v0 build — each activity runs through the Matt Pocock skill that fits it, and each executed step's record names the skill invocation that ran it. A step with no fitting skill records why.
+
+| Activity | Skill |
+| --- | --- |
+| A decision, a design question, a stress test | `grill-with-docs` (grilling and domain-modeling) |
+| A spec amendment | `to-spec`, amending the existing spec in place |
+| A backlog change | `to-tickets`, reconciling the existing ticket ids |
+| An implementation slice | `implement`, which runs `tdd` and `code-review` |
+| A red run or a bug | `diagnosing-bugs` |
+| A review | `code-review`, from a fixed point that includes the work under review |
+| A PR body | `pr` |
+| A session or harness change | `handoff` |
+| The skills' repository configuration | `setup-matt-pocock-skills` |
+
+A fitting Matt skill outside this set runs too. The set superman delivers and pins is the one [spec §5.6](.scratch/superman-v0/spec.md#56-skills-installation-and-context-budget) names; growing it is a §5.6 decision.
+
+The skills run configured for this repository: the tracker is `.scratch/<slug>/`, and the domain documents are [GLOSSARY.md](GLOSSARY.md) and [docs/adr/](docs/adr/). `setup-matt-pocock-skills` writes that configuration into `AGENTS.md` and `docs/agents/` in its own spec-kind PR, right after Gate 1 merges and before ticket 01 (André, 2026-11-08).
+
+**Once `superman` exists**, every command runs through it. superman invokes the skills — `ship` runs `implement`, `tdd`, `code-review` and `pr`, and planning stays `grill-with-docs` → `to-spec` → `to-tickets` — and keeps their configuration current through `superman init` and `superman skills lock|sync|verify`.
+
+**Authority stays with superman's rules.** A commit, push, publication, label or merge that a skill would make by default happens only under the authority the preparation record or the ticket names. One ticket is one PR with one human approval, so `implement-spec` stays outside the flow (spec §5.6). Upstream skill files stay byte-identical to the pin; this repository's configuration carries every adaptation.
+
 ## The workflows
 
 ### Adopt superman in a repository
