@@ -29,6 +29,7 @@ import {
   type GateResult,
   mutationLane,
   runProfile,
+  SNAPSHOT_GATES,
   type StageScope,
   stagePolicy,
 } from "./direct-gates.ts";
@@ -274,8 +275,8 @@ const receipt: Record<string, unknown> = {
   verdict: "fail",
 };
 let receiptPath: string | undefined;
-// The temporary directory of the owned snapshot G11 scans, removed when the
-// run ends, pass or fail.
+// The temporary directory of the owned snapshot the snapshot gates read,
+// removed when the run ends, pass or fail.
 let snapshotTemporary: string | undefined;
 try {
   if (values.receipt) {
@@ -401,9 +402,9 @@ try {
   const wholeTree = ciRun || bindsWholeTree(selected);
   // The local merge-candidate run: neither the CI leg nor the staged stage. It
   // binds what its selected gates read, the whole tree while one of them reads
-  // it, and its G11 scans an owned snapshot of the evaluated commit (§5.4).
-  // The binding checks and the scan root read this one predicate, so they
-  // always select the same leg.
+  // it, and its snapshot gates read an owned snapshot of the evaluated commit
+  // (§5.4). The binding checks and the snapshot read this one predicate, so
+  // they always select the same leg.
   const localCandidateRun = !ciRun && declared.scope !== "staged";
   // The preconditions depend on the stage's scope, so they are resolved here
   // rather than before the stage is known.
@@ -463,18 +464,18 @@ try {
   receipt.inputScope = (values.gate ? "full" : declared.scope) as StageScope;
   const tools: Record<string, unknown> = {};
   receipt.tools = tools;
-  // §5.4's local scan root: the local merge-candidate run claims that the
-  // merge candidate passes, so its G11 scans an owned snapshot of the
-  // evaluated commit, never the caller's checkout; the CI leg and the staged
-  // stage keep the checkout. A snapshot that cannot be built is handed to G11
-  // as its cause, so G11 fails with it instead of the run failing whole, and
-  // never falls back to the checkout.
+  // §5.4, local scan root and binding scope: the local merge-candidate run
+  // claims that the merge candidate passes, so its snapshot gates read one
+  // owned snapshot of the evaluated commit, never the caller's checkout; the
+  // CI leg and the staged stage keep the checkout. A snapshot that cannot be
+  // built is handed to those gates as its cause, so they fail with it instead
+  // of the run failing whole, and never fall back to the checkout.
   let snapshot: string | Error | undefined;
-  if (localCandidateRun && selected.includes("G11")) {
+  if (localCandidateRun && selected.some((gate) => SNAPSHOT_GATES.includes(gate))) {
     try {
-      snapshotTemporary = mkdtempSync(join(tmpdir(), "superman-scan-"));
-      // G11 runs no declared binary inside the snapshot, so none replaces the
-      // reviewed tree's linked commands.
+      snapshotTemporary = mkdtempSync(join(tmpdir(), "superman-snapshot-"));
+      // The snapshot gates run no declared binary inside the snapshot, so
+      // none replaces the reviewed tree's linked commands.
       snapshot = ownedSnapshot(Deno.cwd(), snapshotTemporary, "candidate", String(receipt.evaluatedSha), env, {});
     } catch (error) {
       snapshot = error instanceof Error ? error : new Error(String(error));
@@ -491,8 +492,8 @@ try {
     tools,
     stage: (values.gate ? "scoped" : stage) as "scoped" | "pre-commit" | "pre-pr" | "ci",
     scope: (values.gate ? "full" : declared.scope) as StageScope,
-    // The owned snapshot G11 scans, or why it could not be built; absent
-    // where G11 reads the checkout.
+    // The owned snapshot the snapshot gates read, or why it could not be
+    // built; absent where they read the checkout.
     snapshot,
   };
   const results: Record<string, unknown>[] = [];

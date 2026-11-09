@@ -1,5 +1,6 @@
 // Bootstrap process seam; these tests depend on all product source (src/**).
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -13,10 +14,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, sep } from "node:path";
+import { delimiter, join, resolve, sep } from "node:path";
 import { type TestContext, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { fixture, interceptPnpm } from "./raw-fixture.ts";
+import { fixtureEnvironment } from "./fixture-env.ts";
+import { fixture, GATE_CHILD_TIMEOUT, interceptPnpm } from "./raw-fixture.ts";
+
+/** The reviewed repository, whose rule sources a fixture copies. */
+const repository = resolve(import.meta.dirname, "../..");
 
 test("spec-kind G9 is explicitly inapplicable and records evaluated revisions", (t) => {
   const repo = fixture(t, "spec/demo");
@@ -292,8 +297,18 @@ test("raw checks reject hidden worktree bytes while preserving caller index flag
   }
 });
 
-/** The file the Trivy stand-in reports as a HIGH finding when the tree it scans holds it. */
+/** The file the Trivy and Archgate stand-ins report as a finding when the tree they read holds it. */
 const plantedFinding = "planted-finding.txt";
+
+/** The calls a stand-in logged, one JSON object per line; none when it never ran. */
+function readCalls<T>(path: string): T[] {
+  return existsSync(path)
+    ? readFileSync(path, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line): T => JSON.parse(line))
+    : [];
+}
 
 /**
  * A stand-in for the pinned Trivy binary that reports one HIGH finding
@@ -324,19 +339,134 @@ process.exit(found ? 1 : 0);
 `,
     { mode: 0o755 },
   );
-  const logged = (): { root?: string }[] =>
-    existsSync(calls)
-      ? readFileSync(calls, "utf8")
-          .split("\n")
-          .filter(Boolean)
-          .map((line) => JSON.parse(line))
-      : [];
+  const logged = () => readCalls<{ root?: string }>(calls);
   return {
     binary,
     /** Whether the scanner ran at all, its version probe included. */
     ran: () => existsSync(calls),
     /** The trees the scanner was pointed at, in order. */
     roots: () => logged().flatMap((call) => (call.root ? [call.root] : [])),
+  };
+}
+
+/**
+ * A stand-in for the pinned Archgate binary that reports one violation
+ * whenever the directory it runs in holds the planted file. It logs every call
+ * with its working directory, so a case can see which tree G1 judged and
+ * whether Archgate ran at all.
+ */
+function markerArchgate(repo: { root: string }) {
+  const binary = join(repo.root, ".git/archgate-stand-in");
+  const calls = join(repo.root, ".git/archgate-calls.log");
+  writeFileSync(
+    binary,
+    `#!${process.execPath}
+import { appendFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(calls)}, JSON.stringify({ cwd: process.cwd(), args }) + "\\n");
+if (args.includes("--version")) {
+  console.log("0.61.0");
+  process.exit(0);
+}
+const found = existsSync(join(process.cwd(), ${JSON.stringify(plantedFinding)}));
+const results = found ? [{ adrId: "TEST-001", violations: [{ message: "planted finding in the judged tree" }] }] : [];
+console.log(JSON.stringify({ pass: !found, results }));
+process.exit(found ? 1 : 0);
+`,
+    { mode: 0o755 },
+  );
+  const logged = () => readCalls<{ cwd: string; args: string[] }>(calls);
+  return {
+    binary,
+    /** Whether Archgate ran at all, its version probe included. */
+    ran: () => existsSync(calls),
+    /** The directories Archgate ran in, in order. */
+    directories: () => logged().map((call) => call.cwd),
+    /** The directories Archgate ran its checks in, its version probe left out. */
+    checks: () => logged().flatMap((call) => (call.args[0] === "check" ? [call.cwd] : [])),
+  };
+}
+
+/**
+ * A reviewed module tree whose Archgate package is a stand-in, so a case can
+ * see where `pnpm exec archgate` found the command and where it ran it. Every
+ * other package and command is the reviewed tree's own, linked.
+ */
+function standInArchgateModules(t: TestContext) {
+  const reviewed = join(repository, "node_modules");
+  const modules = mkdtempSync(join(tmpdir(), "superman-raw-modules-"));
+  t.after(() => rmSync(modules, { recursive: true, force: true }));
+  const calls = join(modules, "archgate-calls.log");
+  for (const item of readdirSync(reviewed))
+    if (!item.startsWith(".") && item !== "archgate")
+      symlinkSync(realpathSync(join(reviewed, item)), join(modules, item), "dir");
+  mkdirSync(join(modules, ".bin"));
+  for (const command of readdirSync(join(reviewed, ".bin")))
+    if (command !== "archgate")
+      symlinkSync(realpathSync(join(reviewed, ".bin", command)), join(modules, ".bin", command));
+  mkdirSync(join(modules, "archgate/bin"), { recursive: true });
+  writeFileSync(
+    join(modules, "archgate/package.json"),
+    JSON.stringify({ name: "archgate", version: "0.61.0", bin: { archgate: "bin/archgate.mjs" } }),
+  );
+  writeFileSync(
+    join(modules, "archgate/bin/archgate.mjs"),
+    `#!${process.execPath}
+import { appendFileSync, realpathSync } from "node:fs";
+import { delimiter, dirname } from "node:path";
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(calls)}, JSON.stringify({
+  cwd: process.cwd(),
+  args,
+  command: realpathSync(dirname(process.argv[1])),
+  pathHead: realpathSync((process.env.PATH ?? "").split(delimiter)[0]),
+}) + "\\n");
+if (args.includes("--version")) {
+  console.log("archgate 0.61.0 (stand-in)");
+  process.exit(0);
+}
+console.log(JSON.stringify({ pass: true, results: [] }));
+`,
+    { mode: 0o755 },
+  );
+  symlinkSync(join(modules, "archgate/bin/archgate.mjs"), join(modules, ".bin/archgate"));
+  return {
+    modules,
+    /** Every Archgate call: where it ran, the command directory pnpm found it in and PATH's first entry. */
+    calls: () => readCalls<{ cwd: string; args: string[]; command: string; pathHead: string }>(calls),
+  };
+}
+
+/**
+ * A full local pre-PR run over a fixture: every gate selected, no `--gate`,
+ * in the fixture's own environment and under its child bound.
+ */
+function runPrePr(
+  repo: { root: string; receiptPath: string; git: (...args: string[]) => string },
+  extraEnv: Record<string, string | undefined>,
+) {
+  const result = spawnSync(
+    process.execPath,
+    [join(import.meta.dirname, "raw-gates.ts"), "--stage", "pre-pr", "--receipt", repo.receiptPath],
+    {
+      cwd: repo.root,
+      env: {
+        ...fixtureEnvironment(),
+        PATH: `${join(repo.root, ".tools")}${delimiter}${process.env.PATH}`,
+        HEAD_REF: repo.git("branch", "--show-current").trim(),
+        ...extraEnv,
+      },
+      encoding: "utf8",
+      shell: false,
+      timeout: GATE_CHILD_TIMEOUT,
+    },
+  );
+  assert.ifError(result.error);
+  return {
+    status: result.status,
+    output: `${result.stdout}${result.stderr}`,
+    receipt: existsSync(repo.receiptPath) ? JSON.parse(readFileSync(repo.receiptPath, "utf8")) : undefined,
   };
 }
 
@@ -460,6 +590,146 @@ test("the CI and nightly legs' G11 still reads the checkout and builds no owned 
       assert.equal(result.status, 1, result.output);
       assert.match(result.receipt.results[0].reason, /Trivy reported 1 HIGH\/CRITICAL finding/u);
       assert.deepEqual([...new Set(trivy.roots())], [realpathSync(repo.root)]);
+    });
+  }
+});
+
+test("a local G1 run judges an owned snapshot of the commit, not a file the checkout ignores", (t) => {
+  const repo = fixture(t);
+  repo.commit();
+  const archgate = markerArchgate(repo);
+  plantIgnoredFinding(repo);
+  const temporary = runTemporary(t);
+  const kept = callerStateKept(repo);
+  const result = repo.runGate("G1", [], { ARCHGATE_BIN: archgate.binary, TMPDIR: temporary });
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.receipt.results[0].status, "pass");
+  const judged = new Set(archgate.checks());
+  assert.notEqual(judged.size, 0, "Archgate never checked a tree");
+  for (const root of judged) {
+    assert.ok(outside(realpathSync(repo.root), root), `Archgate judged ${root}, inside the caller's repository`);
+    assert.equal(existsSync(root), false, "the owned snapshot outlived its run");
+  }
+  assert.deepEqual(readdirSync(temporary), [], "the run left files in its temporary directory");
+  kept();
+});
+
+test("a local G1 run leaves Archgate's regenerated rule declarations out of the caller's checkout", (t) => {
+  const repo = fixture(t, "spec/demo");
+  for (const file of [
+    ".archgate/config.json",
+    ".archgate/adrs/SUP-005-no-inline-suppression.md",
+    ".archgate/adrs/SUP-005-no-inline-suppression.rules.ts",
+  ])
+    repo.write(file, readFileSync(join(repository, file), "utf8"));
+  repo.write("docs/adr/0004-no-waivers.md", "# Reviewed policy\n");
+  // Archgate regenerates its rule declarations on every run; they are not a
+  // tracked input, exactly as the reviewed repository ignores them.
+  repo.write(".gitignore", "node_modules\n.tools/\n.archgate/rules.d.ts\n");
+  repo.commit();
+  const result = repo.runGate("G1");
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.receipt.results[0].status, "pass");
+  assert.equal(
+    existsSync(join(repo.root, ".archgate/rules.d.ts")),
+    false,
+    "Archgate wrote its rule declarations into the caller's checkout",
+  );
+});
+
+test("a local G1 run resolves pnpm's archgate inside the owned snapshot", (t) => {
+  const archgate = standInArchgateModules(t);
+  const repo = fixture(t, "ticket/demo-01", "behavior", archgate.modules);
+  repo.commit();
+  const result = repo.runGate("G1", [], { ARCHGATE_BIN: undefined, TMPDIR: runTemporary(t) });
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.receipt.tools.archgate.executableVersion, "archgate 0.61.0 (stand-in)");
+  const calls = archgate.calls();
+  assert.ok(
+    calls.some((call) => call.args[0] === "check"),
+    "pnpm never ran Archgate's checks",
+  );
+  for (const call of calls) {
+    assert.ok(
+      outside(realpathSync(repo.root), call.cwd),
+      `pnpm ran Archgate in ${call.cwd}, inside the caller's repository`,
+    );
+    assert.equal(
+      call.command,
+      join(call.cwd, "node_modules", ".bin"),
+      "pnpm found archgate outside the snapshot's commands",
+    );
+    assert.equal(call.pathHead, join(call.cwd, "node_modules", ".bin"), "pnpm led PATH with another command directory");
+    assert.equal(existsSync(call.cwd), false, "the owned snapshot outlived its run");
+  }
+});
+
+test("a local pre-PR run's G1 and G11 read one owned snapshot", (t) => {
+  const repo = fixture(t, "spec/demo");
+  repo.commit();
+  const archgate = markerArchgate(repo);
+  const trivy = scanRootTrivy(repo);
+  const result = runPrePr(repo, {
+    ARCHGATE_BIN: archgate.binary,
+    TRIVY_BIN: trivy.binary,
+    TMPDIR: runTemporary(t),
+  });
+  assert.ok(result.receipt, result.output);
+  for (const gate of ["G1", "G11"])
+    assert.equal(
+      result.receipt.results.find((entry: { gate: string }) => entry.gate === gate)?.status,
+      "pass",
+      `${gate} did not pass\n${result.output}`,
+    );
+  // Both tools ran, and they read the same trees: Archgate's set and Trivy's
+  // set are one and the same owned snapshot.
+  const judged = new Set(archgate.directories());
+  const scanned = new Set(trivy.roots());
+  assert.notEqual(judged.size, 0, "Archgate never ran");
+  assert.deepEqual(judged, scanned, "G1 and G11 read different trees");
+  assert.equal(judged.size, 1, `G1 and G11 read ${[...judged].join(", ")}`);
+  const [root] = judged;
+  assert.ok(outside(realpathSync(repo.root), root), `G1 and G11 read ${root}, inside the caller's repository`);
+  assert.equal(existsSync(root), false, "the owned snapshot outlived its run");
+});
+
+test("a local G1 run whose owned snapshot cannot be built fails with the cause and never runs Archgate", (t) => {
+  const repo = fixture(t);
+  repo.commit();
+  const archgate = markerArchgate(repo);
+  const absent = absentTemporary(t);
+  const result = repo.runGate("G1", [], { ARCHGATE_BIN: archgate.binary, TMPDIR: absent });
+  assert.equal(result.status, 1, result.output);
+  assert.equal(result.receipt.error, undefined, "the run failed as a whole instead of as G1's own result");
+  assert.equal(result.receipt.results.length, 1);
+  const [g1] = result.receipt.results;
+  assert.equal(g1.gate, "G1");
+  assert.equal(g1.status, "fail");
+  assert.equal(g1.kind, "skipped-required-work");
+  assert.match(g1.reason, /ENOENT/u);
+  assert.ok(g1.reason.includes(absent), g1.reason);
+  assert.equal(archgate.ran(), false, "Archgate ran although its owned snapshot could not be built");
+});
+
+test("the CI and nightly legs' G1 still judges the checkout and builds no owned snapshot", async (t) => {
+  for (const stage of ["ci", "nightly"]) {
+    await t.test(stage, (t) => {
+      const repo = fixture(t);
+      // The nightly runs on main and compares it with the main before it.
+      if (stage === "nightly") repo.git("switch", "--quiet", "main");
+      repo.commit();
+      const archgate = markerArchgate(repo);
+      plantIgnoredFinding(repo);
+      const result = repo.runGate("G1", ["--stage", stage], {
+        ARCHGATE_BIN: archgate.binary,
+        // A leg that tried to build an owned snapshot would fail on this
+        // directory instead of running Archgate.
+        TMPDIR: absentTemporary(t),
+        ...(stage === "nightly" ? { HEAD_REF: "main" } : {}),
+      });
+      assert.equal(result.status, 1, result.output);
+      assert.match(result.receipt.results[0].reason, /planted finding in the judged tree/u);
+      assert.deepEqual([...new Set(archgate.directories())], [realpathSync(repo.root)]);
     });
   }
 });

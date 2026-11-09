@@ -48,9 +48,10 @@ export type GateContext = {
   /** The scope the stage declared: staged files, or the whole repository. */
   scope?: StageScope;
   /**
-   * The owned snapshot of the evaluated commit that G11 scans (§5.4), or why
-   * it could not be built. The driver hands one only to a local run outside
-   * the staged stage; every other run's G11 reads the checkout.
+   * The owned snapshot of the evaluated commit that the snapshot gates read
+   * (§5.4), or why it could not be built. The driver hands one only to a
+   * local run outside the staged stage; every other run's snapshot gates read
+   * the checkout.
    */
   snapshot?: string | Error;
 };
@@ -275,6 +276,30 @@ function sourceInventory(root: string): string[] {
   return files.filter(isSourceFile).sort();
 }
 
+/**
+ * The gates that read the owned snapshot of the evaluated commit on a local
+ * merge-candidate run (§5.4). The driver builds the snapshot when a run
+ * selects one of them, and each takes its context from `judgedContext`: a
+ * gate added here must do the same, or the driver builds a snapshot nothing
+ * reads.
+ */
+export const SNAPSHOT_GATES: readonly string[] = ["G1", "G11"];
+
+/**
+ * The context a snapshot gate judges in (§5.4): rooted at the owned snapshot
+ * of the evaluated commit when the driver built one, at the checkout
+ * otherwise. A snapshot the driver could not build fails the gate with its
+ * cause before its tool runs; the checkout is never its fallback.
+ */
+function judgedContext(gate: string, ctx: GateContext): GateContext {
+  if (ctx.snapshot instanceof Error)
+    throw new GateFailure(
+      "skipped-required-work",
+      `${gate}: the owned snapshot of the evaluated commit could not be built: ${ctx.snapshot.message}`,
+    );
+  return { ...ctx, root: ctx.snapshot ?? ctx.root };
+}
+
 function readPatterns(value: unknown, name: string): string[] {
   if (!Array.isArray(value) || value.some((item: unknown) => typeof item !== "string" || !item))
     throw new GateFailure("incomplete-report", `Invalid declared ${name} pattern list`);
@@ -311,16 +336,8 @@ export async function directGate(gate: string, ctx: GateContext): Promise<GateRe
         status: "n/a",
         reason: "delegated to the required linux-x64 CI leg; an explicit delegation, not a tool pass",
       };
-    // A snapshot the driver could not build fails the gate with its cause,
-    // before the scanner runs; the checkout is never its fallback.
-    if (ctx.snapshot instanceof Error)
-      throw new GateFailure(
-        "skipped-required-work",
-        `G11: the owned snapshot of the evaluated commit could not be built: ${ctx.snapshot.message}`,
-      );
-    // The tree the scan reads: the owned snapshot of the evaluated commit when
-    // the driver built one (§5.4), the checkout otherwise.
-    const scanContext = { ...ctx, root: ctx.snapshot ?? ctx.root };
+    // The tree the scan reads, before the scanner runs.
+    const scanContext = judgedContext("G11", ctx);
     const command = ctx.env.TRIVY_BIN || "trivy";
     // The caller's Trivy environment never reaches the tool: only the cache
     // directory survives, so an inherited severity or skip list cannot shape
@@ -422,25 +439,31 @@ export async function directGate(gate: string, ctx: GateContext): Promise<GateRe
   if (gate === "G5" || gate === "G6")
     throw new GateFailure("policy-refusal", `Raw gate ${gate} is dispatched by the driver; the quality module owns it`);
   if (gate === "G1") {
+    // The tree G1 judges, before Archgate runs: the pin reads the commit's
+    // declared version and the installed one the snapshot links in, both
+    // checks and the file inventory read it, and Archgate regenerates its rule
+    // declarations there.
+    const checkContext = judgedContext("G1", ctx);
     const command = ctx.env.ARCHGATE_BIN ? [ctx.env.ARCHGATE_BIN] : ["pnpm", "exec", "archgate"];
-    pin(ctx, policy, "archgate", "archgate", "archgate", command);
+    pin(checkContext, policy, "archgate", "archgate", "archgate", command);
     if (ctx.scope === "staged") {
       // §5.4's pre-commit form: only the staged files are checked. The staged
       // invocation is a different check, not the whole-repository one scoped
-      // down: it evaluates the rules that apply to the staged files.
+      // down: it evaluates the rules that apply to the staged files, and it
+      // reads the live index, so it runs in the caller's checkout itself.
       execute(ctx, [...command, "check", "--staged", "--strict", "--output", "json"]);
       return { gate, status: "pass", scope: "staged" };
     }
-    execute(ctx, [...command, "check", "--base", ctx.baseSha, "--strict", "--output", "json"]);
+    execute(checkContext, [...command, "check", "--base", ctx.baseSha, "--strict", "--output", "json"]);
     const files = execFileSync("git", ["ls-files", "-z"], {
-      cwd: ctx.root,
-      env: ctx.env,
+      cwd: checkContext.root,
+      env: checkContext.env,
       encoding: "utf8",
       shell: false,
     })
       .split("\0")
       .filter(Boolean);
-    execute(ctx, [...command, "check", "--strict", "--output", "json", "--", ...files]);
+    execute(checkContext, [...command, "check", "--strict", "--output", "json", "--", ...files]);
     return { gate, status: "pass", scope: "full", fullInventory: files.length };
   }
   if (gate === "G3") {

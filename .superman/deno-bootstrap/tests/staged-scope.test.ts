@@ -597,8 +597,18 @@ test("a local scoped run accepts a document it did not commit", (t) => {
   assert.equal(observed.deno.receipt?.inputIntegrity.status, "pass");
 });
 
-/** The file the Trivy stand-in reports as a HIGH finding when the tree it scans holds it. */
+/** The file the Trivy and Archgate stand-ins report as a finding when the tree they read holds it. */
 const plantedFinding = "planted-finding.txt";
+
+/** The calls a stand-in logged, one JSON object per line; none when it never ran. */
+function readCalls<T>(path: string): T[] {
+  return existsSync(path)
+    ? readFileSync(path, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line): T => JSON.parse(line))
+    : [];
+}
 
 /**
  * A stand-in for the pinned Trivy binary that reports one HIGH finding
@@ -629,19 +639,102 @@ process.exit(found ? 1 : 0);
 `,
     { mode: 0o755 },
   );
-  const logged = (): { root?: string }[] =>
-    existsSync(calls)
-      ? readFileSync(calls, "utf8")
-          .split("\n")
-          .filter(Boolean)
-          .map((line) => JSON.parse(line))
-      : [];
+  const logged = () => readCalls<{ root?: string }>(calls);
   return {
     binary,
     /** Whether any host ran the scanner, its version probe included. */
     ran: () => existsSync(calls),
     /** The trees the scanner was pointed at, in order. */
     roots: () => logged().flatMap((call) => (call.root ? [call.root] : [])),
+  };
+}
+
+/**
+ * A stand-in for the pinned Archgate binary that reports one violation
+ * whenever the directory it runs in holds the planted file. It logs every call
+ * with its working directory, so a case can see which tree each host's G1
+ * judged and whether Archgate ran at all.
+ */
+function markerArchgate(repo: { root: string }) {
+  const binary = join(repo.root, ".git/archgate-stand-in");
+  const calls = join(repo.root, ".git/archgate-calls.log");
+  writeFileSync(
+    binary,
+    `#!${process.execPath}
+import { appendFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(calls)}, JSON.stringify({ cwd: process.cwd(), args }) + "\\n");
+if (args.includes("--version")) {
+  console.log("0.61.0");
+  process.exit(0);
+}
+const found = existsSync(join(process.cwd(), ${JSON.stringify(plantedFinding)}));
+const results = found ? [{ adrId: "TEST-001", violations: [{ message: "planted finding in the judged tree" }] }] : [];
+console.log(JSON.stringify({ pass: !found, results }));
+process.exit(found ? 1 : 0);
+`,
+    { mode: 0o755 },
+  );
+  const logged = () => readCalls<{ cwd: string; args: string[] }>(calls);
+  return {
+    binary,
+    /** Whether any host ran Archgate, its version probe included. */
+    ran: () => existsSync(calls),
+    /** The directories Archgate ran in, in order. */
+    directories: () => logged().map((call) => call.cwd),
+    /** The directories Archgate ran its checks in, its version probe left out. */
+    checks: () => logged().flatMap((call) => (call.args[0] === "check" ? [call.cwd] : [])),
+  };
+}
+
+/**
+ * A reviewed module tree whose Archgate package is a stand-in, so a case can
+ * see where each host's `pnpm exec archgate` found the command and where it
+ * ran it. Every other package and command is the reviewed tree's own, linked.
+ */
+function standInArchgateModules(t: TestContext) {
+  const reviewed = join(repository, "node_modules");
+  const modules = mkdtempSync(join(tmpdir(), "superman-deno-modules-"));
+  t.after(() => rmSync(modules, { recursive: true, force: true }));
+  const calls = join(modules, "archgate-calls.log");
+  for (const item of readdirSync(reviewed))
+    if (!item.startsWith(".") && item !== "archgate")
+      symlinkSync(realpathSync(join(reviewed, item)), join(modules, item), "dir");
+  mkdirSync(join(modules, ".bin"));
+  for (const command of readdirSync(join(reviewed, ".bin")))
+    if (command !== "archgate")
+      symlinkSync(realpathSync(join(reviewed, ".bin", command)), join(modules, ".bin", command));
+  mkdirSync(join(modules, "archgate/bin"), { recursive: true });
+  writeFileSync(
+    join(modules, "archgate/package.json"),
+    JSON.stringify({ name: "archgate", version: "0.61.0", bin: { archgate: "bin/archgate.mjs" } }),
+  );
+  writeFileSync(
+    join(modules, "archgate/bin/archgate.mjs"),
+    `#!${process.execPath}
+import { appendFileSync, realpathSync } from "node:fs";
+import { delimiter, dirname } from "node:path";
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(calls)}, JSON.stringify({
+  cwd: process.cwd(),
+  args,
+  command: realpathSync(dirname(process.argv[1])),
+  pathHead: realpathSync((process.env.PATH ?? "").split(delimiter)[0]),
+}) + "\\n");
+if (args.includes("--version")) {
+  console.log("archgate 0.61.0 (stand-in)");
+  process.exit(0);
+}
+console.log(JSON.stringify({ pass: true, results: [] }));
+`,
+    { mode: 0o755 },
+  );
+  symlinkSync(join(modules, "archgate/bin/archgate.mjs"), join(modules, ".bin/archgate"));
+  return {
+    modules,
+    /** Every Archgate call: where it ran, the command directory pnpm found it in and PATH's first entry. */
+    calls: () => readCalls<{ cwd: string; args: string[]; command: string; pathHead: string }>(calls),
   };
 }
 
@@ -844,6 +937,242 @@ test("a scoped pre-commit G11 still reads the checkout in both hosts", (t) => {
   assertParity(observed);
   assert.match(gateResult(observed.deno.receipt, "G11").reason ?? "", /Trivy reported 1 HIGH\/CRITICAL finding/u);
   assert.deepEqual([...new Set(trivy.roots())], [realpathSync(repo.root)]);
+});
+
+test("a local G1 run judges an owned snapshot of the commit, not a file the checkout ignores", (t) => {
+  // The input that reaches Archgate: a local scoped G1 run over a checkout
+  // that holds a finding the commit does not, ignored by the caller's own
+  // exclude file. The outcome it produces: both hosts run Archgate's checks
+  // in an owned snapshot of the commit outside the caller's repository, pass,
+  // remove the snapshot when the run ends and leave the caller's state as it
+  // was.
+  const repo = fixture(t);
+  const archgate = markerArchgate(repo);
+  const temporary = runTemporary(t);
+  plantIgnoredFinding(repo);
+  const kept = callerStateKept(repo);
+  const observed = runBoth(repo, ["--stage", "pre-pr", "--gate", "G1"], {
+    ARCHGATE_BIN: archgate.binary,
+    TMPDIR: temporary,
+  });
+  assert.equal(observed.node.status, 0, observed.node.output);
+  assertParity(observed);
+  assert.equal(gateResult(observed.deno.receipt, "G1").status, "pass");
+  const judged = new Set(archgate.checks());
+  assert.notEqual(judged.size, 0, "no host ran Archgate's checks");
+  for (const root of judged) {
+    assert.ok(outside(realpathSync(repo.root), root), `a host judged ${root}, inside the caller's repository`);
+    assert.equal(existsSync(root), false, "an owned snapshot outlived its run");
+  }
+  assert.deepEqual(readdirSync(temporary), [], "a host left files in its temporary directory");
+  kept();
+});
+
+test("a local G1 run leaves Archgate's regenerated rule declarations out of the caller's checkout in both hosts", (t) => {
+  // The input that reaches Archgate: a local scoped G1 run under the real
+  // pinned Archgate, which regenerates its rule declarations on every run.
+  // The outcome it produces: both hosts pass, and the declarations land in
+  // the owned snapshot rather than in the caller's checkout.
+  const repo = fixture(t);
+  const observed = runBoth(repo, ["--stage", "pre-pr", "--gate", "G1"]);
+  assert.equal(observed.node.status, 0, observed.node.output);
+  assertParity(observed);
+  assert.equal(gateResult(observed.deno.receipt, "G1").status, "pass");
+  assert.equal(
+    existsSync(join(repo.root, ".archgate/rules.d.ts")),
+    false,
+    "a host wrote Archgate's rule declarations into the caller's checkout",
+  );
+});
+
+test("a local G1 run resolves pnpm's archgate inside the owned snapshot in both hosts", (t) => {
+  // The input that reaches pnpm: a local scoped G1 run with no explicit
+  // Archgate binary, whose reviewed modules carry a stand-in Archgate
+  // package. The outcome it produces: each host's pnpm finds archgate in its
+  // own snapshot's commands, leads PATH with them, runs every Archgate call
+  // inside that snapshot, and records the stand-in's executable version.
+  const archgate = standInArchgateModules(t);
+  const repo = fixture(t);
+  // The fixture's link to the reviewed modules, pointed at the stand-in
+  // tree instead; unlinking removes the link, never the modules.
+  unlinkSync(join(repo.root, "node_modules"));
+  symlinkSync(archgate.modules, join(repo.root, "node_modules"), "dir");
+  const observed = runBoth(repo, ["--stage", "pre-pr", "--gate", "G1"], {
+    ARCHGATE_BIN: undefined,
+    TMPDIR: runTemporary(t),
+  });
+  assert.equal(observed.node.status, 0, observed.node.output);
+  assertParity(observed);
+  for (const receipt of [observed.node.receipt, observed.deno.receipt])
+    assert.equal(
+      (receipt?.tools as { archgate?: { executableVersion?: string } } | undefined)?.archgate?.executableVersion,
+      "archgate 0.61.0 (stand-in)",
+    );
+  const calls = archgate.calls();
+  assert.ok(
+    calls.some((call) => call.args[0] === "check"),
+    "pnpm never ran Archgate's checks",
+  );
+  for (const call of calls) {
+    assert.ok(
+      outside(realpathSync(repo.root), call.cwd),
+      `pnpm ran Archgate in ${call.cwd}, inside the caller's repository`,
+    );
+    assert.equal(
+      call.command,
+      join(call.cwd, "node_modules", ".bin"),
+      "pnpm found archgate outside the snapshot's commands",
+    );
+    assert.equal(call.pathHead, join(call.cwd, "node_modules", ".bin"), "pnpm led PATH with another command directory");
+    assert.equal(existsSync(call.cwd), false, "an owned snapshot outlived its run");
+  }
+});
+
+test("a local pre-PR run's G1 and G11 read one owned snapshot in each host", (t) => {
+  // The input that reaches both gates: a full local pre-PR run with Archgate
+  // and Trivy stand-ins that record the tree they read. The outcome it
+  // produces: each host's G1 and G11 pass after reading one owned snapshot
+  // outside the caller's repository, gone after the run, and both hosts
+  // decide G1 and G11 alike. The full run's other gates are not this case's
+  // subject, so it compares G1's and G11's results rather than every parity
+  // field.
+  const repo = fixture(t);
+  const archgate = markerArchgate(repo);
+  const trivy = scanRootTrivy(repo);
+  const observed = runBoth(repo, ["--stage", "pre-pr"], {
+    ARCHGATE_BIN: archgate.binary,
+    TRIVY_BIN: trivy.binary,
+    TMPDIR: runTemporary(t),
+  });
+  for (const gate of ["G1", "G11"]) {
+    assert.equal(
+      gateResult(observed.node.receipt, gate).status,
+      "pass",
+      `${gate} did not pass\n${observed.node.output}`,
+    );
+    assert.deepEqual(
+      gateResult(observed.deno.receipt, gate),
+      gateResult(observed.node.receipt, gate),
+      `${gate} differs`,
+    );
+  }
+  // Both tools ran in both hosts and read the same trees: each host's one
+  // owned snapshot, so Archgate's set and Trivy's set are equal and hold one
+  // directory per host.
+  const judged = new Set(archgate.directories());
+  const scanned = new Set(trivy.roots());
+  assert.deepEqual(judged, scanned, "G1 and G11 read different trees");
+  assert.equal(judged.size, 2, `the two hosts read ${[...judged].join(", ")}`);
+  for (const root of judged) {
+    assert.ok(outside(realpathSync(repo.root), root), `a host read ${root}, inside the caller's repository`);
+    assert.equal(existsSync(root), false, "an owned snapshot outlived its run");
+  }
+});
+
+test("a committed suppression fails a local G1 run under the real pinned Archgate in both hosts", (t) => {
+  // The input that reaches Archgate: a commit that adds an inline
+  // suppression, judged by the real pinned Archgate in each host's owned
+  // snapshot. The outcome it produces: both hosts fail G1 on SUP-005, the two
+  // reasons agree once Archgate's own timing is set aside, and neither names
+  // the snapshot it judged.
+  const repo = fixture(t);
+  repo.write(
+    "src/value.ts",
+    "// biome-ignore lint/suspicious/noExplicitAny: forbidden fixture\nexport const value: any = 1;\n",
+  );
+  repo.git("add", "--all");
+  repo.git("commit", "--quiet", "-m", "a committed suppression");
+  const temporary = runTemporary(t);
+  const observed = runBoth(repo, ["--stage", "pre-pr", "--gate", "G1"], { TMPDIR: temporary });
+  assert.equal(observed.node.status, 1, observed.node.output);
+  // Archgate reports how long it took, so the reasons are compared with that
+  // one number set aside.
+  assertParity(observed, ["results"]);
+  const untimed = (receipt: Record<string, unknown> | undefined) => {
+    const g1 = gateResult(receipt, "G1");
+    return { ...g1, reason: g1.reason?.replace(/"durationMs":\s*[\d.]+/gu, '"durationMs": 0') };
+  };
+  assert.deepEqual(
+    untimed(observed.deno.receipt),
+    untimed(observed.node.receipt),
+    "G1 differs beyond Archgate's timing",
+  );
+  for (const receipt of [observed.node.receipt, observed.deno.receipt]) {
+    const reason = gateResult(receipt, "G1").reason ?? "";
+    assert.match(reason, /Inline suppression is forbidden/u);
+    assert.ok(
+      !reason.includes(temporary) && !reason.includes(realpathSync(temporary)),
+      "a G1 reason names the owned snapshot it judged",
+    );
+  }
+});
+
+test("a local G1 run whose owned snapshot cannot be built fails with the cause in both hosts", (t) => {
+  // The input that reaches the guard: a temporary directory that does not
+  // exist, so no owned snapshot can be built. The outcome it produces: G1
+  // fails as its own result, naming the cause, and neither host runs
+  // Archgate, not even its version probe.
+  const repo = fixture(t);
+  const archgate = markerArchgate(repo);
+  const absent = absentTemporary(t);
+  const observed = runBoth(repo, ["--stage", "pre-pr", "--gate", "G1"], {
+    ARCHGATE_BIN: archgate.binary,
+    TMPDIR: absent,
+  });
+  assert.equal(observed.node.status, 1, observed.node.output);
+  assertParity(observed);
+  assert.equal(observed.deno.receipt?.error, undefined, "the Deno run failed as a whole instead of as G1's own result");
+  const g1 = gateResult(observed.deno.receipt, "G1");
+  assert.equal(g1.status, "fail");
+  assert.ok(g1.reason?.includes(absent), g1.reason);
+  assert.equal(archgate.ran(), false, "a host ran Archgate although its owned snapshot could not be built");
+});
+
+test("the CI and nightly legs' G1 still judge the checkout in both hosts", async (t) => {
+  // The input that reaches Archgate: a CI or nightly G1 run over a checkout
+  // that holds an ignored finding, with no temporary directory an owned
+  // snapshot could be built in. The outcome it produces: both hosts run
+  // Archgate in the checkout itself and fail on the finding.
+  for (const stage of ["ci", "nightly"]) {
+    await t.test(stage, (t) => {
+      const repo = fixture(t);
+      if (stage === "nightly") {
+        // The nightly runs on main and compares it with the main before it.
+        repo.git("switch", "--quiet", "main");
+        repo.git("commit", "--quiet", "--allow-empty", "-m", "nightly candidate");
+      }
+      const archgate = markerArchgate(repo);
+      const observed = runBoth(
+        repo,
+        ["--stage", stage, "--gate", "G1"],
+        { ARCHGATE_BIN: archgate.binary, TMPDIR: absentTemporary(t) },
+        () => plantIgnoredFinding(repo),
+      );
+      assert.equal(observed.node.status, 1, observed.node.output);
+      assertParity(observed);
+      assert.match(gateResult(observed.deno.receipt, "G1").reason ?? "", /planted finding in the judged tree/u);
+      assert.deepEqual([...new Set(archgate.directories())], [realpathSync(repo.root)]);
+    });
+  }
+});
+
+test("a scoped pre-commit G1 still judges the checkout in both hosts", (t) => {
+  // The input that reaches Archgate: a scoped G1 run of the staged pre-commit
+  // stage over a checkout that holds an ignored finding. The outcome it
+  // produces: the staged stage keeps the live checkout, so both hosts run
+  // Archgate's whole-repository form there and fail on the finding.
+  const repo = fixture(t);
+  const archgate = markerArchgate(repo);
+  const observed = runBoth(
+    repo,
+    ["--stage", "pre-commit", "--gate", "G1"],
+    { ARCHGATE_BIN: archgate.binary, TMPDIR: absentTemporary(t) },
+    () => plantIgnoredFinding(repo),
+  );
+  assert.equal(observed.node.status, 1, observed.node.output);
+  assertParity(observed);
+  assert.match(gateResult(observed.deno.receipt, "G1").reason ?? "", /planted finding in the judged tree/u);
+  assert.deepEqual([...new Set(archgate.directories())], [realpathSync(repo.root)]);
 });
 
 test("a declared partial stage may not declare a whole-repository scope", (t) => {
