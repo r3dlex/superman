@@ -3336,7 +3336,7 @@ In the full local pre-PR run and its scoped `--gate` runs, G1 and G11 read one o
 
 #### RB1 — Local G11 scans an owned snapshot of the commit
 
-**What to build:** a local run outside the staged pre-commit stage that selects G11 scans an owned snapshot of the evaluated commit instead of the caller's checkout, in both hosts. The driver builds the snapshot only for such a run, keeps it outside the repository and removes it when the run ends, pass or fail. A snapshot that cannot be built fails G11 with its cause and never falls back to the checkout. The CI and nightly legs, including `--stage ci` and `--stage nightly` on a workstation, keep scanning the checkout. The binding rule does not change yet: G11 still binds the whole tree, which keeps every intermediate receipt conservative and truthful. SUP-007's ignore/config refusal and G11's lockfile precondition move in this slice, with the scan they guard: a guard that reads a different tree than the scan describes a tree the scan never saw.
+**What to build:** a local run outside the staged pre-commit stage that selects G11 scans an owned snapshot of the evaluated commit instead of the caller's checkout, in both hosts. The driver builds the snapshot only for such a run, keeps it outside the repository and removes it when the run ends, pass or fail. A snapshot that cannot be built fails G11 with its cause and never falls back to the checkout. The CI and nightly legs, including `--stage ci` and `--stage nightly` on a workstation, keep scanning the checkout. The binding rule does not change yet: G11 still binds the whole tree, which keeps every intermediate receipt conservative and truthful. SUP-007's refusal and the lockfile precondition move in RB3, where their move becomes observable: while the binding still binds the whole tree, a run whose working tree differs from the commit is refused before G11 runs, so the guard's root is not yet a thing any run can observe.
 
 **Blocked by:** None (can start immediately), on the lane branch.
 
@@ -3346,13 +3346,12 @@ In the full local pre-PR run and its scoped `--gate` runs, G1 and G11 read one o
 
 1. A Trivy stand-in reports a HIGH finding whenever its scan root holds a marker file. With the marker ignored in the caller's checkout, a local `--gate G11` run passes. Red today: the checkout scan sees the ignored marker.
 2. When the snapshot cannot be built, for example because the run's temporary directory is unwritable, a local `--gate G11` run fails G11 with that cause and the stand-in never runs. Red today: the scan runs in the checkout and passes.
-3. SUP-007's ignore/config refusal and G11's lockfile precondition read the root the scan reads. A `trivy.yaml` — and separately a `.trivyignore` — that the commit holds and the working copy deleted is refused by a local G11 run as a policy refusal, and a `pnpm-lock.yaml` the commit does not hold is refused for the missing lockfile. Red today: the refusal reads the checkout, which no longer holds the file, so the run passes and the guard is silent.
 
-**Guards:** a committed marker still fails the local run, because the snapshot carries the commit. `--stage ci --gate G11` and `--stage nightly --gate G11` still see the ignored marker, because they read the checkout. After passing and failing local runs, no snapshot directory remains, and the caller's index bytes, `HEAD` and working tree are unchanged. The existing G11 routing and coverage cases stay green: finding propagation, missing tool, ignored failure, incomplete and stale reports, reported findings, the lockfile and ignore/config refusals and the tool versions — the refusal cases survive the move because their fixtures commit the file, so the snapshot carries it. Both hosts agree on the new cases.
+**Guards:** a committed marker still fails the local run, because the snapshot carries the commit. `--stage ci --gate G11` and `--stage nightly --gate G11` still see the ignored marker, because they read the checkout. After passing and failing local runs, no snapshot directory remains, and the caller's index bytes, `HEAD` and working tree are unchanged. The existing G11 routing and coverage cases stay green: finding propagation, missing tool, ignored failure, incomplete and stale reports, reported findings, the lockfile and ignore/config refusals and the tool versions. Both hosts agree on the new cases.
 
-**Covers:** SB02, including its refusal, SB03 for G11, SB04's lifecycle, SB05 for G11. If a G11 diagnostic embeds the absolute snapshot path, the hosts' `results` differ; settle that here, where it first appears.
+**Covers:** SB02 and SB03 for G11, SB04's lifecycle, SB05 for G11. If a G11 diagnostic embeds the absolute snapshot path, the hosts' `results` differ; settle that here, where it first appears.
 
-- [ ] All three reds written first and seen failing for the stated reason
+- [ ] Both reds written first and seen failing for the stated reason
 - [ ] Node original and Deno twin changed together; parity suites green
 - [ ] Guards and the slice verification green
 - [ ] Committed on the lane branch, with the evidence note appended here
@@ -3382,7 +3381,7 @@ In the full local pre-PR run and its scoped `--gate` runs, G1 and G11 read one o
 
 #### RB3 — The full local pre-PR run binds its gate inputs
 
-**What to build:** the whole-tree binding names no gate in either host, so the full local pre-PR run and its scoped `--gate` runs bind `gate-inputs`. An uncommitted document no longer refuses them, and an uncommitted change to any gate input still does, naming the file. In the same slice, SUP-007's ignore/config refusal and G11's lockfile precondition already read the snapshot root, having moved with the scan in RB1, so the flip opens no hole: there is no interval in which the guard and the scan read different trees. The staged pre-commit stage keeps `index` and the CI and nightly legs keep `whole-tree`; both are asserted explicitly for the first time.
+**What to build:** the whole-tree binding names no gate in either host, so the full local pre-PR run and its scoped `--gate` runs bind `gate-inputs`. An uncommitted document no longer refuses them, and an uncommitted change to any gate input still does, naming the file. In the same slice, SUP-007's ignore/config refusal and G11's lockfile precondition read the snapshot root the scan reads, which closes the hole the flip would otherwise open. The staged pre-commit stage keeps `index` and the CI and nightly legs keep `whole-tree`; both are asserted explicitly for the first time.
 
 **Blocked by:** RB2.
 
@@ -3392,13 +3391,13 @@ In the full local pre-PR run and its scoped `--gate` runs, G1 and G11 read one o
 
 1. The raw-gates case *a run whose gate reads the whole tree binds the whole tree* inverts. A local `--gate G1` run over an uncommitted document binds `gate-inputs`, passes input integrity and judges the commit. Red today: refused, `whole-tree`.
 2. A full `--stage pre-pr` run over an uncommitted `.scratch/demo/note.md` binds `gate-inputs` and passes input integrity. It is tested in the raw-gates suite and as the twin parity case *a local full run accepts a document it did not commit*. Red today: `{"scope":"whole-tree","status":"fail"}` with `G9: dirty inputs; commit or preserve them before replay: .scratch/demo/note.md`.
-3. A `trivy.yaml`, and separately a `.trivyignore`, that the commit holds and the working copy deleted is refused by a local G11 run as a policy refusal. This is a guard here, not a red: the refusal moved with the scan in RB1, so it never sat silent across the flip.
+3. A `trivy.yaml`, and separately a `.trivyignore`, that the commit holds and the working copy deleted is refused by a local G11 run as a policy refusal. Red before the slice: refused for dirty inputs instead. Red midway, after the flip but before the refusal moves: the run passes.
 
-**Guards:** a full run over an uncommitted source file is still refused, naming it (the twin's *a local full run refuses a tree it did not commit*). The existing cases for an uncommitted test, policy, rule-source or ignore-rule file, a staged source path and an untracked source file still refuse. New explicit assertions record `index` for the staged pre-commit stage and `whole-tree` for the nightly stage and for a workstation `--stage ci` run. *The CI leg refuses a tree it did not commit, document or not* keeps `whole-tree`. The `policy-selection-and-result-completeness` critical case keeps its scoped `gate-inputs` assertion, and the SUP-007 and lockfile coverage cases stay green — they were carried green from RB1, where the refusal moved.
+**Guards:** a full run over an uncommitted source file is still refused, naming it (the twin's *a local full run refuses a tree it did not commit*). The existing cases for an uncommitted test, policy, rule-source or ignore-rule file, a staged source path and an untracked source file still refuse. New explicit assertions record `index` for the staged pre-commit stage and `whole-tree` for the nightly stage and for a workstation `--stage ci` run. *The CI leg refuses a tree it did not commit, document or not* keeps `whole-tree`. The `policy-selection-and-result-completeness` critical case keeps its scoped `gate-inputs` assertion, and the SUP-007 and lockfile coverage cases stay green.
 
-**Covers:** SB01, SB03, SB05. SB02's refusal was covered in RB1.
+**Covers:** SB01, SB02's refusal, SB03, SB05.
 
-- [ ] Both reds written first and seen failing for the stated reason
+- [ ] All three reds written first and seen failing for the stated reason, including the midway hole
 - [ ] Node original and Deno twin changed together; parity suites green
 - [ ] Guards and the slice verification green
 - [ ] Committed on the lane branch, with the evidence note appended here
