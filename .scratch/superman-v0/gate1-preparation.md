@@ -3351,10 +3351,52 @@ In the full local pre-PR run and its scoped `--gate` runs, G1 and G11 read one o
 
 **Covers:** SB02 and SB03 for G11, SB04's lifecycle, SB05 for G11. If a G11 diagnostic embeds the absolute snapshot path, the hosts' `results` differ; settle that here, where it first appears.
 
-- [ ] Both reds written first and seen failing for the stated reason
-- [ ] Node original and Deno twin changed together; parity suites green
-- [ ] Guards and the slice verification green
-- [ ] Committed on the lane branch, with the evidence note appended here
+- [x] Both reds written first and seen failing for the stated reason
+- [x] Node original and Deno twin changed together; parity suites green
+- [x] Guards and the slice verification green
+- [x] Committed on the lane branch, with the evidence note appended here
+
+##### RB1 evidence — 2026-11-09
+
+**Authority and skills.** André approved the exact files, seams, commands, temporary grants and fixture operations on 2026-11-09. The lane `spec/superman-v0-snapshot-scan` was cut from `spec/superman-v0` at `f7363ce` into a linked worktree, so the shared checkout's branch, tree and HEAD never moved. Matt `tdd` drove the two slices, Matt `code-review` ran the independent Standards and Spec review, and Matt `writing-for-agents` shaped this note. No push, installation, hosted write, activation, approval or merge followed.
+
+**Environment.** `PATH` led by `/tmp/superman-pnpm-shim` (pnpm 12.16.1); `ARCHGATE_BIN` the pinned 0.61.0; `SUPERMAN_DENO_BIN` a copy of the release Deno 2.9.8, sha256 `d1e99265…` as `tool-assets.json` records (the Homebrew 2.9.8 build hashes `2e5e5177…` and fails the transition suite's hash pin). Baseline on the untouched lane: `raw-gates`, `raw-routing` and `bootstrap-coverage` 189/189; the twin's suites 92/92.
+
+**What changed.** A local merge-candidate run that selects G11 builds one owned snapshot with the unchanged `ownedSnapshot`, hands it to G11 through the optional `GateContext.snapshot` (`string | Error`), and removes it in a `finally`; G11's version probe and scan run in it, and an unbuildable snapshot fails G11 with its cause (`skipped-required-work`) before any Trivy call. `localCandidateRun = !ciRun && declared.scope !== "staged"` selects the leg for the dirty-input refusal, the binding checks and the scan root. The binding rule is unchanged: G11 still binds the whole tree, and the lockfile and SUP-007 guards still read the checkout.
+
+**Red → green** — `node --test --test-concurrency=1 --test-name-pattern '<case>'` over `.superman/ci/raw-gates.test.ts` or `.superman/deno-bootstrap/tests/staged-scope.test.ts`:
+
+| Case | At `f7363ce` | After |
+|---|---|---|
+| Red 1: *a local G11 run scans an owned snapshot of the commit, not a file the checkout ignores* | exit 1, `G11: Trivy reported 1 HIGH/CRITICAL finding(s): {"HIGH":1}`: the checkout scan saw the ignored marker | green after slice 1 |
+| Red 2: *a local G11 run whose owned snapshot cannot be built fails with the cause and never scans* | exit 0, `G11: pass`: the scan ran in the checkout | still red after slice 1 (the run failed whole, `receipt.error` set); green after slice 2 |
+| P1 and P2, the parity twins of Red 1 and Red 2 | red | red after the Node change alone (`1 !== 0` from `assertParity`; `results differ between the Node original and the Deno sibling`); green after the Deno mirror |
+| Guards: a committed marker fails locally; `--stage ci` and `--stage nightly --gate G11` read the checkout under an absent `TMPDIR`; parity for those and for a scoped `--stage pre-commit --gate G11` | green | green |
+| Review-driven parity: *a local G11 run whose owned snapshot fails midway fails with the cause and removes it in both hosts* | exit 0, `G11: pass` | green |
+
+The passing and failing local cases also assert that the run's own `TMPDIR` is empty afterwards and that the caller's index bytes, HEAD, refs and working tree, ignored files included, are unchanged.
+
+**Review.** Independent Standards and Spec sub-agents read the frozen delta `d0bcacc5…`: no hard breach of a documented standard and no scope creep in production code. Resolved inside the six files: the predicate named once (both axes); assertions on the set of trees read instead of scan counts; caller state asserted in the parity cases; scanned roots asserted outside the caller's repository; comments for the `{}` binaries and the checkout-reading guards; `scanContext`; within-file helpers; the midway parity case. A second pass by both reviewers on `30a7e61b…` confirmed every resolution, and its two comment nits were applied.
+
+**Settled here: snapshot paths in G11 diagnostics.** G11's pass and finding results carry no snapshot path, so SB05's `results` parity holds on every SB01–SB03 fixture. An unbuildable snapshot's cause is carried verbatim, as "fails G11 with its cause" asks. The `mkdtemp` failure names the shared `TMPDIR` with Node's literal `XXXXXX` template and reads the same in both hosts, which P2 asserts. A failure after `mkdtemp` is host-formatted: Node's `readdir` reports `scandir` where Deno's reports `readdir`, and a clone-step failure would name the run's own snapshot directory. The midway parity case therefore compares outcome, kind, cleanup and caller state, and leaves `results` out; SB05 asks parity over SB01–SB03 only.
+
+**Slice verification.**
+
+- On `30a7e61b…`, which differs from the commit's delta only in comments: `node --test --test-concurrency=1 .superman/ci/raw-gates.test.ts .superman/ci/raw-routing.test.ts .superman/ci/bootstrap-coverage.test.ts` 195/195; `node --test --test-concurrency=1 .superman/deno-bootstrap/tests/*.test.ts` 100/100; `node_modules/.bin/vitest run --config vitest.config.ts .superman/ci/critical` 37/37 in 8 files.
+- On `9c06e9e`: the G11 cases 6/6 and 8/8; `node_modules/.bin/biome ci .` exit 0 with 149 infos, each touched file carrying as many as at `f7363ce`; `node_modules/.bin/tsrs --noEmit`, `node_modules/.bin/knip`, `deno check` on the two twin drivers and `git diff --check` pass; the pinned `archgate check --strict` passes 16 of 16 rules.
+- On `9c06e9e`, after `"$SUPERMAN_DENO_BIN" run --no-prompt --no-config --no-lock --no-npm --no-remote --allow-read --allow-write --allow-env --allow-run .superman/deno-bootstrap/coverage.ts` wrote a fresh receipt (100/100 process tests; exit 1 for the Deno surface's carried 47.53% line floor, which binds at the evaluator cutover): `node .superman/ci/coverage.ts` passes. Its receipt (sha256 `cf3efb24…`) binds `evaluatedSha` `9c06e9e`, and the Node inventory's 21 files measure lines 2795/2911 (96.01%), statements 3121/3281 (95.12%), functions 431/448 (96.2%) and branches 2529/2809 (90.03%). An earlier attempt timed out 14 of the Deno collector's process tests, `git` calls included, while the machine's swap stood at 73.9 of 74.7 GB; the re-run on a calmer machine passed every test.
+
+**Commit.** `9c06e9e` — `feat(ci): scan an owned snapshot of the commit in the local G11` — on `spec/superman-v0-snapshot-scan`: six files, +572/−30. This note is the lane's second commit.
+
+**Limits.**
+
+- G6 stays refused until RB4, and `superman.ratchet.json` is untouched. The eight critical cases, the mutation test population, drive G9 and G2 and never G11, so the snapshot branch and G11's changed lines will read NoCoverage in RB4's remeasurement unless Gate 1 adds a critical case.
+- Node branch coverage clears its floor by one covered branch (2529/2809). The slice's one uncovered new branch is the non-`Error` fallback in the snapshot catch, which no runtime path throws; RB2 and RB3 add code against that margin.
+- G11 still binds the whole tree. `evidence.ts:34-36` ("G11's Trivy scan walks the checkout") and the guard comment in both `direct-gates.ts` change with the whole-tree gate set in RB3.
+- The evidence is local, on darwin-arm64, with Trivy stand-ins: no real Trivy or Archgate run read a snapshot (RB2, RB4).
+- The new test helpers are duplicated across the two suites; sharing them needs a module outside this slice's files.
+
+**Next.** RB2 — *Local G1 judges the commit through the same snapshot* — is the next dependency-ready slice. RB3 and RB4 stay open.
 
 #### RB2 — Local G1 judges the commit through the same snapshot
 
