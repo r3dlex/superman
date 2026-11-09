@@ -419,6 +419,38 @@ test("an initialized duplication ratchet still rejects a later regression", (t) 
   assert.match(regression.output, /duplication regression/u);
 });
 
+test("G6 rejects a forged proposed baseline even when the selected base has no measured source", (t) => {
+  const repo = qualityFixture(t, "spec/demo", (repo) => {
+    const config = JSON.parse(readFileSync(join(repo.root, ".superman/ci/bootstrap.json"), "utf8"));
+    config.quality = { mutation: { scope: [".superman/ci/classify.ts"] } };
+    repo.write(".superman/ci/bootstrap.json", JSON.stringify(config));
+    repo.write(
+      "vitest.config.ts",
+      "export default { test: { include: ['.superman/ci/critical/*.critical.test.ts'] } };\n",
+    );
+  });
+  repo.write(
+    ".superman/ci/classify.ts",
+    "export function classify(value: number) { return value > 0 ? 'positive' : 'other'; }\n",
+  );
+  repo.write(
+    ".superman/ci/critical/classify.critical.test.ts",
+    "import { test, expect } from 'vitest'; import { classify } from '../classify.ts'; test('boundary', () => { expect(classify(1)).toBe('positive'); expect(classify(0)).toBe('other'); expect(classify(-1)).toBe('other'); });\n",
+  );
+  const sourceBase = repo.commit();
+  repo.write(
+    "superman.ratchet.json",
+    JSON.stringify({ jscpdPct: 0, mutationScore: 0, qualityInputsHash: "0".repeat(64) }),
+  );
+  repo.commit();
+  for (const base of [sourceBase, "origin/main"]) {
+    const result = repo.runGate("G6", ["--base", base]);
+    assert.equal(result.receipt.policyPreflight.status, "pass", result.output);
+    assert.equal(result.status, 1, `${base}: ${result.output}`);
+    assert.match(result.output, /forged qualityInputsHash/u);
+  }
+});
+
 test("a spec-kind follow-up can commit the exact measured mutation baseline and rejects a forged score", (t) => {
   const source = "export function classify(value: number) { return value > 0 ? 'positive' : 'other'; }\n";
   const testFile =

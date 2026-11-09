@@ -581,6 +581,39 @@ test("the Deno quality gate keeps the corrected clone-floor decision the Node or
   assert.equal(decisions(reviewedObserved.denoEvidence)[0]?.kind, "policy-refusal");
 });
 
+test("both quality hosts reject an invalid proposed baseline over an empty source base", (t) => {
+  const repo = qualityFixture(
+    t,
+    {
+      duplication: { corpus: ".superman/ci/value.ts" },
+      mutation: { scope: [".superman/ci/value.ts"] },
+    },
+    {
+      ".jscpd.json": readFileSync(join(repository, ".jscpd.json"), "utf8"),
+      "stryker.config.json": readFileSync(join(repository, "stryker.config.json"), "utf8"),
+      "vitest.config.ts": "export default { test: { include: ['.superman/ci/critical/*.critical.test.ts'] } };\n",
+    },
+  );
+  repo.git("switch", "--quiet", "-c", "spec/demo");
+  repo.write(
+    ".superman/ci/value.ts",
+    `export function value(input: number) {\n${Array.from({ length: 15 }, (_, index) => `  input += ${index + 1};`).join("\n")}\n  return input;\n}\n`,
+  );
+  repo.write(
+    ".superman/ci/critical/value.critical.test.ts",
+    "import { test, expect } from 'vitest'; import { value } from '../value.ts'; test('value', () => expect(value(1)).toBe(121));\n",
+  );
+  repo.write("superman.ratchet.json", "{}\n");
+  repo.commit();
+  for (const gate of ["G5", "G6"]) {
+    const observed = observe(repo, gate, "spec/demo", { HEAD_REF: "spec/demo" });
+    assertParity(observed);
+    assert.equal(observed.deno.status, 1, observed.deno.output);
+    assert.match(observed.deno.output, /invalid reviewed superman\.ratchet\.json/u);
+    assert.equal(decisions(observed.denoEvidence)[0]?.kind, "policy-refusal");
+  }
+});
+
 test("the Deno quality gate keeps the corrected critical-case decisions the Node original makes", (t) => {
   // A declared critical case must declare its runner.
   const runnerless = qualityFixture(t, {

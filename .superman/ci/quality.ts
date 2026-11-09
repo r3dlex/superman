@@ -792,9 +792,9 @@ export function qualityGate(
     ) &&
     /^[a-f0-9]{64}$/u.test(value.qualityInputsHash);
   const baselineEntry = git("ls-tree", "-z", baseSha, "--", "superman.ratchet.json");
-  if (before.length || baselineEntry) {
+  const candidateEntry = git("ls-tree", "-z", headSha, "--", "superman.ratchet.json");
+  if (before.length || baselineEntry || candidateEntry) {
     if (!/^100(?:644|755) blob /u.test(baselineEntry)) {
-      const candidateEntry = git("ls-tree", "-z", headSha, "--", "superman.ratchet.json");
       if (!/^100(?:644|755) blob /u.test(candidateEntry))
         throw new GateFailure(
           "policy-refusal",
