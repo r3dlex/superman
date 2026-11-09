@@ -3487,10 +3487,71 @@ The passing and failing local cases also assert that the run's own `TMPDIR` is e
 
 **Covers:** SB01, SB02's refusal, SB03, SB05.
 
-- [ ] All three reds written first and seen failing for the stated reason, including the midway hole
-- [ ] Node original and Deno twin changed together; parity suites green
-- [ ] Guards and the slice verification green
-- [ ] Committed on the lane branch, with the evidence note appended here
+- [x] All three reds written first and seen failing for the stated reason, including the midway hole
+- [x] Node original and Deno twin changed together; parity suites green
+- [x] Guards and the slice verification green
+- [x] Committed on the lane branch, with the evidence note appended here
+
+##### RB3 evidence — 2026-11-10
+
+**Authority and skills.** André's instruction of 2026-11-09, "Ensure preconditions are true and run it", covered RB3 and RB4. First, the G6 baseline-preflight fix landed on `spec/superman-v0` as `c5a2074` (`cherry-pick -x` of `0e06de7`, not pushed). The lane was then rebased onto it without conflict: `9c06e9e`→`82f51a0`, `d99fdef`→`1bff59c`, `ccaa0c5`→`146876e`, `43731b3`→`2afd2f0`. RB3 ran on that lane and worktree, on top of `2afd2f0`. Matt `tdd` drove the reds. Matt `code-review` ran the independent Standards and Spec review, with a second pass. Matt `writing-for-agents` shaped this note. No push, installation, hosted write, activation, approval or merge followed.
+
+**What changed.**
+
+- **The binding.** `wholeTreeGates` is now empty in both `evidence.ts`. On the local merge-candidate run, G1 and G11 read the owned snapshot, so the full local pre-PR run and its scoped `--gate` runs bind `gate-inputs`. `bindsWholeTree` and `changedEvidenceInputs`' `wholeTree` parameter remain, naming no gate, because §5.4 keeps the whole-tree binding "for a future gate that genuinely reads the checkout".
+- **The guards.** G11 in both `direct-gates.ts` now resolves `judgedContext("G11", ctx)` before any guard runs. The lockfile precondition and SUP-007's ignore/config refusal read that root.
+- **The comments** in both hosts' `raw-gates.ts`, `evidence.ts` and `direct-gates.ts` now name the run they describe: the local merge-candidate run, the staged stage's `index` and the CI leg's `whole-tree`.
+
+**Red → green** — `node --test --test-concurrency=1 --test-name-pattern '<case>'` over `.superman/ci/raw-gates.test.ts` or `.superman/deno-bootstrap/tests/staged-scope.test.ts`:
+
+| Case | Before the slice | Midway: binding flipped, guards unmoved | Green |
+|---|---|---|---|
+| Red 1: *a local G1 run binds the inputs its gates read and judges the commit, not an uncommitted document*, which inverts *a run whose gate reads the whole tree binds the whole tree* | exit 1, `G9: dirty inputs; commit or preserve them before replay: GLOSSARY.md` | green | green |
+| Red 2: *a full local pre-PR run accepts a document it did not commit*, and its parity twin *a local full run accepts a document it did not commit* | `G9: dirty inputs; …: .scratch/demo/note.md`; the twin's Deno host recorded `{"reason":"G9: dirty inputs; …: .scratch/demo/note.md","scope":"whole-tree","status":"fail"}` | green | green |
+| Red 3: *a local G11 run refuses a Trivy config or ignore file the commit holds, though the checkout deleted it* (`trivy.yaml`, `.trivyignore`), and its parity twin | refused as a whole: `G9: dirty inputs; …: trivy.yaml` / `.trivyignore` | **the hole:** `G11: pass`. Node `0 !== 1`; the twin's Deno host `G11: pass` | `policy-refusal` with `G11: Trivy ignore/config files are forbidden`; no scanner call |
+| *a local G11 run scans the commit, not a file the checkout holds untracked* (spec red 4's untracked half), and its parity twin | `G9: dirty inputs; …: planted-finding.txt` | green | green |
+| Parity twin *a local scoped G1 run binds the inputs its gates read and judges the commit in both hosts* | the Deno host refused: `1 !== 0`, `dirty inputs: .scratch/demo/note.md` | green | green |
+| Review-driven: *a local G11 run refuses a commit without the reviewed lockfile, though the checkout holds one*, and its parity twin | with only the lockfile guard reverted to the checkout: `G11: pass`, `0 !== 1`, in Node, in both hosts, and with the Deno guard alone reverted | — | `policy-refusal` with `G11: dependency scan requires the reviewed lockfile`; no scanner call |
+| Guards: *a local full run refuses a tree it did not commit* (now naming `src/value.ts`); the Node refusals for uncommitted test, policy, rule-source and ignore-rule files, a staged path and an untracked source file; *the CI leg refuses a tree it did not commit, document or not*; the new `index` assertions (scoped and unscoped staged stage) and `whole-tree` assertions (`--stage ci`, `--stage nightly`) | green | green | green |
+
+**The midway hole.** After the flip alone, the binding no longer refused the deleted `trivy.yaml`, while the guard still read the checkout, where the file was gone. So G11 passed in both hosts. Moving the guards turned that into the policy refusal. The first parity run of red 3 failed on a `scope` mismatch instead, because the parity check came before the per-host checks. With the order swapped, it failed for the stated reason.
+
+**Review.** Independent Standards and Spec sub-agents read the frozen delta `f526f9e6…`.
+
+- **Findings.** Neither axis found a hard breach of a documented standard or wrong behaviour. The Spec axis found one MAJOR gap: nothing could catch the lockfile precondition's move, so reverting it passed every suite. It also found three minor gaps.
+- **Resolved:**
+  - the lockfile case in both suites. The twin's commit also drops `vitest.config.ts` from its policy, because the G4 preflight resolves that file's package import only against the reviewed lockfile digest.
+  - `index` asserted for the unscoped staged stage.
+  - the full-run refusal guard now names `src/value.ts`. It does not assert `gate-inputs`, because guards stay green before and after.
+  - stale and inaccurate comments, in both hosts.
+  - the full-run twin moved beside its scoped twin.
+  - a comment naming the minimal fixture's other failures. A diagnostic run showed G2, G3, G5, G6 and G10 failing on what the fixture lacks.
+- **Declined:**
+  - removing the empty whole-tree chain (possible Speculative Generality), because §5.4 keeps it.
+  - a suite-wide helper for the outside-the-repository loop.
+- **Second pass.** Both reviewers approved `968dc3f4…`. Its last items were applied: a corrected fixture comment, G2's cause named in the comment, and a `writeIgnored` helper that `plantIgnoredFinding` and the lockfile cases share.
+
+**Slice verification**, on `8b7a36c`'s bytes:
+
+- **Suites.** `node --test --test-concurrency=1 .superman/ci/*.test.ts` passed 615/615 in 766 s. `node --test --test-concurrency=1 .superman/deno-bootstrap/tests/*.test.ts` passed 118/118. `node_modules/.bin/vitest run --config vitest.config.ts .superman/ci/critical` passed 37/37 in 8 files.
+- **Static checks.** `node_modules/.bin/biome ci .` exited 0 with 149 infos. `tsrs --noEmit`, `knip`, `deno check` on the twin and `git diff --check` pass. The pinned `archgate check --strict` passes 16 of 16 rules.
+- **Coverage.** `"$SUPERMAN_DENO_BIN" run --no-prompt --no-config --no-lock --no-npm --no-remote --allow-read --allow-write --allow-env --allow-run .superman/deno-bootstrap/coverage.ts` wrote a fresh receipt (sha256 `b4a0a4a0…`, bound to `8b7a36c`). It exits 1 for the Deno surface's carried floor: lines 993/2069, 47.99%. `node .superman/ci/coverage.ts` then passes. Its receipt (sha256 `401593c1…`) binds `evaluatedSha` `8b7a36c`. The Node inventory's 21 files measure:
+  - lines 2798/2914 (96.01%)
+  - statements 3125/3285 (95.12%)
+  - functions 433/450 (96.22%)
+  - branches 2529/2810 (90.00%)
+
+**Commit.** `8b7a36c` — `feat(ci): bind the full local pre-PR run to the inputs its gates read` — on `spec/superman-v0-snapshot-scan`: eight files, +303/−59. This note is the lane's sixth commit.
+
+**Limits.**
+
+- G6 stays refused until RB4. The lane moved the measured inputs, and `superman.ratchet.json` is untouched. The empty set's `[]` is an equivalent mutant.
+- Node branch coverage now sits exactly at its floor, 2529/2810. The landed fix added one covered branch. The flip left `changedEvidenceInputs`' whole-tree arm unreachable on every local run: 77 hits at `ccaa0c5`, none now. The next uncovered branch in `.superman/ci` fails the floor.
+- The lockfile twin's commit declares no Vitest configuration. It proves the guard's root, not the full policy's behaviour; under the full policy, G4 refuses such a commit first.
+- No test runs G1 or G11 under `GITHUB_ACTIONS`, which the slice accepted. The CI and nightly rules are asserted through `--stage ci` and `--stage nightly` on the workstation.
+- The evidence is local, on darwin-arm64. Archgate ran as the pinned 0.61.0 through `ARCHGATE_BIN`, and Trivy only as stand-ins.
+
+**Next.** RB4, *Close the lane*, is the next dependency-ready slice, and its preconditions hold.
 
 #### RB4 — Close the lane: real run, one G6 remeasurement, one ratchet refresh
 
