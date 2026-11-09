@@ -21,8 +21,9 @@
 | Mutation-policy amendment | **Planning confirmed 2026-11-08; seams and M01–M08 reconfirmed 2026-11-09; unimplemented/unadmitted.** Bounded critical evidence before 01; risk-affected PR mutation with normal/slow budgets; weekly/release broad audits and fourteen-day freshness stop; scope-bound baseline/disposition read-back. Canonical requirements are spec §§5.3–5.4, 13, 16 and 17; [the finalization record](#mutation-policy-spec-finalization--2026-11-09) records the latest confirmation. |
 | Concurrent G6 reconciliation | **Reconciled 2026-11-09.** The terminal `e498403`/`57bcaba` receipt records **G6 pass, overall fail, exit 1**: the shared-checkout Markdown edits failed input integrity. Its 9,004 raw outcomes include zero Timeouts. [The terminal record](#terminal-result-and-integration--2026-11-09) preserves the bytes, counts and limitations; D1–D14 remain unchanged. |
 | Mutation backlog reconciliation | **Approved and reconciled 2026-11-09.** Thirteen existing tickets now consume the amended policy; [MP1–MP7](#approved-mutation-backlog-reconciliation--2026-11-09) organize M01–M08 with dependencies and observable verification. The existing 01–33 IDs and readiness states are retained. Preparation execution and ticket 01 admission remain outstanding. |
+| §17 gate/baseline read-back slice | **Specified and broken down 2026-11-09; unimplemented.** Seams confirmed; spec §5.4, §16 and §17 (SB01–SB06) and the glossary are amended in [the synthesis record](#17-gatebaseline-read-back-slice--specified-2026-11-09). André approved [RB1–RB4](#implementation-slices--approved-2026-11-09), all `ready-for-agent`; RB1 is the frontier, on a local lane branch. Only RB4 waits for the G6 baseline-preflight fix on `spec/g6-baseline-readback`, and it closes the lane with one G6 remeasurement and one ratchet refresh. |
 
-**Next action.** Select the exact source/test/file/command scope for [MP1](#mp1--map-the-campaign-and-prove-one-operational-deno-control), obtain its narrow execution authorization and review M01's concrete eight-group map before measurement. The existing seams, timeout declaration and D1–D14 remain confirmed. The [parallel G6 reconciliation](#terminal-result-and-integration--2026-11-09) changes the evidence record, not those prerequisites: its scoped Node measurement passed while the whole receipt failed input integrity. The earlier 8,881-mutant run with five Timeouts and 9,004-mutant run with 25 remain failed evidence at their original scope. Preserve rows 1–11's accepted preparation scopes; row 12's operator/live-authority requirements and exact-head Gate 1 approval remain outstanding.
+**Next action.** Select the exact source/test/file/command scope for [MP1](#mp1--map-the-campaign-and-prove-one-operational-deno-control), obtain its narrow execution authorization and review M01's concrete eight-group map before measurement. The existing seams, timeout declaration and D1–D14 remain confirmed. The [parallel G6 reconciliation](#terminal-result-and-integration--2026-11-09) changes the evidence record, not those prerequisites: its scoped Node measurement passed while the whole receipt failed input integrity. The earlier 8,881-mutant run with five Timeouts and 9,004-mutant run with 25 remain failed evidence at their original scope. Preserve rows 1–11's accepted preparation scopes; row 12's operator/live-authority requirements and exact-head Gate 1 approval remain outstanding. Independently of MP1, the §17 gate/baseline read-back slice's [RB1](#rb1--local-g11-scans-an-owned-snapshot-of-the-commit) is the frontier: RB1–RB3 run on a local lane branch now, and RB4 lands the lane after the G6 baseline-preflight fix.
 
 **Rules of record.** [ADR 0018](../../docs/adr/0018-admission-evidence-not-tool-correctness.md) decides how a preparation step is judged — read it before starting a step. [The grilling record](gate1-grilling-record.md) holds the reasoning behind those decisions; [the loop diagnosis](gate1-loop-diagnosis.md) holds why three attempts circled, and `gate1-loop-check.mjs` reports whether the last three attempts measured anything (exit 1 means they did not).
 
@@ -3198,3 +3199,224 @@ Spec §17 M01–M08 remains the closed acceptance list; §§5.3–5.4 own policy
 **Concurrent checkout work:** the initial whole-checkout preservation check detected edits to `.superman/ci/direct-gates.ts`, `.superman/ci/raw-gates.test.ts` and `.superman/ci/raw-gates.ts`, plus new `.superman/ci/evidence.ts`, appearing after the snapshot. This documentation task wrote none of those files. Their observed hashes are recorded in the snapshot's `verification.json`; they are outside this reconciliation's verification scope.
 
 **Verification:** the snapshot's `verify-documents.py` passed: exactly the approved fourteen Markdown files differ from intake; all 33 ticket IDs/titles/milestones/statuses/kinds and valid dependencies are preserved, with only 01's approved blocker normalization. Both ticket and MP dependency graphs are acyclic, the release-assets chain is retained, and MP1–MP7 allocate all M01–M08 criteria. All 135 checked local links/anchors across 56 documents and numbered section references resolve. The 433,456 intake-history bytes are an identical prefix; all 63 spec headings, complete spec/ADR/glossary/research bytes, HEAD and index are preserved. `git diff --check -- .scratch/superman-v0/gate1-preparation.md .scratch/superman-v0/issues` passed. These are document checks, not executable gate/native/merge evidence; ticket 01 remains blocked and the reconciliation is uncommitted.
+
+## §17 gate/baseline read-back slice — specified 2026-11-09
+
+**Status:** ready-for-agent
+
+**Intake and skills.** HEAD `47fbab4e681e54a8b755becc6f5592f356d14fd0` on `spec/superman-v0`, clean working tree. `to-spec` synthesized this record from [the settled proposal](#proposed-17-gatebaseline-read-back-slice--2026-11-09) without a new interview, and `domain-modeling` added the glossary terms. André confirmed the test seams below on 2026-11-09 ("Confirm these seams"). The label lets an agent take the slice to `to-tickets` and then `implement`; it grants no commit, push, activation, ticket 01 admission or merge authority, and the slice waits for the G6 baseline-preflight fix.
+
+**Canonical homes.** Spec [§5.4](spec.md#54-gates-one-full-localremote-quality-contract) holds the rule, [§16](spec.md#16-test-seams-to-spec-step-2-m1-addition) the seam confirmation, [§17](spec.md#17-protected-path-follow-ups-and-bootstrap-readiness) the completion evidence SB01–SB06, and [the glossary](../../GLOSSARY.md) the terms binding scope, input integrity and owned snapshot. This record carries the synthesis; where it and the spec differ, the spec wins.
+
+### Problem statement
+
+The full local pre-PR run, the stage André and agents run before every push, is refused by any uncommitted file in the checkout, including a document no gate reads. Two gates cause it: G1's Archgate checks and G11's Trivy scan read the live checkout, so the run binds the whole tree. [The input-binding fix](#input-binding-correction--2026-11-09) already lets a scoped run accept an uncommitted document, but the full stage, the only one that can satisfy the full bar, still cannot. The cost is on record: under the old rule, concurrent Markdown edits in a shared checkout failed input integrity for a scoped `--gate G6` run, so [the terminal G6 receipt](#terminal-result-and-integration--2026-11-09) recorded G6 pass and overall fail. A full run today fails the same way. The local receipt also makes the wrong claim. It says the caller's working copy passes, including untracked and ignored files that will never merge, while the question before a push is whether the merge candidate passes. Walking those files costs time as well: the ignored `.superman-ci` receipts, twelve megabytes each, stretch the local Trivy scan from one second to sixteen.
+
+### Solution
+
+In the full local pre-PR run and its scoped `--gate` runs, G1 and G11 read one owned snapshot of the evaluated commit, the seam G5 and G6 already use, instead of the checkout. The full local pre-PR run then binds the inputs its gates read: an uncommitted document stops refusing it, and an uncommitted change to a file the remaining gates read still refuses it. The local receipt claims that the merge candidate passes, and the staged pre-commit leg stays the feedback on work in progress. The CI and nightly legs keep the whole-tree rule and keep scanning the checkout, which there is the tested merge, so coverage of committed code is unchanged on every leg. After the slice a local run binds `gate-inputs`, a staged run `index`, and the CI and nightly legs `whole-tree`.
+
+### User stories
+
+1. As André, I want a full local pre-PR run to judge the commit I am about to propose, so that an uncommitted document in my checkout no longer refuses the run.
+2. As an agent sharing a checkout with another session, I want my full local pre-PR run to bind only the inputs its gates read, so that another session's document edit cannot fail my receipt.
+3. As André, I want the local pre-PR receipt to claim that the merge candidate passes, so that it speaks about what would merge rather than about my work in progress.
+4. As an agent, I want the staged pre-commit leg to stay the feedback on my work in progress, so that moving the pre-PR claim to the merge candidate leaves my in-progress signal unchanged.
+5. As an agent, I want an uncommitted change to a source file to still refuse the full local pre-PR run, naming the file, so that G2, G3 and G10 never report on bytes the commit lacks.
+6. As an agent, I want an uncommitted change to a declared test file, a declared policy input, an Archgate rule source or an ignore rule to still refuse the run, so that no gate that reads the checkout judges bytes the commit does not hold.
+7. As an agent, I want an uncommitted JSON file to still refuse a run that includes G10, so that the linter never reads JSON the commit does not hold.
+8. As an agent, I want a staged source path the commit does not hold, and an untracked source file, to still refuse the run, so that the gates' index-based source inventory cannot contain source the commit lacks.
+9. As André, I want G1's base-versus-head and full-inventory Archgate checks to run inside the owned snapshot, so that the architecture rules judge exactly the committed tree.
+10. As André, I want G1's file inventory and Archgate's own scope resolution to come from the snapshot, so that an untracked file outside the gate inputs can neither enter nor block the local G1.
+11. As André, I want G11's Trivy scan to walk the owned snapshot, so that the local scan covers exactly the files that would merge and no longer walks ignored receipts.
+12. As André, I want SUP-007's refusal of `.trivyignore*` and `trivy.{yaml,yml,json,toml}` to read the root Trivy scans, so that an ignore or config file in the commit cannot shape the scan without the refusal firing, even when my working copy deleted it.
+13. As André, I want G11's reviewed-lockfile precondition to read the snapshot, so that the scan's dependency input is the commit's lockfile.
+14. As André, I want the Archgate pin check to compare the commit's declared version with the installed version, so that scanning a snapshot changes nothing about tool identity.
+15. As an agent, I want `ARCHGATE_BIN`, `TRIVY_BIN` and `TRIVY_CACHE_DIR` to keep their current meaning, so that the pinned tools and their caches are found the same way wherever the scan runs.
+16. As an agent, I want G1 and G11 to share one snapshot per run, so that the run pays for one materialisation and both gates judge identical bytes.
+17. As an agent, I want only a local, non-staged run that selects G1 or G11 to build that snapshot, so that pre-commit, CI, nightly and every other scoped run pay nothing for it.
+18. As an agent, I want the snapshot outside my repository, writable, and removed when the run ends, pass or fail, so that Archgate can regenerate its ignored rule declarations there and no run leaves residue or writes into my checkout.
+19. As an agent, I want my working tree, index and refs left exactly as they were, so that a gate run never rewrites the caller's state.
+20. As André, I want a snapshot that cannot be built to fail G1 and G11 with its cause, and a snapshot without the base commit Archgate compares against to fail G1, never falling back to the checkout, so that a `gate-inputs` receipt never conceals a checkout scan.
+21. As a receipt reader, I want one predicate to choose both the scan root and the binding scope, so that `gate-inputs` always means G1 and G11 read the snapshot and `whole-tree` always means they read the checkout.
+22. As a receipt reader, I want `inputIntegrity.scope` to keep exactly three values with fixed meanings, `gate-inputs`, `index` and `whole-tree`, so that receipts from every leg stay comparable.
+23. As André, I want the CI and nightly legs to keep the whole-tree rule and keep G1 and G11 on the checkout, so that the required legs cover committed code exactly as before.
+24. As André, I want a `--stage ci` or `--stage nightly` run on a workstation to keep those legs' rule, so that a leg's rule follows its stage rather than its host.
+25. As an agent, I want the staged pre-commit leg unchanged, with `index` binding, `archgate check --staged` on the live index and G11 off, so that the staged G1 keeps working where an index snapshot has no `.git` for Archgate to resolve.
+26. As André, I want G5 and G6 to keep their own snapshots and binary maps, so that the slice stays out of the quality module and does not move the measurement's checker identity.
+27. As André, I want the whole-tree binding kept as a named, currently empty set of gates, so that a future gate that genuinely reads the checkout has a declared place.
+28. As André, I want the untracked-file gap stated in §5.4, so that nobody mistakes the local pre-PR run for a scan of the working copy: locally, a suppression directive goes unseen until its bytes are staged, and a secret until they are committed.
+29. As André, I want SUP-005's ADR and scope unchanged and no new why ADR, so that the decision record still matches enforcement while CI keeps the checkout and committed code is covered identically on every leg.
+30. As the Deno sibling's maintainer, I want the twin to make the same change and the parity harness to compare `inputIntegrity` and `results` over the same fixtures, so that the replacement evaluator cannot drift from the active one.
+31. As André, I want the slice's red tests at the confirmed process seam, the inverted G1 case and a full pre-PR case, so that the change is proven where a user observes it.
+32. As André, I want this lane to land after the G6 baseline-preflight fix and end with one G6 remeasurement and ratchet refresh, so that the ratchet reflects both changes without measuring twice.
+33. As André, I want a real full local pre-PR run over a disposable clone with an uncommitted document to record `gate-inputs` and passing input integrity at a reachable committed SHA, so that the claim is proven on the real repository and not only in fixtures.
+34. As André, I want the slice to stay Gate 1 bootstrap work on the spec-kind surface with no file under `issues/`, as the SUP-005 prerequisite did, so that the product backlog holds only product tickets.
+
+### Implementation decisions
+
+**The eight settled decisions (André, 2026-11-09), summarized; [the proposal's text](#proposed-17-gatebaseline-read-back-slice--2026-11-09) governs:**
+
+1. **Merge candidate only.** The local pre-PR G1 and G11 answer whether the merge candidate passes, not whether the working copy does. This changes what the local receipt claims, not the merge candidate's coverage, and §5.4's partial staged leg remains the feedback meant for the caller's own work in progress.
+2. **CI keeps the checkout.** The slice is local-only. The CI and nightly legs keep their whole-tree rule and their current scan surface, and the CI leg's G1 and G11 still read the checkout, which is already the tested merge.
+3. **A separate snapshot for the whole-tree gates.** G1 and G11 share one. G5 and G6 keep their own snapshots and binary maps, so the quality module stays untouched.
+4. **Only G1 and G11 move.** G2, G3, G4 and G10 keep reading the checkout, so a local run still refuses when the files they read differ from the commit. The refusal set narrows from every tracked file to the source inventory, declared policy inputs, `.archgate/` rule sources, ignore rules and the JSON files G10 reads.
+5. **The untracked-file gap is accepted.** An untracked file carrying a suppression directive is scanned by nothing locally: not by the pre-PR run, which reads the commit, and not by the staged leg, because an unstaged file is not in the index. It is caught once staged and once committed; the invisible window is a new file nobody has staged.
+6. **Glossary terms and the spec amendment; no new why ADR.** SUP-005's ADR is unchanged, because its scope statement holds and CI keeps the checkout.
+7. **The whole-tree mechanism survives as an empty list.** The whole-tree gate set becomes empty and `bindsWholeTree` stays, returning false for every gate set, so the concept and the CI branch survive.
+8. **The other lane lands first.** The G6 baseline-preflight fix on `spec/g6-baseline-readback` lands before this lane, which rebases on it; the G6 remeasurement happens once, over both.
+
+**Flagged for André, not re-decided: decision 5's window is wider than one new file.** With decisions 1 and 4, an uncommitted edit to a tracked file outside the gate inputs, such as a document gaining a secret, is likewise neither refused nor scanned locally. A suppression directive in it goes unseen until its bytes are staged and a secret until they are committed, exactly as for a new file. §5.4 states the window that way. This follows from the settled decisions; nothing here changes them.
+
+**Requirements that follow from the decisions, the proposal's carried requirements and §5.4's existing fail-closed contract; none is a new policy decision:**
+
+- **One predicate.** The driver's existing CI-leg predicate, a GitHub Actions environment (`GITHUB_ACTIONS` or `GITHUB_EVENT_PATH`) or the `ci` or `nightly` stage, together with the stage's declared scope, decides both the binding rule and G1's and G11's root, so the two cannot disagree. A scoped `--gate` run of the pre-commit stage keeps today's combination unchanged: `index` binding, with G1's or G11's whole-repository form on the live checkout.
+- **The gate context carries the snapshot root.** Every other gate keeps the checkout as its root. G1 and G11 run their tools, take their file inventory and evaluate SUP-007's guard and the lockfile precondition against the snapshot root.
+- **The pin check reads two roots.** The declared version comes from the commit's package manifest and the installed version from the reviewed tree's installed modules, which the snapshot links to.
+- **Snapshot construction reuses `ownedSnapshot`** as G5 and G6 do: a no-checkout, no-hardlinks clone of the caller's repository with the evaluated commit materialised, `HEAD` at it, and the reviewed tree's installed modules and `.bin` commands linked in. The prototype confirmed that the base commit is reachable inside it. The replay module changes only if the snapshot must carry the pinned Trivy path, because a replay module change moves `qualityInputsHash`.
+- **The snapshot is writable.** Archgate regenerates its ignored rule declarations on every run, so the snapshot's cleanliness is a property of the moment before the gates run, not after.
+- **Lifecycle.** At most one snapshot per run, only for a local, non-staged run that selects G1 or G11, outside the caller's repository, and removed when the run ends, pass or fail.
+- **Fail closed.** A snapshot that cannot be built fails G1 and G11, carrying its cause, and a snapshot without the base commit fails G1; never a pass, an `n/a` or a fallback to the checkout.
+- **Unchanged around it.** The full `ci` stage's delegation of G11 off linux-x64, the local G11's self-run, the tool overrides and the scope vocabulary, with no new scope value. G1 still reports its full scope and inventory count, now the commit's; G11 still reports its scan and findings.
+- **The Deno sibling mirrors every change**: its evidence, direct-gate and raw-driver modules, and its replay module only under the same condition. Its coverage inventory changes only if a module is added or removed, and must then match exactly.
+- **Measurement.** The changed `.superman/ci` modules, its TypeScript files other than tests, are inside the declared mutation scope, so the slice invalidates the current G6 measurement: one fresh measurement and ratchet refresh close the lane, after the baseline-preflight fix. `qualityInputsHash` moves if the quality or replay module or a declared policy input changes, `.superman/ci/coverage.json` among them. The twin is inside the coverage inventory, not the mutation scope.
+- **File allowance.** The proposal's exact file allowance binds; a file outside it needs a scope amendment. This synthesis already amended the spec, the glossary and this record.
+
+### Testing decisions
+
+**A good test here** drives the raw driver over a temporary Git repository, or both hosts through the parity harness, and asserts on what a user or CI sees: the exit code, the diagnostic, the receipt's `inputIntegrity` and per-gate results, and which tree a tool was pointed at. It never asserts on private helpers, call order or mock counts. **Seams, confirmed by André on 2026-11-09:** the raw-gate process boundary and the Node/Deno parity harness, with no new seam (spec §16).
+
+**Red first, where the premise lives:**
+
+1. The existing case *a run whose gate reads the whole tree binds the whole tree* in the raw-gates suite inverts: a local `--gate G1` run over an uncommitted document binds `gate-inputs`, passes input integrity and judges the commit. Red today: refused, `whole-tree`.
+2. A full `--stage pre-pr` run over an uncommitted `.scratch/demo/note.md` binds `gate-inputs` and passes input integrity. Red today: `inputIntegrity` `{"scope":"whole-tree","status":"fail"}` with the reason `G9: dirty inputs; commit or preserve them before replay: .scratch/demo/note.md`.
+3. SUP-007 follows the scan: a `trivy.yaml`, and separately a `.trivyignore`, that the commit holds and the working copy deleted is refused by the local G11 as a policy refusal. Red today: refused for dirty inputs, not by the guard.
+4. The local scan reads the commit: a Trivy stand-in that reports a finding whenever its scan root holds a marker file passes locally when the marker is ignored or untracked and fails when the marker is committed. Red today: the checkout scan sees the ignored marker, and an untracked marker refuses the run for dirty inputs.
+
+**Guards, green today and kept green:** the same full run over an uncommitted source file is still refused, naming it; the CI-leg case *the CI leg refuses a tree it did not commit, document or not* keeps `whole-tree`, and a new CI-mode stand-in case still sees the ignored marker (the full `ci` stage delegates G11 off linux-x64, so the nightly stage or an `ARCHGATE_BIN` stand-in carries the platform-neutral observation); new explicit scope assertions, which no test makes today, record `index` for the staged pre-commit stage and `whole-tree` for the nightly stage and a workstation `--stage ci` run; the real pinned-Archgate case *raw G1 executes strict pinned Archgate and rejects an effective suppression* still fails, now through the snapshot; the staged-scope cases keep `--staged`; the critical case `policy-selection-and-result-completeness` keeps its scoped `gate-inputs` assertion. **Lifecycle:** after a passing and a failing local run no snapshot remains and the caller's index bytes, `HEAD` and working tree are unchanged; a snapshot that cannot be built, for example under an unwritable temporary directory, fails G1 and G11 without a checkout scan. **Parity:** the Deno staged-scope suite gains *a local full run accepts a document it did not commit* beside its scoped twin, and the parity fields, `inputIntegrity` and `results` among them, agree on SB01–SB03's cases.
+
+**Prior art:** the raw-gates suite's binding cases; the routing suite's Trivy stand-in, its pinned-Archgate case and *the full local pre-PR run and the CI run share one tool profile and gate inventory*; the Deno staged-scope cases *a local scoped run accepts a document it did not commit* and *a local full run refuses a tree it did not commit*; and *raw checks reject hidden worktree bytes while preserving caller index flags* for asserting that the caller's index is untouched. **Environment:** `ARCHGATE_BIN` must name the pinned 0.61.0 binary, because the npm shim reuses a stale 0.43.0; the real run needs the pinned Trivy 0.76.1 and `.serena/` moved aside ([environment notes](#current-state)); commit only when no raw-gates run is active. **Commands:** the proposal's proposed verification binds: the two Node suites with `--test-concurrency=1`, the Deno parity suites, the real pre-PR run, the coverage collector, strict Archgate, `biome ci` over the whole repository, `tsrs --noEmit`, `knip`, and the G6 remeasurement with its ratchet refresh.
+
+### Out of scope
+
+- The CI and nightly legs' binding rule and scan surface.
+- The staged pre-commit leg, including a scoped `--gate` run of it, and the open item that a staged run refused for unstaged changes records no `inputIntegrity` scope; that is its own change inside the measured scope.
+- The roots of G2, G3, G4, G7, G8, G9 and G10; G5's and G6's snapshots and binary maps; the quality module.
+- The G6 baseline-preflight fix itself, which is its own lane.
+- Closing the untracked-file gap: no local scan of untracked or ignored files is added.
+- New scope values, a new why ADR, and any change to SUP-005's or SUP-007's ADRs or rules.
+- Product tickets, files under `issues/`, ticket readiness changes, ticket 01 admission, Deno evaluator activation, MP1–MP7, hosted settings, pushes, approvals and merges.
+
+### Further notes
+
+- **Evidence.** The prototype on the local, unpushed branch `prototype/snapshot-binding` (`18cac29`) reused `ownedSnapshot()` and ran the real Archgate and Trivy in the snapshot and in the checkout on one commit. `HEAD` matched, the worktree was clean, `git ls-files` equalled the commit tree (183 files) and the base commit was reachable. Archgate agreed on 16 of 16 rules both ways; Trivy reported the same single result against `pnpm-lock.yaml`, followed no linked `node_modules` symlink, and took one second in the snapshot against sixteen in the checkout. The branch stays local; it proves feasibility, not an implementation.
+- **Ordering.** `spec/g6-baseline-readback` (`0e06de7`, "fix(ci): validate proposed baselines over an empty source base") forked at `d05d8a4` and is not yet on `spec/superman-v0`. This lane starts from a base that contains it and remeasures once at the end.
+- **Accesses.** As the proposal states: a read-only clone into disposable temporary directories and the pinned Archgate 0.61.0 and Trivy 0.76.1 already on this machine. No network, credential access, staging or commit of the real repository, push, activation or merge authority follows from this record; each implementation slice obtains its own.
+- **Open question for the implementation, unverified.** Each host builds its own snapshot under a different temporary path. If a G1 or G11 diagnostic embeds an absolute snapshot path, SB05's `results` parity differs between hosts; check this before relying on the parity comparison.
+- **Beyond the named sections.** Decision 6 names §5.4 and §17. This synthesis also added §16's seam-confirmation bullet, because §16 is the spec's home for seam confirmations, and a front-matter pointer, as every earlier amendment has.
+- **Review.** An independent read-only review against the proposal and the code found nothing blocking. It raised nine should-fix items and ten nits. Each was checked against the code and corrected here and in the spec before this record was closed, including the window flagged above and the missing `index` and nightly scope assertions.
+- **Next.** [The approved implementation slices](#implementation-slices--approved-2026-11-09) below; `implement` runs each on the bootstrap surface. The proposal's trailing *Next action* (select the slice for authorization, or leave the whole-tree binding as it stands) predates the settled decisions and is superseded here; its bytes stay as recorded.
+
+### Implementation slices — approved 2026-11-09
+
+**Approval.** André approved these four slices on 2026-11-09 through `to-tickets` and placed the G6-fix edge on RB4 alone. RB labels are preparation labels in this record, like MP1–MP7: not product ticket IDs, and never written into a product `Blocked by:` field. Each slice still needs its own execution authorization for its exact file and command scope inside the proposal's file allowance; none grants a push, activation, ticket 01 admission or merge.
+
+**Lane rules.**
+
+- **Branch.** RB1–RB3 commit on a local lane branch cut from `spec/superman-v0`. RB4 rebases the lane onto `spec/superman-v0` after the G6 baseline-preflight fix has landed there, so the branch carries the fix first and the lane after it.
+- **Both hosts in every slice.** Each slice changes the Node original and its Deno twin together, so the parity suites stay green at every commit. New parity cases go in the twin's staged-scope suite where they fit: the fix also edits the twin's bootstrap suite, and the rebase stays clean if this lane leaves that suite alone.
+- **Red first at the confirmed seams.** Every red runs through the raw-gate process boundary or the parity harness (spec §16) and fails for the stated reason before its change. Guards are green before and after.
+- **One predicate.** The driver decides the binding scope and G1's and G11's scan root from one predicate: the existing CI-leg predicate together with the stage's declared scope.
+- **The tool-routing critical case stays byte-unchanged.** `policy-preflight-and-tool-routing` builds gate contexts directly and is outside the allowance, so the snapshot root reaches G1 and G11 without becoming a field every gate context must supply.
+- **Reuse `ownedSnapshot` unchanged.** A replay-module change moves `qualityInputsHash`; it is allowed only if the snapshot must carry the pinned Trivy path, and the prototype showed it need not.
+- **G6 stays refused until RB4.** The changed `.superman/ci` modules move the mutation population and the fix moves `qualityInputsHash`, so a local full run's G6 is expected to fail until RB4. No slice but RB4 touches `superman.ratchet.json`.
+- **Each slice's verification.** The touched Node suites with `node --test --test-concurrency=1`; the twin's parity suites with `SUPERMAN_DENO_BIN=<pinned> ARCHGATE_BIN=<pinned> node --test --test-concurrency=1` over `.superman/deno-bootstrap/tests/`; `node .superman/ci/coverage.ts` at its floors; `node_modules/.bin/biome ci` over the whole repository; `tsrs --noEmit`; `knip`; the pinned `archgate check --strict`. Commit only when no raw-gates run is active, and append a dated evidence note under the slice: the skill run, the red and green commands with their outcomes, and the commit.
+
+**Dependency chain.** RB1 → RB2 → RB3 → RB4, and RB4 also waits for the fix on `spec/superman-v0`.
+
+#### RB1 — Local G11 scans an owned snapshot of the commit
+
+**What to build:** a local run outside the staged pre-commit stage that selects G11 scans an owned snapshot of the evaluated commit instead of the caller's checkout, in both hosts. The driver builds the snapshot only for such a run, keeps it outside the repository and removes it when the run ends, pass or fail. A snapshot that cannot be built fails G11 with its cause and never falls back to the checkout. The CI and nightly legs, including `--stage ci` and `--stage nightly` on a workstation, keep scanning the checkout. The binding rule does not change yet: G11 still binds the whole tree, which keeps every intermediate receipt conservative and truthful. SUP-007's ignore/config refusal and G11's lockfile precondition move in this slice, with the scan they guard: a guard that reads a different tree than the scan describes a tree the scan never saw.
+
+**Blocked by:** None (can start immediately), on the lane branch.
+
+**Status:** ready-for-agent
+
+**Red tests:**
+
+1. A Trivy stand-in reports a HIGH finding whenever its scan root holds a marker file. With the marker ignored in the caller's checkout, a local `--gate G11` run passes. Red today: the checkout scan sees the ignored marker.
+2. When the snapshot cannot be built, for example because the run's temporary directory is unwritable, a local `--gate G11` run fails G11 with that cause and the stand-in never runs. Red today: the scan runs in the checkout and passes.
+3. SUP-007's ignore/config refusal and G11's lockfile precondition read the root the scan reads. A `trivy.yaml` — and separately a `.trivyignore` — that the commit holds and the working copy deleted is refused by a local G11 run as a policy refusal, and a `pnpm-lock.yaml` the commit does not hold is refused for the missing lockfile. Red today: the refusal reads the checkout, which no longer holds the file, so the run passes and the guard is silent.
+
+**Guards:** a committed marker still fails the local run, because the snapshot carries the commit. `--stage ci --gate G11` and `--stage nightly --gate G11` still see the ignored marker, because they read the checkout. After passing and failing local runs, no snapshot directory remains, and the caller's index bytes, `HEAD` and working tree are unchanged. The existing G11 routing and coverage cases stay green: finding propagation, missing tool, ignored failure, incomplete and stale reports, reported findings, the lockfile and ignore/config refusals and the tool versions — the refusal cases survive the move because their fixtures commit the file, so the snapshot carries it. Both hosts agree on the new cases.
+
+**Covers:** SB02, including its refusal, SB03 for G11, SB04's lifecycle, SB05 for G11. If a G11 diagnostic embeds the absolute snapshot path, the hosts' `results` differ; settle that here, where it first appears.
+
+- [ ] All three reds written first and seen failing for the stated reason
+- [ ] Node original and Deno twin changed together; parity suites green
+- [ ] Guards and the slice verification green
+- [ ] Committed on the lane branch, with the evidence note appended here
+
+#### RB2 — Local G1 judges the commit through the same snapshot
+
+**What to build:** in the same runs, G1's base-versus-head and full-inventory Archgate checks run inside the owned snapshot RB1 introduced. G1 and G11 share it, so a run builds at most one. G1's file inventory comes from the snapshot, and Archgate regenerates its ignored rule declarations there instead of in the caller's checkout. The pin check compares the commit's declared Archgate version with the installed one. The staged pre-commit stage keeps `archgate check --staged` on the live index, and the CI and nightly legs keep the checkout. Both hosts change; the binding rule still does not.
+
+**Blocked by:** RB1.
+
+**Status:** ready-for-agent
+
+**Red tests:**
+
+1. An `ARCHGATE_BIN` stand-in reports a violation whenever its working directory holds a marker file. With the marker ignored in the caller's checkout, a local `--gate G1` run passes. Red today: Archgate runs in the checkout and sees it.
+2. In a local pre-PR run, the G1 and G11 stand-ins record the directory they ran in. Both record the same directory, it is not the caller's checkout, and it is gone after the run. Red today: both record the checkout.
+3. With the real pinned Archgate, a local G1 run leaves no regenerated rule declarations in the caller's checkout. Red today: Archgate writes them there.
+
+**Guards:** the real pinned-Archgate case *raw G1 executes strict pinned Archgate and rejects an effective suppression* still fails, now through the snapshot. The Archgate identity cases (wrong version, wrong identity through pnpm) still refuse. *A pre-commit run executes the staged forms and a pre-pr run executes the whole-repository forms* stays green, and `--stage ci --gate G1` still runs in the checkout. Both hosts agree.
+
+**Covers:** SB02 and SB03 for G1, SB04's shared snapshot, SB05 for G1. The prototype ran the snapshot's linked `node_modules/.bin/archgate` directly. Whether `pnpm exec archgate` resolves inside the snapshot is unproven, so prove it in a red before relying on it.
+
+- [ ] All three reds written first and seen failing for the stated reason
+- [ ] Node original and Deno twin changed together; parity suites green
+- [ ] Guards and the slice verification green
+- [ ] Committed on the lane branch, with the evidence note appended here
+
+#### RB3 — The full local pre-PR run binds its gate inputs
+
+**What to build:** the whole-tree binding names no gate in either host, so the full local pre-PR run and its scoped `--gate` runs bind `gate-inputs`. An uncommitted document no longer refuses them, and an uncommitted change to any gate input still does, naming the file. In the same slice, SUP-007's ignore/config refusal and G11's lockfile precondition already read the snapshot root, having moved with the scan in RB1, so the flip opens no hole: there is no interval in which the guard and the scan read different trees. The staged pre-commit stage keeps `index` and the CI and nightly legs keep `whole-tree`; both are asserted explicitly for the first time.
+
+**Blocked by:** RB2.
+
+**Status:** ready-for-agent
+
+**Red tests:**
+
+1. The raw-gates case *a run whose gate reads the whole tree binds the whole tree* inverts. A local `--gate G1` run over an uncommitted document binds `gate-inputs`, passes input integrity and judges the commit. Red today: refused, `whole-tree`.
+2. A full `--stage pre-pr` run over an uncommitted `.scratch/demo/note.md` binds `gate-inputs` and passes input integrity. It is tested in the raw-gates suite and as the twin parity case *a local full run accepts a document it did not commit*. Red today: `{"scope":"whole-tree","status":"fail"}` with `G9: dirty inputs; commit or preserve them before replay: .scratch/demo/note.md`.
+3. A `trivy.yaml`, and separately a `.trivyignore`, that the commit holds and the working copy deleted is refused by a local G11 run as a policy refusal. This is a guard here, not a red: the refusal moved with the scan in RB1, so it never sat silent across the flip.
+
+**Guards:** a full run over an uncommitted source file is still refused, naming it (the twin's *a local full run refuses a tree it did not commit*). The existing cases for an uncommitted test, policy, rule-source or ignore-rule file, a staged source path and an untracked source file still refuse. New explicit assertions record `index` for the staged pre-commit stage and `whole-tree` for the nightly stage and for a workstation `--stage ci` run. *The CI leg refuses a tree it did not commit, document or not* keeps `whole-tree`. The `policy-selection-and-result-completeness` critical case keeps its scoped `gate-inputs` assertion, and the SUP-007 and lockfile coverage cases stay green — they were carried green from RB1, where the refusal moved.
+
+**Covers:** SB01, SB03, SB05. SB02's refusal was covered in RB1.
+
+- [ ] Both reds written first and seen failing for the stated reason
+- [ ] Node original and Deno twin changed together; parity suites green
+- [ ] Guards and the slice verification green
+- [ ] Committed on the lane branch, with the evidence note appended here
+
+#### RB4 — Close the lane: real run, one G6 remeasurement, one ratchet refresh
+
+**What to build:** the lane lands with its measured baseline restored and its claim proven on the real repository. After the G6 baseline-preflight fix has landed on `spec/superman-v0`, the lane is rebased onto it and the whole-repository checks are run. One fresh G6 measurement over the fix and the lane follows, with one `superman.ratchet.json` refresh in its own commit, as `eb47296` did. Then a real full local pre-PR run goes over a disposable clone of the resulting head carrying one uncommitted document. Landing means the lane's commits sit on `spec/superman-v0` after the fix; pushing needs its own authorization.
+
+**Blocked by:** RB3, and the G6 baseline-preflight fix (`0e06de7` on `spec/g6-baseline-readback`) landed on `spec/superman-v0`.
+
+**Status:** ready-for-agent
+
+**No red step:** an evidence step and a measured-value refresh carry none (spec Testing Decisions).
+
+- [ ] The lane sits on top of the fix on `spec/superman-v0`, with every RB1–RB3 suite green after the rebase
+- [ ] `node .superman/ci/coverage.ts` at its floors, `biome ci`, `tsrs --noEmit`, `knip` and the pinned `archgate check --strict` pass
+- [ ] One G6 measurement completes with valid outcomes and all eight critical cases passing, and `superman.ratchet.json` takes the measured score and `qualityInputsHash` in one commit. A score below the current ratchet is a loosening that André reviews before it lands, never offset by manufactured kills
+- [ ] A real full local pre-PR run over a disposable clone of the lane head, carrying one uncommitted document, records `inputIntegrity` `{"scope":"gate-inputs","status":"pass"}` at that reachable commit, with G1 and G11 passing under the pinned Archgate 0.61.0 and Trivy 0.76.1 (SB06)
+- [ ] Commands, exit codes, receipt digests and counts appended here, and the Current state row updated
+
+**Covers:** SB06; with RB1–RB3, SB01–SB06. The measurement wants a warm cache and a spawnable pinned pnpm, and no other raw-gates run may be active when committing. The [environment notes](#current-state) cover `ARCHGATE_BIN` and `.serena/`.

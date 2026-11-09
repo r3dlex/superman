@@ -82,6 +82,18 @@ _Avoid_: threshold (a ratchet moves), budget
 The evidence record of one gate run, including its inputs, outcomes and evaluated revisions. A PR integration receipt distinguishes the PR head, tested base and tested merge result.
 _Avoid_: report, log, attestation
 
+**Binding scope**:
+The part of a checkout that must hold the bytes a run evaluated for the run's evidence to count: the inputs its gates read, the staged index, or the whole tree.
+_Avoid_: dirty check, clean tree (the scope differs by stage and leg)
+
+**Input integrity**:
+The condition that every file inside a run's binding scope held the evaluated bytes from the run's start to its end. A run without it fails, whatever its gates report.
+_Avoid_: clean checkout, dirty-tree check
+
+**Owned snapshot**:
+A run's own temporary copy of the files one revision or the staged index holds, kept outside the caller's checkout and removed when the run ends. A gate that reads it judges those recorded files, never the caller's working copy.
+_Avoid_: checkout, worktree, clone
+
 **Candidate artifact identity**:
 A named upstream release asset proposed for later review, not an accepted pin.
 _Avoid_: pin, bottle, latest
