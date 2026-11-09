@@ -133,6 +133,29 @@ test("direct gates compare pnpm policy with the real executable version", (t) =>
   assert.equal(result.receipt.tools.pnpm, undefined);
 });
 
+test("G1 rejects a wrong-version Archgate through pnpm when no explicit binary is selected", (t) => {
+  const repo = fixture(t, "spec/bootstrap");
+  repo.write(
+    ".tools/pnpm-real",
+    `#!${process.execPath}
+const command = process.argv.slice(2).join(" ");
+if (command === "--version") console.log("12.16.1");
+else if (command === "exec archgate --version") console.log("0.0.0");
+else throw new Error("Unexpected pnpm execution");
+`,
+  );
+  repo.commit();
+  const rejected = repo.runGate("G1", [], { ARCHGATE_BIN: undefined });
+  assert.equal(rejected.status, 1, rejected.output);
+  assert.equal(rejected.receipt.policyPreflight.status, "pass");
+  assert.equal(rejected.receipt.results[0].gate, "G1");
+  assert.equal(rejected.receipt.results[0].status, "fail");
+  assert.equal(rejected.receipt.results[0].reason, "archgate executable version mismatch: 0.0.0");
+  assert.equal(rejected.receipt.tools.pnpm.status, "pass");
+  assert.equal(rejected.receipt.tools.archgate, undefined);
+  assert.equal(rejected.receipt.inputIntegrity.status, "pass");
+});
+
 test("G2 checks executable identity after package pins agree", (t) => {
   const repo = fixture(t, "spec/bootstrap");
   repo.commit();

@@ -2805,6 +2805,37 @@ nonblocking structural advisories. Full committed-head collection, stage
 receipts and independent `/code-review` results are publication evidence to be
 obtained after this slice; these focused results do not establish them.
 
+### Approved follow-up: measure the pnpm Archgate route
+
+The committed-head check at `fdba707c53152b70bde70bf104bfc1a307d75d5a`
+passed the focused test, pre-commit and pre-PR stages. Deno collection ran
+92/92 tests and produced its attributed receipt, truthfully carrying its floor
+shortfall. Node collection ran 593/593 tests but exited 1: its branch coverage
+was **2515/2795 (89.98%)**, below the unchanged 90% floor. The receipt was
+`.superman-ci/coverage-J9B2HE/coverage-receipt.json`, with input hash
+`a3ff5d99de78f29cabf4fb31756130ec4c13d9ca32db612d329abf3ef3bd61ae`.
+Independent repair review reported Standards 0 findings and Spec 0 findings;
+the coverage failure still blocked publication.
+
+The raw branch map identified an unexecuted, relevant route in `direct-gates.ts`:
+G1 selects `pnpm exec archgate` when `ARCHGATE_BIN` is unset. André approved
+extending the repair to `bootstrap-coverage.test.ts` at the same public
+raw-gates process/receipt seam. The existing fixture's disposable pnpm now
+answers its own version probe and reports `0.0.0` for `exec archgate --version`,
+rejecting other invocations. The new test explicitly unsets `ARCHGATE_BIN` and
+requires the exact G1 version refusal, passing preflight/input integrity and no
+accepted Archgate identity. It exercises the fallback rather than assuming
+anything about the installed cache.
+
+`/tdd` retained the real coverage-floor red and checked assertion sensitivity:
+temporarily bypassing Archgate's version guard fails the new test with
+`Unexpected pnpm execution` instead of the required version-mismatch reason.
+After restoring the guard byte-for-byte, the two focused tests pass (2/2,
+zero skips); `tsrs --noEmit` and changed-file Biome both exit 0. This adds
+behavioral evidence to the existing inventory; it changes no production guard,
+coverage denominator, policy or pin. Fresh committed-head collection and
+independent review remain required before publication.
+
 ### Both carried coverage floors bind at the merge-bound cutover — 2026-11-05
 
 **Outcome:** the Node gate and the Deno collector now name **one** binding point for **both** carried coverage floors. The candidate inventory's floor and the Deno operational surface's floor both bind at the merge-bound cutover, when the Deno root becomes the required evaluator, and `.superman/ci/coverage.ts` writes that exact string into the candidate obligation of the Node receipt. This is a **wording correction on André's 2026-11-04 decision**, which settled an ambiguity in the earlier wording — it discovered no new obligation, and no floor, threshold, scope, exclusion, inventory or admission state changed. This append is not an acceptance, and it accepts nothing — no pin, no native profile, no evaluator activation, no workflow publication, no ticket 01 admission and no readiness change.
