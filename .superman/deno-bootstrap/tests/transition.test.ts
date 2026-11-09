@@ -32,6 +32,7 @@ import { type TestContext, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import sup008 from "../../../.archgate/adrs/SUP-008-tests-through-superman.rules.ts";
 import { fixtureEnvironment } from "../../ci/fixture-env.ts";
+import { fixture } from "../../ci/raw-fixture.ts";
 import { runOwned } from "../../ci/replay.ts";
 import { DENO_LAUNCH_FLAGS, denoPermissions } from "../exec.ts";
 
@@ -1415,7 +1416,7 @@ test("the template satisfies the row 9 rules when it is published as a workflow"
   assert.match(violations[0], /SUP-008/u);
 });
 
-test("the local result binds the exact source, the tool identities and the permission profile identity", () => {
+test("the local result binds the exact source, the tool identities and the permission profile identity", (t) => {
   const head = runOwned("git", ["rev-parse", "HEAD"], {
     cwd: repository,
     env: isolated,
@@ -1452,21 +1453,24 @@ test("the local result binds the exact source, the tool identities and the permi
   const invocations = denoInvocations(job);
   assert.ok(invocations.length > 0);
   assert.equal(sha256(invocations[0].flags.join("\n")), sha256(REVIEWED_FLAGS.join("\n")));
-  // The unpinned archgate in the repository is not the reviewed one: the
-  // identity check changes the outcome when the tool is not the recorded one.
-  const unpinned = join(repository, "node_modules/.bin/archgate");
-  if (existsSync(unpinned)) {
-    // The versions differ, and that is what "not the reviewed one" means:
-    // each platform's reviewed executable has its own digest.
-    const unpinnedVersion = runOwned(unpinned, ["--version"], {
-      cwd: repository,
-      env: isolated,
-      encoding: "utf8",
-      shell: false,
-      timeout: 60_000,
-    });
-    assert.doesNotMatch(unpinnedVersion.stdout, new RegExp(`\\b${REVIEWED_ARCHGATE_VERSION}\\b`, "u"));
-  }
+  // The installed cache may hold the reviewed version. A controlled executable
+  // proves that G1 rejects a different version before running any rule checks.
+  const repo = fixture(t, "spec/transition");
+  const wrongArchgate = join(repo.root, ".tools/archgate-wrong-version");
+  writeFileSync(
+    wrongArchgate,
+    `#!${process.execPath}\nif (process.argv.slice(2).join(" ") !== "--version") throw new Error("Unexpected Archgate execution");\nconsole.log("0.0.0");\n`,
+    { mode: 0o755 },
+  );
+  repo.commit();
+  const rejected = repo.runGate("G1", [], { ARCHGATE_BIN: wrongArchgate });
+  assert.equal(rejected.status, 1, rejected.output);
+  assert.equal(rejected.receipt.policyPreflight.status, "pass");
+  assert.equal(rejected.receipt.results[0].gate, "G1");
+  assert.equal(rejected.receipt.results[0].status, "fail");
+  assert.equal(rejected.receipt.results[0].reason, "archgate executable version mismatch: 0.0.0");
+  assert.equal(rejected.receipt.tools.archgate, undefined);
+  assert.equal(rejected.receipt.inputIntegrity.status, "pass");
 });
 
 test("the expected forge evidence names the tested merge, never the head alone", (t) => {

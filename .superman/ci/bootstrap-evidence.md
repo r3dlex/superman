@@ -2757,6 +2757,54 @@ The receipt names its own collector by file and digest, the source it evaluated,
 
 This append changes no threshold, floor, pin, workflow, protected field or admission state, and it is not an acceptance.
 
+## 2026-11-09 — controlled Archgate negative fixture for PR #1
+
+**Scope and seam.** `/diagnosing-bugs` reproduced the existing transition test
+at `fc8c079175e21fb55575a1222b910d391cba8b0a`; `/implement` with `/tdd`
+repairs that test through the existing raw-gates process/receipt seam. The
+fixture reuses `raw-fixture.ts`, following the controlled wrong-version tool
+pattern in `bootstrap-coverage.test.ts`. The positive source SHA, registered
+Deno executable digest, explicit Archgate 0.61.0 version and permission-profile
+identity checks remain in the same test.
+
+**Original red, preserved.** With the registered Deno 2.9.8 executable and
+Archgate 0.61.0 selected explicitly:
+
+```text
+node --test --test-concurrency=1 \
+  --test-name-pattern='^the local result binds the exact source, the tool identities and the permission profile identity$' \
+  .superman/deno-bootstrap/tests/transition.test.ts
+
+exit 1; tests 1; pass 0; fail 1
+transition.test.ts:1468:12
+AssertionError: The input was expected to not match /\b0.61.0\b/u.
+Input: '0.61.0\n'
+```
+
+The failure reproduced twice in the original checkout and once in the isolated
+repair worktree before editing. The installed npm cache legitimately reports
+the reviewed version; its contents cannot serve as a wrong-version fixture.
+
+**Green.** A disposable executable now reports `0.0.0` for `--version` and
+rejects any other invocation. The real G1 run must exit 1 with the exact receipt
+reason `archgate executable version mismatch: 0.0.0`, a failed G1 result, no
+accepted Archgate tool entry, and passing policy preflight and input integrity.
+The focused command passes (1/1); the complete transition suite passes (25/25,
+zero skips) after the repair.
+
+**Assertion sensitivity.** Temporarily bypassing only Archgate's executable
+version comparison in the isolated worktree makes the focused test fail:
+G1 attempts `check`, the controlled executable reports `Unexpected Archgate
+execution`, and that reason does not equal the required version-mismatch
+refusal. The mutation was restored byte-for-byte (`git diff` on
+`direct-gates.ts` is empty) before the 25/25 green run. This distinguishes the
+intended rejection from an unrelated command failure.
+
+`tsrs --noEmit` and the changed-file Biome check exit 0; Biome reports five
+nonblocking structural advisories. Full committed-head collection, stage
+receipts and independent `/code-review` results are publication evidence to be
+obtained after this slice; these focused results do not establish them.
+
 ### Both carried coverage floors bind at the merge-bound cutover — 2026-11-05
 
 **Outcome:** the Node gate and the Deno collector now name **one** binding point for **both** carried coverage floors. The candidate inventory's floor and the Deno operational surface's floor both bind at the merge-bound cutover, when the Deno root becomes the required evaluator, and `.superman/ci/coverage.ts` writes that exact string into the candidate obligation of the Node receipt. This is a **wording correction on André's 2026-11-04 decision**, which settled an ambiguity in the earlier wording — it discovered no new obligation, and no floor, threshold, scope, exclusion, inventory or admission state changed. This append is not an acceptance, and it accepts nothing — no pin, no native profile, no evaluator activation, no workflow publication, no ticket 01 admission and no readiness change.
