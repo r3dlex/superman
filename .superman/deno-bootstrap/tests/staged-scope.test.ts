@@ -24,13 +24,16 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve, sep } from "node:path";
 import { type TestContext, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { fixtureEnvironment } from "../../ci/fixture-env.ts";
@@ -592,6 +595,255 @@ test("a local scoped run accepts a document it did not commit", (t) => {
   assert.doesNotMatch(observed.deno.output, /dirty inputs/u);
   assert.equal(observed.node.receipt?.inputIntegrity.status, "pass");
   assert.equal(observed.deno.receipt?.inputIntegrity.status, "pass");
+});
+
+/** The file the Trivy stand-in reports as a HIGH finding when the tree it scans holds it. */
+const plantedFinding = "planted-finding.txt";
+
+/**
+ * A stand-in for the pinned Trivy binary that reports one HIGH finding
+ * whenever the tree it is pointed at holds the planted file. It logs every
+ * call and the tree each scan read, so a case can see which tree each host's
+ * G11 scanned and whether a scanner ran at all.
+ */
+function scanRootTrivy(repo: { root: string }) {
+  const binary = join(repo.root, ".git/trivy-stand-in");
+  const calls = join(repo.root, ".git/trivy-calls.log");
+  writeFileSync(
+    binary,
+    `#!${process.execPath}
+import { appendFileSync, existsSync } from "node:fs";
+import { join, resolve } from "node:path";
+const args = process.argv.slice(2);
+if (args.includes("--version")) {
+  appendFileSync(${JSON.stringify(calls)}, "{}\\n");
+  console.log("Version: 0.76.1");
+  process.exit(0);
+}
+const root = resolve(args.at(-1) ?? ".");
+appendFileSync(${JSON.stringify(calls)}, JSON.stringify({ root }) + "\\n");
+const found = existsSync(join(root, ${JSON.stringify(plantedFinding)}));
+const results = found ? [{ Target: ${JSON.stringify(plantedFinding)}, Vulnerabilities: [{ Severity: "HIGH", VulnerabilityID: "TEST-0002" }] }] : [];
+console.log(JSON.stringify({ CreatedAt: new Date().toISOString(), Results: results }));
+process.exit(found ? 1 : 0);
+`,
+    { mode: 0o755 },
+  );
+  const logged = (): { root?: string }[] =>
+    existsSync(calls)
+      ? readFileSync(calls, "utf8")
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => JSON.parse(line))
+      : [];
+  return {
+    binary,
+    /** Whether any host ran the scanner, its version probe included. */
+    ran: () => existsSync(calls),
+    /** The trees the scanner was pointed at, in order. */
+    roots: () => logged().flatMap((call) => (call.root ? [call.root] : [])),
+  };
+}
+
+/**
+ * Plant a finding the commit does not hold, ignored by the caller's own
+ * exclude file: the exclude file is the clone's and is never committed.
+ */
+function plantIgnoredFinding(repo: { root: string; write: (file: string, content: string) => void }): void {
+  mkdirSync(join(repo.root, ".git/info"), { recursive: true });
+  writeFileSync(join(repo.root, ".git/info/exclude"), `${plantedFinding}\n`, { flag: "a" });
+  repo.write(plantedFinding, "a finding the commit does not hold\n");
+}
+
+/** A temporary directory handed to both hosts as their own, so what a run leaves there is visible. */
+function runTemporary(t: TestContext): string {
+  const directory = mkdtempSync(join(tmpdir(), "superman-deno-run-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  return directory;
+}
+
+/** A temporary directory that does not exist, so no owned snapshot can be built in it. */
+function absentTemporary(t: TestContext): string {
+  return join(runTemporary(t), "absent");
+}
+
+/** Whether a path lies outside a directory: neither the directory itself nor anything inside it. */
+function outside(directory: string, path: string): boolean {
+  return path !== directory && !path.startsWith(`${directory}${sep}`);
+}
+
+/**
+ * Record what both hosts must leave as the caller had it, the working tree
+ * with its ignored files, the index bytes, HEAD and the refs, and return the
+ * check that they did.
+ */
+function callerStateKept(repo: { root: string; git: (...args: string[]) => string }): () => void {
+  const status = () => repo.git("status", "--porcelain=v1", "--ignored", "--untracked-files=all");
+  const refs = () => repo.git("for-each-ref", "--format=%(refname) %(objectname)");
+  // Git status may refresh the caller's own index, so it runs before the index
+  // bytes are read and after they are compared.
+  const tree = status();
+  const index = readFileSync(join(repo.root, ".git/index"));
+  const head = repo.git("rev-parse", "HEAD");
+  const references = refs();
+  return () => {
+    assert.deepEqual(readFileSync(join(repo.root, ".git/index")), index, "a host rewrote the caller's index");
+    assert.equal(repo.git("rev-parse", "HEAD"), head, "a host moved the caller's HEAD");
+    assert.equal(refs(), references, "a host changed the caller's refs");
+    assert.equal(status(), tree, "a host changed the caller's working tree");
+  };
+}
+
+test("a local G11 run scans an owned snapshot of the commit, not a file the checkout ignores", (t) => {
+  // The input that reaches the scan: a local scoped G11 run over a checkout
+  // that holds a finding the commit does not, ignored by the caller's own
+  // exclude file. The outcome it produces: both hosts scan an owned snapshot
+  // of the commit outside the caller's repository, pass, remove the snapshot
+  // when the run ends and leave the caller's state as it was.
+  const repo = fixture(t);
+  const trivy = scanRootTrivy(repo);
+  const temporary = runTemporary(t);
+  plantIgnoredFinding(repo);
+  const kept = callerStateKept(repo);
+  const observed = runBoth(repo, ["--stage", "pre-pr", "--gate", "G11"], {
+    TRIVY_BIN: trivy.binary,
+    TMPDIR: temporary,
+  });
+  assert.equal(observed.node.status, 0, observed.node.output);
+  assertParity(observed);
+  assert.equal(gateResult(observed.deno.receipt, "G11").status, "pass");
+  const scanned = new Set(trivy.roots());
+  assert.notEqual(scanned.size, 0, "no host scanned");
+  for (const root of scanned) {
+    assert.ok(outside(realpathSync(repo.root), root), `a host scanned ${root}, inside the caller's repository`);
+    assert.equal(existsSync(root), false, "an owned snapshot outlived its run");
+  }
+  assert.deepEqual(readdirSync(temporary), [], "a host left files in its temporary directory");
+  kept();
+});
+
+test("a local G11 run whose owned snapshot cannot be built fails with the cause in both hosts", (t) => {
+  // The input that reaches the guard: a temporary directory that does not
+  // exist, so no owned snapshot can be built. The outcome it produces: G11
+  // fails as its own result, naming the cause, and neither host runs the
+  // scanner against the checkout.
+  const repo = fixture(t);
+  const trivy = scanRootTrivy(repo);
+  const absent = absentTemporary(t);
+  const observed = runBoth(repo, ["--stage", "pre-pr", "--gate", "G11"], { TRIVY_BIN: trivy.binary, TMPDIR: absent });
+  assert.equal(observed.node.status, 1, observed.node.output);
+  assertParity(observed);
+  assert.equal(
+    observed.deno.receipt?.error,
+    undefined,
+    "the Deno run failed as a whole instead of as G11's own result",
+  );
+  const g11 = gateResult(observed.deno.receipt, "G11");
+  assert.equal(g11.status, "fail");
+  assert.ok(g11.reason?.includes(absent), g11.reason);
+  assert.equal(trivy.ran(), false, "a host ran the scanner although its owned snapshot could not be built");
+});
+
+test("a local G11 run whose owned snapshot fails midway fails with the cause and removes it in both hosts", (t) => {
+  // The input that reaches the guard: a checkout without installed modules,
+  // so the owned snapshot fails after its clone, where the modules are linked
+  // in. The outcome it produces: G11 fails as its own result in both hosts,
+  // neither host runs the scanner, and the partial snapshot is removed. The
+  // cause is each runtime's own error text, so it is compared by what it
+  // names rather than byte for byte: Node's readdir reports `scandir` where
+  // Deno's reports `readdir`.
+  const repo = fixture(t);
+  // The fixture's link to the reviewed modules: unlinking it removes the link,
+  // never the modules it points at.
+  unlinkSync(join(repo.root, "node_modules"));
+  const trivy = scanRootTrivy(repo);
+  const temporary = runTemporary(t);
+  const kept = callerStateKept(repo);
+  const observed = runBoth(repo, ["--stage", "pre-pr", "--gate", "G11"], {
+    TRIVY_BIN: trivy.binary,
+    TMPDIR: temporary,
+  });
+  assert.equal(observed.node.status, 1, observed.node.output);
+  assertParity(observed, ["results"]);
+  const modules = join(realpathSync(repo.root), "node_modules");
+  for (const receipt of [observed.node.receipt, observed.deno.receipt]) {
+    assert.equal(receipt?.error, undefined, "a run failed as a whole instead of as G11's own result");
+    const g11 = gateResult(receipt, "G11");
+    assert.equal(g11.status, "fail");
+    assert.equal(g11.kind, "skipped-required-work");
+    assert.ok(g11.reason?.includes(modules), g11.reason);
+  }
+  assert.equal(trivy.ran(), false, "a host ran the scanner although its owned snapshot could not be built");
+  assert.deepEqual(readdirSync(temporary), [], "a host left a partial owned snapshot behind");
+  kept();
+});
+
+test("a committed finding fails a local G11 run in both hosts", (t) => {
+  // The input that reaches the scan: a finding the commit holds. The outcome
+  // it produces: both hosts fail G11 on it, leave nothing in the temporary
+  // directory they were given and leave the caller's state as it was.
+  const repo = fixture(t, ({ write }) => {
+    write(plantedFinding, "a finding the commit holds\n");
+  });
+  const trivy = scanRootTrivy(repo);
+  const temporary = runTemporary(t);
+  const kept = callerStateKept(repo);
+  const observed = runBoth(repo, ["--stage", "pre-pr", "--gate", "G11"], {
+    TRIVY_BIN: trivy.binary,
+    TMPDIR: temporary,
+  });
+  assert.equal(observed.node.status, 1, observed.node.output);
+  assertParity(observed);
+  assert.match(gateResult(observed.deno.receipt, "G11").reason ?? "", /Trivy reported 1 HIGH\/CRITICAL finding/u);
+  assert.deepEqual(readdirSync(temporary), [], "a host left files in its temporary directory");
+  kept();
+});
+
+test("the CI and nightly legs' G11 still read the checkout in both hosts", async (t) => {
+  // The input that reaches the scan: a CI or nightly G11 run over a checkout
+  // that holds an ignored finding, with no temporary directory an owned
+  // snapshot could be built in. The outcome it produces: both hosts scan the
+  // checkout itself and fail on the finding.
+  for (const stage of ["ci", "nightly"]) {
+    await t.test(stage, (t) => {
+      const repo = fixture(t);
+      if (stage === "nightly") {
+        // The nightly runs on main and compares it with the main before it.
+        repo.git("switch", "--quiet", "main");
+        repo.git("commit", "--quiet", "--allow-empty", "-m", "nightly candidate");
+      }
+      const trivy = scanRootTrivy(repo);
+      const observed = runBoth(
+        repo,
+        ["--stage", stage, "--gate", "G11"],
+        { TRIVY_BIN: trivy.binary, TMPDIR: absentTemporary(t) },
+        () => plantIgnoredFinding(repo),
+      );
+      assert.equal(observed.node.status, 1, observed.node.output);
+      assertParity(observed);
+      assert.match(gateResult(observed.deno.receipt, "G11").reason ?? "", /Trivy reported 1 HIGH\/CRITICAL finding/u);
+      assert.deepEqual([...new Set(trivy.roots())], [realpathSync(repo.root)]);
+    });
+  }
+});
+
+test("a scoped pre-commit G11 still reads the checkout in both hosts", (t) => {
+  // The input that reaches the scan: a scoped G11 run of the staged
+  // pre-commit stage over a checkout that holds an ignored finding. The
+  // outcome it produces: the staged stage keeps the live checkout, so both
+  // hosts scan it and fail on the finding.
+  const repo = fixture(t);
+  const trivy = scanRootTrivy(repo);
+  const observed = runBoth(
+    repo,
+    ["--stage", "pre-commit", "--gate", "G11"],
+    { TRIVY_BIN: trivy.binary, TMPDIR: absentTemporary(t) },
+    () => plantIgnoredFinding(repo),
+  );
+  assert.equal(observed.node.status, 1, observed.node.output);
+  assertParity(observed);
+  assert.match(gateResult(observed.deno.receipt, "G11").reason ?? "", /Trivy reported 1 HIGH\/CRITICAL finding/u);
+  assert.deepEqual([...new Set(trivy.roots())], [realpathSync(repo.root)]);
 });
 
 test("a declared partial stage may not declare a whole-repository scope", (t) => {

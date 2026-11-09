@@ -8,6 +8,7 @@ import {
   fsyncSync,
   lstatSync,
   mkdirSync,
+  mkdtempSync,
   openSync,
   readFileSync,
   realpathSync,
@@ -15,6 +16,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, matchesGlob, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import {
@@ -35,7 +37,7 @@ import {
 import { bindsWholeTree, changedEvidenceInputs, committedTreeMatches } from "./evidence.ts";
 import { fixtureEnvironment } from "./fixture-env.ts";
 import { qualityGate } from "./quality.ts";
-import { replayBehavior } from "./replay.ts";
+import { ownedSnapshot, replayBehavior } from "./replay.ts";
 
 const { values } = parseArgs({
   options: {
@@ -268,6 +270,9 @@ const receipt: Record<string, unknown> = {
   verdict: "fail",
 };
 let receiptPath: string | undefined;
+// The temporary directory of the owned snapshot G11 scans, removed when the
+// run ends, pass or fail.
+let snapshotTemporary: string | undefined;
 try {
   if (values.receipt) {
     receiptPath = safeReceipt(values.receipt);
@@ -382,14 +387,19 @@ try {
   // The CI leg keeps the whole-tree rule: there the checkout is the commit, so
   // a difference is a setup error rather than the caller's work in progress. A
   // local run binds the inputs its gates read instead, and names the ones it
-  // could not bind. Both checks below use this one predicate, so they cannot
-  // bind different things.
+  // could not bind.
   const ciRun =
     process.env.GITHUB_ACTIONS === "true" ||
     Boolean(process.env.GITHUB_EVENT_PATH) ||
     stage === "ci" ||
     stage === "nightly";
   const wholeTree = ciRun || bindsWholeTree(selected);
+  // The local merge-candidate run: neither the CI leg nor the staged stage. It
+  // binds what its selected gates read, the whole tree while one of them reads
+  // it, and its G11 scans an owned snapshot of the evaluated commit (§5.4).
+  // The binding checks and the scan root read this one predicate, so they
+  // always select the same leg.
+  const localCandidateRun = !ciRun && declared.scope !== "staged";
   // The preconditions depend on the stage's scope, so they are resolved here
   // rather than before the stage is known.
   if (declared.scope === "staged") {
@@ -412,7 +422,7 @@ try {
     // whole tree. A document the gates never read cannot change a result, so an
     // uncommitted document is the caller's work in progress and not a reason to
     // refuse the measurement.
-    if (!ciRun) {
+    if (localCandidateRun) {
       const changed = changedEvidenceInputs(process.cwd(), String(receipt.evaluatedSha), selected, wholeTree);
       if (changed.files.length) {
         const reason = `G9: dirty inputs; commit or preserve them before replay: ${changed.files.join(", ")}`;
@@ -448,6 +458,23 @@ try {
   receipt.inputScope = (values.gate ? "full" : declared.scope) as StageScope;
   const tools: Record<string, unknown> = {};
   receipt.tools = tools;
+  // §5.4's local scan root: the local merge-candidate run claims that the
+  // merge candidate passes, so its G11 scans an owned snapshot of the
+  // evaluated commit, never the caller's checkout; the CI leg and the staged
+  // stage keep the checkout. A snapshot that cannot be built is handed to G11
+  // as its cause, so G11 fails with it instead of the run failing whole, and
+  // never falls back to the checkout.
+  let snapshot: string | Error | undefined;
+  if (localCandidateRun && selected.includes("G11")) {
+    try {
+      snapshotTemporary = mkdtempSync(join(tmpdir(), "superman-scan-"));
+      // G11 runs no declared binary inside the snapshot, so none replaces the
+      // reviewed tree's linked commands.
+      snapshot = ownedSnapshot(process.cwd(), snapshotTemporary, "candidate", String(receipt.evaluatedSha), env, {});
+    } catch (error) {
+      snapshot = error instanceof Error ? error : new Error(String(error));
+    }
+  }
   const context = {
     root: process.cwd(),
     baseSha: String(receipt.baseSha),
@@ -459,6 +486,9 @@ try {
     tools,
     stage: (values.gate ? "scoped" : stage) as "scoped" | "pre-commit" | "pre-pr" | "ci",
     scope: (values.gate ? "full" : declared.scope) as StageScope,
+    // The owned snapshot G11 scans, or why it could not be built; absent
+    // where G11 reads the checkout.
+    snapshot,
   };
   const results: Record<string, unknown>[] = [];
   let policyError: string | undefined;
@@ -539,17 +569,17 @@ try {
   const binding =
     declared.scope === "staged"
       ? { scope: "index" as const, files: [] as string[] }
-      : ciRun
-        ? { scope: "whole-tree" as const, files: [] as string[] }
-        : changedEvidenceInputs(process.cwd(), String(receipt.evaluatedSha), selected, wholeTree);
+      : localCandidateRun
+        ? changedEvidenceInputs(process.cwd(), String(receipt.evaluatedSha), selected, wholeTree)
+        : { scope: "whole-tree" as const, files: [] as string[] };
   const inputsChanged =
     git("rev-parse", "--verify", "HEAD^{commit}") !== receipt.evaluatedSha ||
     (declared.scope === "staged"
       ? receipt.stagedInputsId !== stagedInputsId() || unstagedChanges()
-      : ciRun
-        ? Boolean(git("status", "--porcelain=v1", "-z", "--untracked-files=all")) ||
-          !committedTreeMatches(process.cwd(), String(receipt.evaluatedSha))
-        : binding.files.length > 0);
+      : localCandidateRun
+        ? binding.files.length > 0
+        : Boolean(git("status", "--porcelain=v1", "-z", "--untracked-files=all")) ||
+          !committedTreeMatches(process.cwd(), String(receipt.evaluatedSha)));
   if (inputsChanged) {
     const reason = `Inputs changed during raw checks; evidence does not bind the committed snapshot (caller changes were preserved)${
       binding.files.length ? `: ${binding.files.join(", ")}` : ""
@@ -569,6 +599,8 @@ try {
   ];
   console.error(receipt.error);
   process.exitCode = 1;
+} finally {
+  if (snapshotTemporary) rmSync(snapshotTemporary, { recursive: true, force: true });
 }
 if (receiptPath && values.receipt) {
   const temporary = `${receiptPath}.${randomUUID()}.tmp`;

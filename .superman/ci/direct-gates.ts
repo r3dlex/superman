@@ -47,6 +47,12 @@ export type GateContext = {
   stage?: GateStage;
   /** The scope the stage declared: staged files, or the whole repository. */
   scope?: StageScope;
+  /**
+   * The owned snapshot of the evaluated commit that G11 scans (§5.4), or why
+   * it could not be built. The driver hands one only to a local run outside
+   * the staged stage; every other run's G11 reads the checkout.
+   */
+  snapshot?: string | Error;
 };
 
 function toolFailure(
@@ -285,6 +291,10 @@ export async function directGate(gate: string, ctx: GateContext): Promise<GateRe
   }
   const policy = config(ctx);
   if (gate === "G11") {
+    // The lockfile precondition and SUP-007's ignore/config refusal read the
+    // checkout. A local run's G11 binds the whole tree, so a checkout that
+    // lacks or alters a file the commit holds is refused before this gate
+    // runs, and the guards see every file the owned snapshot carries.
     if (!existsSync(join(ctx.root, "pnpm-lock.yaml")))
       throw new GateFailure("policy-refusal", "G11: dependency scan requires the reviewed lockfile");
     if (
@@ -301,19 +311,31 @@ export async function directGate(gate: string, ctx: GateContext): Promise<GateRe
         status: "n/a",
         reason: "delegated to the required linux-x64 CI leg; an explicit delegation, not a tool pass",
       };
+    // A snapshot the driver could not build fails the gate with its cause,
+    // before the scanner runs; the checkout is never its fallback.
+    if (ctx.snapshot instanceof Error)
+      throw new GateFailure(
+        "skipped-required-work",
+        `G11: the owned snapshot of the evaluated commit could not be built: ${ctx.snapshot.message}`,
+      );
+    // The tree the scan reads: the owned snapshot of the evaluated commit when
+    // the driver built one (§5.4), the checkout otherwise.
+    const scanContext = { ...ctx, root: ctx.snapshot ?? ctx.root };
     const command = ctx.env.TRIVY_BIN || "trivy";
     // The caller's Trivy environment never reaches the tool: only the cache
     // directory survives, so an inherited severity or skip list cannot shape
     // the scan.
     const clean = { ...ctx.env };
     for (const key of Object.keys(clean)) if (key.startsWith("TRIVY_") && key !== "TRIVY_CACHE_DIR") delete clean[key];
-    const actual = /^Version:\s*(\S+)/mu.exec(execute({ ...ctx, env: clean }, [command, "--version"], 60_000))?.[1];
+    const actual = /^Version:\s*(\S+)/mu.exec(
+      execute({ ...scanContext, env: clean }, [command, "--version"], 60_000),
+    )?.[1];
     if (actual !== policy.tools.trivy)
       throw new GateFailure("policy-refusal", `Trivy pin expected ${policy.tools.trivy}, actual ${actual}`);
     ctx.tools.trivy = { expected: policy.tools.trivy, actual, status: "pass" };
     const startedAt = Date.now();
     const result = runTool(
-      { ...ctx, env: clean },
+      { ...scanContext, env: clean },
       [
         command,
         "fs",

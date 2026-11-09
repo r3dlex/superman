@@ -1,8 +1,20 @@
 // Bootstrap process seam; these tests depend on all product source (src/**).
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { test } from "node:test";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join, sep } from "node:path";
+import { type TestContext, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { fixture, interceptPnpm } from "./raw-fixture.ts";
 
@@ -277,6 +289,178 @@ test("raw checks reject hidden worktree bytes while preserving caller index flag
     assert.equal(readFileSync(join(repo.root, "src/value.ts"), "utf8"), "export const value = 1;\n");
     assert.equal(repo.git("rev-parse", "HEAD").trim(), head);
     assert.deepEqual(readFileSync(join(repo.root, ".git/index")), index);
+  }
+});
+
+/** The file the Trivy stand-in reports as a HIGH finding when the tree it scans holds it. */
+const plantedFinding = "planted-finding.txt";
+
+/**
+ * A stand-in for the pinned Trivy binary that reports one HIGH finding
+ * whenever the tree it is pointed at holds the planted file. It logs every
+ * call and the tree each scan read, so a case can see which tree G11 scanned
+ * and whether the scanner ran at all.
+ */
+function scanRootTrivy(repo: { root: string }) {
+  const binary = join(repo.root, ".git/trivy-stand-in");
+  const calls = join(repo.root, ".git/trivy-calls.log");
+  writeFileSync(
+    binary,
+    `#!${process.execPath}
+import { appendFileSync, existsSync } from "node:fs";
+import { join, resolve } from "node:path";
+const args = process.argv.slice(2);
+if (args.includes("--version")) {
+  appendFileSync(${JSON.stringify(calls)}, "{}\\n");
+  console.log("Version: 0.76.1");
+  process.exit(0);
+}
+const root = resolve(args.at(-1) ?? ".");
+appendFileSync(${JSON.stringify(calls)}, JSON.stringify({ root }) + "\\n");
+const found = existsSync(join(root, ${JSON.stringify(plantedFinding)}));
+const results = found ? [{ Target: ${JSON.stringify(plantedFinding)}, Vulnerabilities: [{ Severity: "HIGH", VulnerabilityID: "TEST-0002" }] }] : [];
+console.log(JSON.stringify({ CreatedAt: new Date().toISOString(), Results: results }));
+process.exit(found ? 1 : 0);
+`,
+    { mode: 0o755 },
+  );
+  const logged = (): { root?: string }[] =>
+    existsSync(calls)
+      ? readFileSync(calls, "utf8")
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => JSON.parse(line))
+      : [];
+  return {
+    binary,
+    /** Whether the scanner ran at all, its version probe included. */
+    ran: () => existsSync(calls),
+    /** The trees the scanner was pointed at, in order. */
+    roots: () => logged().flatMap((call) => (call.root ? [call.root] : [])),
+  };
+}
+
+/**
+ * Plant a finding the commit does not hold, ignored by the caller's own
+ * exclude file: the exclude file is the clone's and is never committed.
+ */
+function plantIgnoredFinding(repo: { root: string; write: (path: string, content: string) => void }): void {
+  mkdirSync(join(repo.root, ".git/info"), { recursive: true });
+  writeFileSync(join(repo.root, ".git/info/exclude"), `${plantedFinding}\n`, { flag: "a" });
+  repo.write(plantedFinding, "a finding the commit does not hold\n");
+}
+
+/** A temporary directory handed to the run as its own, so what the run leaves there is visible. */
+function runTemporary(t: TestContext): string {
+  const directory = mkdtempSync(join(tmpdir(), "superman-raw-run-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  return directory;
+}
+
+/** A temporary directory that does not exist, so no owned snapshot can be built in it. */
+function absentTemporary(t: TestContext): string {
+  return join(runTemporary(t), "absent");
+}
+
+/** Whether a path lies outside a directory: neither the directory itself nor anything inside it. */
+function outside(directory: string, path: string): boolean {
+  return path !== directory && !path.startsWith(`${directory}${sep}`);
+}
+
+/**
+ * Record what a run must leave as the caller had it, the working tree with its
+ * ignored files, the index bytes, HEAD and the refs, and return the check that
+ * it did.
+ */
+function callerStateKept(repo: { root: string; git: (...args: string[]) => string }): () => void {
+  const status = () => repo.git("status", "--porcelain=v1", "--ignored", "--untracked-files=all");
+  const refs = () => repo.git("for-each-ref", "--format=%(refname) %(objectname)");
+  // Git status may refresh the caller's own index, so it runs before the index
+  // bytes are read and after they are compared.
+  const tree = status();
+  const index = readFileSync(join(repo.root, ".git/index"));
+  const head = repo.git("rev-parse", "HEAD").trim();
+  const references = refs();
+  return () => {
+    assert.deepEqual(readFileSync(join(repo.root, ".git/index")), index, "the run rewrote the caller's index");
+    assert.equal(repo.git("rev-parse", "HEAD").trim(), head, "the run moved the caller's HEAD");
+    assert.equal(refs(), references, "the run changed the caller's refs");
+    assert.equal(status(), tree, "the run changed the caller's working tree");
+  };
+}
+
+test("a local G11 run scans an owned snapshot of the commit, not a file the checkout ignores", (t) => {
+  const repo = fixture(t);
+  repo.commit();
+  const trivy = scanRootTrivy(repo);
+  plantIgnoredFinding(repo);
+  const temporary = runTemporary(t);
+  const kept = callerStateKept(repo);
+  const result = repo.runGate("G11", [], { TRIVY_BIN: trivy.binary, TMPDIR: temporary });
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.receipt.results[0].status, "pass");
+  const scanned = new Set(trivy.roots());
+  assert.notEqual(scanned.size, 0, "the scanner never scanned");
+  for (const root of scanned) {
+    assert.ok(outside(realpathSync(repo.root), root), `the scan read ${root}, inside the caller's repository`);
+    assert.equal(existsSync(root), false, "the owned snapshot outlived its run");
+  }
+  assert.deepEqual(readdirSync(temporary), [], "the run left files in its temporary directory");
+  kept();
+});
+
+test("a local G11 run whose owned snapshot cannot be built fails with the cause and never scans", (t) => {
+  const repo = fixture(t);
+  repo.commit();
+  const trivy = scanRootTrivy(repo);
+  const absent = absentTemporary(t);
+  const result = repo.runGate("G11", [], { TRIVY_BIN: trivy.binary, TMPDIR: absent });
+  assert.equal(result.status, 1, result.output);
+  assert.equal(result.receipt.error, undefined, "the run failed as a whole instead of as G11's own result");
+  assert.equal(result.receipt.results.length, 1);
+  const [g11] = result.receipt.results;
+  assert.equal(g11.gate, "G11");
+  assert.equal(g11.status, "fail");
+  assert.equal(g11.kind, "skipped-required-work");
+  assert.match(g11.reason, /ENOENT/u);
+  assert.ok(g11.reason.includes(absent), g11.reason);
+  assert.equal(trivy.ran(), false, "the scanner ran although its owned snapshot could not be built");
+});
+
+test("a committed finding still fails a local G11 run, which leaves no owned snapshot behind", (t) => {
+  const repo = fixture(t);
+  repo.write(plantedFinding, "a finding the commit holds\n");
+  repo.commit();
+  const trivy = scanRootTrivy(repo);
+  const temporary = runTemporary(t);
+  const kept = callerStateKept(repo);
+  const result = repo.runGate("G11", [], { TRIVY_BIN: trivy.binary, TMPDIR: temporary });
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.receipt.results[0].reason, /Trivy reported 1 HIGH\/CRITICAL finding/u);
+  assert.deepEqual(readdirSync(temporary), [], "the run left files in its temporary directory");
+  kept();
+});
+
+test("the CI and nightly legs' G11 still reads the checkout and builds no owned snapshot", async (t) => {
+  for (const stage of ["ci", "nightly"]) {
+    await t.test(stage, (t) => {
+      const repo = fixture(t);
+      // The nightly runs on main and compares it with the main before it.
+      if (stage === "nightly") repo.git("switch", "--quiet", "main");
+      repo.commit();
+      const trivy = scanRootTrivy(repo);
+      plantIgnoredFinding(repo);
+      const result = repo.runGate("G11", ["--stage", stage], {
+        TRIVY_BIN: trivy.binary,
+        // A leg that tried to build an owned snapshot would fail on this
+        // directory instead of scanning.
+        TMPDIR: absentTemporary(t),
+        ...(stage === "nightly" ? { HEAD_REF: "main" } : {}),
+      });
+      assert.equal(result.status, 1, result.output);
+      assert.match(result.receipt.results[0].reason, /Trivy reported 1 HIGH\/CRITICAL finding/u);
+      assert.deepEqual([...new Set(trivy.roots())], [realpathSync(repo.root)]);
+    });
   }
 });
 
