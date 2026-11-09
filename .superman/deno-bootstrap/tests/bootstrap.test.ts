@@ -388,6 +388,7 @@ test("the Deno sibling's G2 runs the Deno check over the whole operational graph
     "archgate-linux-arm64-wizard.ts",
     "coverage.ts",
     "direct-gates.ts",
+    "evidence.ts",
     "exec.ts",
     "fixture-env.ts",
     "pr-policy.ts",
