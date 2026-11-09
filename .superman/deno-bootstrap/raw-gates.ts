@@ -8,7 +8,6 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
-  readlinkSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -31,6 +30,7 @@ import {
   type StageScope,
   stagePolicy,
 } from "./direct-gates.ts";
+import { bindsWholeTree, changedEvidenceInputs, committedTreeMatches } from "./evidence.ts";
 // Protected bootstrap entrypoint; ticket 06 may replace it only after parity.
 //
 // The Deno sibling of the Node original. The receipt shape, the gate
@@ -221,24 +221,6 @@ async function runStagedG9(ctx: GateContext): Promise<StagedGateResult> {
     };
   }
 }
-function committedInputsMatch(sha: string): boolean {
-  const format = git("rev-parse", "--show-object-format");
-  if (!["sha1", "sha256"].includes(format)) throw new Error("Unknown Git object format");
-  return git("ls-tree", "-r", "-z", sha)
-    .split("\0")
-    .filter(Boolean)
-    .every((entry) => {
-      const tab = entry.indexOf("\t");
-      const [mode, type, expected] = entry.slice(0, tab).split(" ");
-      const file = entry.slice(tab + 1);
-      if (type !== "blob" || !existsSync(file)) return false;
-      const stat = lstatSync(file);
-      if (mode === "120000" ? !stat.isSymbolicLink() : !stat.isFile()) return false;
-      if (mode !== "120000" && ((stat.mode & 0o111) !== 0) !== (mode === "100755")) return false;
-      const bytes = mode === "120000" ? Buffer.from(readlinkSync(file)) : readFileSync(file);
-      return createHash(format).update(`blob ${bytes.length}\0`).update(bytes).digest("hex") === expected;
-    });
-}
 function safeReceipt(input: string): string {
   const requested = resolve(input);
   let parent = dirname(requested);
@@ -398,6 +380,21 @@ try {
   if (!["pre-commit", "pre-pr", "ci", "nightly"].includes(stage)) throw new Error("Unknown raw stage selector");
   receipt.stage = stage;
   const declared = stagePolicy(Deno.cwd(), stage);
+  // The gates this run selects decide what it binds: a gate that reads the
+  // whole tree binds the whole tree, and the rest bind the inputs they read.
+  const selected = values.gate ? [values.gate] : declared.gates;
+  if (selected.some((gate) => !gates.includes(gate))) throw new Error("Unknown raw gate selector");
+  // The CI leg keeps the whole-tree rule: there the checkout is the commit, so
+  // a difference is a setup error rather than the caller's work in progress. A
+  // local run binds the inputs its gates read instead, and names the ones it
+  // could not bind. Both checks below use this one predicate, so they cannot
+  // bind different things.
+  const ciRun =
+    Deno.env.get("GITHUB_ACTIONS") === "true" ||
+    Boolean(Deno.env.get("GITHUB_EVENT_PATH")) ||
+    stage === "ci" ||
+    stage === "nightly";
+  const wholeTree = ciRun || bindsWholeTree(selected);
   // The preconditions depend on the stage's scope, so they are resolved here
   // rather than before the stage is known.
   if (declared.scope === "staged") {
@@ -415,11 +412,19 @@ try {
     // be the one checked out, and the tree it evaluates must be committed.
     if ((gitOptional("symbolic-ref", "--quiet", "--short", "HEAD") ?? "") !== String(receipt.branch))
       throw new Error("G9: HEAD_REF does not match the local branch");
-    if (
-      git("status", "--porcelain=v1", "-z", "--untracked-files=all") ||
-      !committedInputsMatch(String(receipt.evaluatedSha))
-    )
-      throw new Error("G9: dirty inputs; commit or preserve them before replay");
+    // A local run binds what its gates read: the inputs the selected gates read
+    // must hold the committed bytes, and the whole tree when a gate reads the
+    // whole tree. A document the gates never read cannot change a result, so an
+    // uncommitted document is the caller's work in progress and not a reason to
+    // refuse the measurement.
+    if (!ciRun) {
+      const changed = changedEvidenceInputs(Deno.cwd(), String(receipt.evaluatedSha), selected, wholeTree);
+      if (changed.files.length) {
+        const reason = `G9: dirty inputs; commit or preserve them before replay: ${changed.files.join(", ")}`;
+        receipt.inputIntegrity = { status: "fail", scope: changed.scope, reason };
+        throw new Error(reason);
+      }
+    }
   }
   // The identity this run resolved is recorded even when a later guard
   // refuses it, so a refused receipt still names the policy it refused.
@@ -439,8 +444,6 @@ try {
         "The full local pre-PR run and the CI run must declare one gate inventory",
       );
   }
-  const selected = values.gate ? [values.gate] : declared.gates;
-  if (selected.some((gate) => !gates.includes(gate))) throw new Error("Unknown raw gate selector");
   receipt.scope = selected;
   receipt.feedback = values.gate ? "scoped" : declared.feedback;
   receipt.satisfiesFullBar = !values.gate && declared.feedback === "full";
@@ -536,20 +539,31 @@ try {
   // full-stage evaluation may be reported as a pass.
   receipt.verdict = failed ? "fail" : receipt.satisfiesFullBar ? "pass" : "partial-feedback";
   if (failed) Deno.exitCode = 1;
+  // The scope the receipt records says which rule produced the verdict: the
+  // whole tree, the inputs the gates read, or the index of a staged run.
+  const binding =
+    declared.scope === "staged"
+      ? { scope: "index" as const, files: [] as string[] }
+      : ciRun
+        ? { scope: "whole-tree" as const, files: [] as string[] }
+        : changedEvidenceInputs(Deno.cwd(), String(receipt.evaluatedSha), selected, wholeTree);
   const inputsChanged =
     git("rev-parse", "--verify", "HEAD^{commit}") !== receipt.evaluatedSha ||
     (declared.scope === "staged"
       ? receipt.stagedInputsId !== stagedInputsId() || unstagedChanges()
-      : Boolean(git("status", "--porcelain=v1", "-z", "--untracked-files=all")) ||
-        !committedInputsMatch(String(receipt.evaluatedSha)));
+      : ciRun
+        ? Boolean(git("status", "--porcelain=v1", "-z", "--untracked-files=all")) ||
+          !committedTreeMatches(Deno.cwd(), String(receipt.evaluatedSha))
+        : binding.files.length > 0);
   if (inputsChanged) {
-    const reason =
-      "Inputs changed during raw checks; evidence does not bind the committed snapshot (caller changes were preserved)";
-    receipt.inputIntegrity = { status: "fail", reason };
+    const reason = `Inputs changed during raw checks; evidence does not bind the committed snapshot (caller changes were preserved)${
+      binding.files.length ? `: ${binding.files.join(", ")}` : ""
+    }`;
+    receipt.inputIntegrity = { status: "fail", scope: binding.scope, reason };
     receipt.verdict = "fail";
     Deno.exitCode = 1;
     console.error(reason);
-  } else receipt.inputIntegrity = { status: "pass" };
+  } else receipt.inputIntegrity = { status: "pass", scope: binding.scope };
 } catch (error) {
   receipt.verdict = "fail";
   receipt.error = error instanceof Error ? error.message : String(error);

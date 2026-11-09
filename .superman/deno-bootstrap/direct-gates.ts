@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, matchesGlob } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isSourceFile } from "./evidence.ts";
 import { DENO_LAUNCH_FLAGS, DENO_PERMISSIONS, denoPermissions, execFileSync, type PermissionProfile } from "./exec.ts";
 import { nodeRuntimeVersion, type ProcessEnv, runOwned } from "./replay.ts";
 
@@ -57,8 +58,6 @@ export type GateContext = {
   scope?: StageScope;
 };
 
-const sourceExtensions = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte", ".astro"];
-
 /**
  * The reviewed launch of a module in this root under the Deno runtime.
  *
@@ -68,10 +67,6 @@ const sourceExtensions = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", 
  */
 function denoLaunch(...args: string[]): string[] {
   return [Deno.execPath(), "run", ...DENO_LAUNCH_FLAGS, ...DENO_PERMISSIONS, ...args];
-}
-
-function isSourceFile(file: string): boolean {
-  return sourceExtensions.some((extension) => file.endsWith(extension));
 }
 
 function toolFailure(

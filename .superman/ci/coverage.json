@@ -51,6 +51,7 @@
       ".superman/deno-bootstrap/archgate-linux-arm64-wizard.ts",
       ".superman/deno-bootstrap/coverage.ts",
       ".superman/deno-bootstrap/direct-gates.ts",
+      ".superman/deno-bootstrap/evidence.ts",
       ".superman/deno-bootstrap/exec.ts",
       ".superman/deno-bootstrap/fixture-env.ts",
       ".superman/deno-bootstrap/pr-policy.ts",

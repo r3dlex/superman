@@ -560,19 +560,38 @@ test("a local full run binds the local branch when no pull-request reference nam
 
 test("a local full run refuses a tree it did not commit", (t) => {
   // The input that reaches the guard: a whole-repository run over a tree that
-  // carries an uncommitted change. The outcome it produces: the run is
-  // refused, because the evidence would not bind a committed snapshot.
+  // carries an uncommitted change to a file the gates read. The outcome it
+  // produces: the run is refused, because the evidence would not bind a
+  // committed snapshot.
   const repo = fixture(t, ({ write }) => {
-    write(".scratch/demo/note.md", "# Reviewed note\n");
+    write("src/value.ts", "export const value = 1;\n");
   });
   const observed = runBoth(repo, ["--stage", "pre-pr"], {}, () => {
-    repo.write(".scratch/demo/note.md", "# Edited note\n");
+    repo.write("src/value.ts", "export const value = 9;\n");
   });
   assert.notEqual(observed.node.status, 0);
   assert.match(observed.node.output, /dirty inputs; commit or preserve them before replay/u);
   assertParity(observed);
   assert.match(observed.deno.output, /dirty inputs; commit or preserve them before replay/u);
   assert.equal(observed.deno.receipt?.verdict, "fail");
+});
+
+test("a local scoped run accepts a document it did not commit", (t) => {
+  // The input that reaches the guard: a scoped run over a tree that carries an
+  // uncommitted document. The outcome it produces: the run binds the snapshot
+  // it measures, because a document is not a file the gates read.
+  const repo = fixture(t, ({ write }) => {
+    write(".scratch/demo/note.md", "# Reviewed note\n");
+  });
+  const observed = runBoth(repo, ["--stage", "pre-pr", "--gate", "G4"], {}, () => {
+    repo.write(".scratch/demo/note.md", "# Edited note\n");
+  });
+  assert.equal(observed.node.status, 0, observed.node.output);
+  assert.doesNotMatch(observed.node.output, /dirty inputs/u);
+  assertParity(observed);
+  assert.doesNotMatch(observed.deno.output, /dirty inputs/u);
+  assert.equal(observed.node.receipt?.inputIntegrity.status, "pass");
+  assert.equal(observed.deno.receipt?.inputIntegrity.status, "pass");
 });
 
 test("a declared partial stage may not declare a whole-repository scope", (t) => {

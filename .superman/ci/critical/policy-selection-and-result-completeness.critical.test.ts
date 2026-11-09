@@ -142,7 +142,7 @@ describe("the selected gate inventory", () => {
     expect(decision.receipt?.evaluatedSha).toBe(headSha);
     expect(decision.receipt?.headSha).toBe(headSha);
     expect(decision.receipt?.branch).toBe("spec/demo");
-    expect(decision.receipt?.inputIntegrity).toEqual({ status: "pass" });
+    expect(decision.receipt?.inputIntegrity).toEqual({ status: "pass", scope: "gate-inputs" });
     expect(decision.receipt?.behaviorReplay).toBeUndefined();
   }, 120_000);
 });

@@ -79,6 +79,184 @@ test("G9 refuses dirty inputs instead of claiming committed revisions tested the
   assert.equal(repo.git("status", "--porcelain=v1"), before);
 });
 
+test("an uncommitted document does not fail a run whose measurement it cannot affect", (t) => {
+  const repo = fixture(t);
+  repo.write(
+    "test/value.test.ts",
+    "import { expect, test } from 'vitest'; import { value } from '../src/value.ts'; test('behavior', () => expect(value).toBe(1));\n",
+  );
+  repo.write("src/value.ts", "export const value = 1;\n");
+  repo.commit();
+  repo.write("GLOSSARY.md", "# Glossary\n\nAn uncommitted term.\n");
+  const result = repo.run();
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.receipt.inputIntegrity.status, "pass");
+  assert.equal(result.receipt.inputIntegrity.scope, "gate-inputs");
+});
+
+test("a modified document does not fail a run whose measurement it cannot affect", (t) => {
+  const repo = fixture(t);
+  repo.write(
+    "test/value.test.ts",
+    "import { expect, test } from 'vitest'; import { value } from '../src/value.ts'; test('behavior', () => expect(value).toBe(1));\n",
+  );
+  repo.write("src/value.ts", "export const value = 1;\n");
+  repo.write("GLOSSARY.md", "# Glossary\n\nA committed term.\n");
+  repo.commit();
+  repo.write("GLOSSARY.md", "# Glossary\n\nAn edited term.\n");
+  const result = repo.run();
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.receipt.inputIntegrity.status, "pass");
+});
+
+test("the CI leg refuses a tree it did not commit, document or not", (t) => {
+  const repo = fixture(t);
+  repo.write(
+    "test/value.test.ts",
+    "import { expect, test } from 'vitest'; import { value } from '../src/value.ts'; test('behavior', () => expect(value).toBe(1));\n",
+  );
+  repo.write("src/value.ts", "export const value = 1;\n");
+  const head = repo.commit();
+  repo.git("switch", "--quiet", "main");
+  repo.write("README.md", "new approved base\n");
+  const base = repo.commit();
+  repo.git("update-ref", "refs/remotes/origin/main", base);
+  repo.git("merge", "--quiet", "--no-ff", "-m", "test integration", "ticket/demo-01");
+  const merge = repo.git("rev-parse", "HEAD").trim();
+  const eventPath = join(repo.root, ".git/event.json");
+  writeFileSync(
+    eventPath,
+    JSON.stringify({
+      pull_request: {
+        head: { sha: head, ref: "ticket/demo-01" },
+        base: { sha: base, ref: "main" },
+        merge_commit_sha: merge,
+      },
+    }),
+  );
+  repo.write("GLOSSARY.md", "# An uncommitted document\n");
+  const result = repo.run([], {
+    GITHUB_ACTIONS: "true",
+    GITHUB_EVENT_NAME: "pull_request",
+    GITHUB_EVENT_PATH: eventPath,
+    GITHUB_SHA: merge,
+  });
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /Inputs changed during raw checks/u);
+  assert.equal(result.receipt.inputIntegrity.status, "fail");
+  assert.equal(result.receipt.inputIntegrity.scope, "whole-tree");
+});
+
+test("a run whose gate reads the whole tree binds the whole tree", (t) => {
+  const repo = fixture(t);
+  repo.write(
+    "test/value.test.ts",
+    "import { expect, test } from 'vitest'; import { value } from '../src/value.ts'; test('behavior', () => expect(value).toBe(1));\n",
+  );
+  repo.write("src/value.ts", "export const value = 1;\n");
+  repo.commit();
+  repo.write("GLOSSARY.md", "# An uncommitted document\n");
+  const result = repo.runGate("G1");
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /dirty inputs/u);
+  assert.equal(result.receipt.inputIntegrity.scope, "whole-tree");
+});
+
+test("a staged file the commit does not hold fails the run that would read it", (t) => {
+  const repo = fixture(t);
+  repo.write(
+    "test/value.test.ts",
+    "import { expect, test } from 'vitest'; import { value } from '../src/value.ts'; test('behavior', () => expect(value).toBe(1));\n",
+  );
+  repo.write("src/value.ts", "export const value = 1;\n");
+  repo.commit();
+  repo.write("src/staged.ts", "export const staged = 1;\n");
+  repo.git("add", "src/staged.ts");
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /dirty inputs/u);
+  assert.match(result.output, /src\/staged\.ts/u);
+});
+
+test("an untracked source file fails the run that would measure it", (t) => {
+  const repo = fixture(t);
+  repo.write(
+    "test/value.test.ts",
+    "import { expect, test } from 'vitest'; import { value } from '../src/value.ts'; test('behavior', () => expect(value).toBe(1));\n",
+  );
+  repo.write("src/value.ts", "export const value = 1;\n");
+  repo.commit();
+  repo.write("src/extra.ts", "export const extra = 1;\n");
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /dirty inputs/u);
+  assert.match(result.output, /src\/extra\.ts/u);
+});
+
+test("an uncommitted policy input fails the run that would measure it", (t) => {
+  const repo = fixture(t);
+  repo.write(
+    "test/value.test.ts",
+    "import { expect, test } from 'vitest'; import { value } from '../src/value.ts'; test('behavior', () => expect(value).toBe(1));\n",
+  );
+  repo.write("src/value.ts", "export const value = 1;\n");
+  repo.commit();
+  repo.write("tsconfig.json", '{"compilerOptions":{"strict":false}}\n');
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /dirty inputs/u);
+  assert.match(result.output, /tsconfig\.json/u);
+});
+
+test("an uncommitted test file fails the run that would replay it", (t) => {
+  const repo = fixture(t);
+  repo.write(
+    "test/value.test.ts",
+    "import { expect, test } from 'vitest'; import { value } from '../src/value.ts'; test('behavior', () => expect(value).toBe(1));\n",
+  );
+  repo.write("src/value.ts", "export const value = 1;\n");
+  repo.commit();
+  repo.write(
+    "test/value.test.ts",
+    "import { expect, test } from 'vitest'; import { value } from '../src/value.ts'; test('behavior', () => expect(value).toBe(2));\n",
+  );
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /dirty inputs/u);
+  assert.match(result.output, /test\/value\.test\.ts/u);
+});
+
+test("an uncommitted ignore rule fails the run it would measure", (t) => {
+  const repo = fixture(t);
+  repo.write(
+    "test/value.test.ts",
+    "import { expect, test } from 'vitest'; import { value } from '../src/value.ts'; test('behavior', () => expect(value).toBe(1));\n",
+  );
+  repo.write("src/value.ts", "export const value = 1;\n");
+  repo.commit();
+  repo.write(".gitignore", "node_modules\n.tools/\nsrc/\n");
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /dirty inputs/u);
+  assert.match(result.output, /\.gitignore/u);
+});
+
+test("an uncommitted rule source fails the run it would judge with", (t) => {
+  const repo = fixture(t);
+  repo.write(
+    "test/value.test.ts",
+    "import { expect, test } from 'vitest'; import { value } from '../src/value.ts'; test('behavior', () => expect(value).toBe(1));\n",
+  );
+  repo.write("src/value.ts", "export const value = 1;\n");
+  repo.write(".archgate/adrs/SUP-001-rule.md", "# Reviewed rule\n");
+  repo.commit();
+  repo.write(".archgate/adrs/SUP-001-rule.md", "# Edited rule\n");
+  const result = repo.run();
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /dirty inputs/u);
+  assert.match(result.output, /SUP-001-rule\.md/u);
+});
+
 test("raw checks reject hidden worktree bytes while preserving caller index flags", (t) => {
   for (const flag of ["--assume-unchanged", "--skip-worktree"]) {
     const repo = fixture(t);

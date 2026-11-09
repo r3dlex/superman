@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, matchesGlob } from "node:path";
+import { isSourceFile } from "./evidence.ts";
 import { runOwned } from "./replay.ts";
 
 /** The complete raw gate inventory. A full stage must run every one of them. */
@@ -47,12 +48,6 @@ export type GateContext = {
   /** The scope the stage declared: staged files, or the whole repository. */
   scope?: StageScope;
 };
-
-const sourceExtensions = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte", ".astro"];
-
-function isSourceFile(file: string): boolean {
-  return sourceExtensions.some((extension) => file.endsWith(extension));
-}
 
 function toolFailure(
   argv: string[],
