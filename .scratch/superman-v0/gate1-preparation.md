@@ -3416,10 +3416,58 @@ The passing and failing local cases also assert that the run's own `TMPDIR` is e
 
 **Covers:** SB02 and SB03 for G1, SB04's shared snapshot, SB05 for G1. The prototype ran the snapshot's linked `node_modules/.bin/archgate` directly. Whether `pnpm exec archgate` resolves inside the snapshot is unproven, so prove it in a red before relying on it.
 
-- [ ] All three reds written first and seen failing for the stated reason
-- [ ] Node original and Deno twin changed together; parity suites green
-- [ ] Guards and the slice verification green
-- [ ] Committed on the lane branch, with the evidence note appended here
+- [x] All three reds written first and seen failing for the stated reason
+- [x] Node original and Deno twin changed together; parity suites green
+- [x] Guards and the slice verification green
+- [x] Committed on the lane branch, with the evidence note appended here
+
+##### RB2 evidence — 2026-11-09
+
+**Authority and skills.** André approved the RB2 plan on 2026-11-09 as presented, and chose to record the base-commit guard rather than build it (below). The work continued on the same lane and worktree, on top of `d99fdef`. Matt `tdd` drove three slices, Matt `code-review` ran the independent Standards and Spec review with a second pass on its fixes, and Matt `writing-for-agents` shaped this note. No push, installation, hosted write, activation, approval or merge followed.
+
+**Planning probes**, run in the scratchpad before the plan: pinned pnpm's `exec` resolves inside an owned snapshot (PATH led by `<snapshot>/node_modules/.bin`, `which archgate` the snapshot's link, `--version` 0.61.0); a failing Archgate check prints relative paths but carries its own `durationMs`; `ownedSnapshot`'s local clone copies the whole object store; and Archgate's verdict was identical with a valid and an unknown `--base`, for a violation the commit changed and for one it did not.
+
+**What changed.** `SNAPSHOT_GATES` (`G1`, `G11`) in both `direct-gates.ts` names the gates that read the owned snapshot, and the driver builds the one snapshot when a local merge-candidate run selects any of them, so a full run shares it. `judgedContext(gate, ctx)` replaces RB1's inline G11 check: an unbuildable snapshot fails the gate with its cause (`skipped-required-work`) before its tool runs; otherwise the gate's context is rooted at the snapshot, or at the checkout where the driver built none. G1's pin (the commit's declared version, the installed one through the snapshot's linked modules, the executable probe), both Archgate checks and the `git ls-files` inventory run in that context, and Archgate regenerates its rule declarations there. The staged form keeps `--staged` on the live checkout and index; the binding rule is unchanged. The temporary directory's prefix is now `superman-snapshot-`.
+
+**Red → green** — `node --test --test-concurrency=1 --test-name-pattern '<case>'` over `.superman/ci/raw-gates.test.ts` or `.superman/deno-bootstrap/tests/staged-scope.test.ts`:
+
+| Case | Red | Green |
+|---|---|---|
+| Red 5: *a local G1 run whose owned snapshot cannot be built fails with the cause and never runs Archgate* | at `d99fdef`: exit 0, `G1: pass` | slice A |
+| Red 1: *a local G1 run judges an owned snapshot of the commit, not a file the checkout ignores* | after slice A: exit 1, `planted finding in the judged tree`; Archgate's checks ran in the checkout | slice B1 |
+| Red 3: *a local G1 run leaves Archgate's regenerated rule declarations out of the caller's checkout* (real pinned Archgate) | after slice A: the run passed and `.archgate/rules.d.ts` appeared in the checkout | slice B1 |
+| Red 4: *a local G1 run resolves pnpm's archgate inside the owned snapshot* | after slice B1: "pnpm ran Archgate in <checkout>", the version probe; at `d99fdef`: every call there | slice B2 |
+| Red 2: *a local pre-PR run's G1 and G11 read one owned snapshot* | after slice B1: the checkout and the snapshot, `2 !== 1`; at `d99fdef`: G1's checkout and G11's snapshot | slice B2 |
+| Parity twins of reds 1–5 | red after each Node change alone (`assertParity` status or results; the Deno host in the checkout) | green after each Deno mirror |
+| Guards: `--stage ci` and `--stage nightly --gate G1` keep the checkout under an absent `TMPDIR`; a scoped `--stage pre-commit --gate G1` keeps it, in both hosts | green at `d99fdef` | green |
+| Review-driven parity guard: *a committed suppression fails a local G1 run under the real pinned Archgate in both hosts* | green at `d99fdef` | green |
+
+**pnpm resolution, proven.** Red 4 replaces the fixture's reviewed Archgate package with a stand-in and leaves `ARCHGATE_BIN` unset. It passes only when the receipt's `tools.archgate.executableVersion` is the stand-in's own `archgate 0.61.0 (stand-in)`, and when every Archgate call, version probe and both checks, was found in `<snapshot>/node_modules/.bin`, ran with PATH led by that directory, and ran inside a snapshot outside the repository that is gone after the run. A pnpm that resolved nothing would fail the run with "not found", and the red would stay red.
+
+**Snapshot paths in G1 diagnostics, settled.** G1's results carry no snapshot path. The suppression parity guard shows both hosts' failure reasons agree once Archgate's own `"durationMs"` is set aside, and that neither names the run's temporary directory; the stand-in cases keep byte-equal `results` parity.
+
+**Base-commit guard, recorded and not built.** André's decision rested on my claim that no fixture could reach a snapshot without the base commit. That claim was incomplete: from a shallow caller repository, git skips the local object copy and fetches only branches, tags and `HEAD`, so a base reachable only from `origin/main` would be missing from the snapshot. The decision stands on the probe's evidence: Archgate's verdict did not depend on the base, so a missing base does not narrow what G1 detects. A shallow local checkout remains a recorded limit; the explicit guard waits for a reason to build it.
+
+**Review.** Independent Standards and Spec sub-agents read the frozen delta `7105e52e…`: no hard breach of a documented standard, nothing CRITICAL or HIGH, no scope creep. Resolved inside the six files: stale comments and the temporary prefix; `SNAPSHOT_GATES` as the one gate list the driver and the gates share; `judgedContext` returning the judged context, so G1 uses one context throughout; in-file `readCalls`; `runPrePr` taking its branch from the fixture; both pre-PR cases asserting that G1 and G11 pass and that Archgate's and Trivy's directory sets are equal; and the suppression parity guard. A second pass by both reviewers on `689ab0f2…` approved every resolution; its last items were applied without changing behaviour: the staged form's explicit live-index context, a read-only `SNAPSHOT_GATES` whose comment states its coupling to `judgedContext`, and comment wording. An optional refusal of an unlisted gate inside `judgedContext` was left out: no run reaches it today, so it would ship an uncovered branch against the coverage margin below.
+
+**Slice verification.**
+
+- On `689ab0f2…`, which differs from the commit only in comments, one type annotation and the staged form's original `ctx`: `node --test --test-concurrency=1 .superman/ci/raw-gates.test.ts .superman/ci/raw-routing.test.ts .superman/ci/bootstrap-coverage.test.ts` 203/203; `node --test --test-concurrency=1 .superman/deno-bootstrap/tests/*.test.ts` 110/110; `node_modules/.bin/vitest run --config vitest.config.ts .superman/ci/critical` 37/37 in 8 files.
+- On `ccaa0c5`: the G1 and G11 cases 14/14, the routing suite's pre-commit and staged cases 15/15, and the parity G1, G11 and staged cases 21/21; `node_modules/.bin/biome ci .` exit 0 with 149 infos; `node_modules/.bin/tsrs --noEmit`, `node_modules/.bin/knip`, `deno check` on the two twin drivers and `git diff --check` pass; the pinned `archgate check --strict` passes 16 of 16 rules.
+- On `ccaa0c5`, after `"$SUPERMAN_DENO_BIN" run --no-prompt --no-config --no-lock --no-npm --no-remote --allow-read --allow-write --allow-env --allow-run .superman/deno-bootstrap/coverage.ts` wrote a fresh receipt (110/110 process tests; exit 1 for the Deno surface's carried 47.65% line floor): `node .superman/ci/coverage.ts` passes. Its receipt (sha256 `169b5b2a…`) binds `evaluatedSha` `ccaa0c5`, and the Node inventory's 21 files measure lines 2798/2914 (96.01%), statements 3125/3285 (95.12%), functions 433/450 (96.22%) and branches 2529/2809 (90.03%).
+
+**Commit.** `ccaa0c5` — `feat(ci): judge the local G1 inside the owned snapshot of the commit` — on `spec/superman-v0-snapshot-scan`: six files, +737/−90. This note is the lane's fourth commit.
+
+**Limits.**
+
+- G6 stays refused until RB4, and `superman.ratchet.json` is untouched. The eight critical cases drive G9 and G2 only, so `judgedContext` and G1's changed lines will read NoCoverage in RB4's remeasurement unless Gate 1 adds a critical case.
+- G1 and G11 still bind the whole tree; `evidence.ts:34-36` and the guard comment in both `direct-gates.ts` change in RB3, together with SUP-007's refusal and the lockfile precondition.
+- A shallow caller repository can leave the base commit out of the snapshot (above).
+- Node branch coverage still clears its floor by one covered branch (2529/2809); RB3 adds code against that margin.
+- The evidence is local, on darwin-arm64; Archgate's real runs used the pinned 0.61.0 through `ARCHGATE_BIN`, and pnpm resolution was proven with a stand-in package, not with the npm shim's cache.
+- The stand-in helpers are duplicated across the two suites; sharing them needs a module outside this slice's files.
+
+**Next.** RB3 — *The full local pre-PR run binds its gate inputs* — is the next dependency-ready slice. RB4 stays open.
 
 #### RB3 — The full local pre-PR run binds its gate inputs
 
