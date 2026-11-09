@@ -386,8 +386,9 @@ try {
   if (!["pre-commit", "pre-pr", "ci", "nightly"].includes(stage)) throw new Error("Unknown raw stage selector");
   receipt.stage = stage;
   const declared = stagePolicy(Deno.cwd(), stage);
-  // The gates this run selects decide what it binds: a gate that reads the
-  // whole tree binds the whole tree, and the rest bind the inputs they read.
+  // The gates this run selects decide what a local merge-candidate run binds:
+  // the inputs they read, or the whole tree while one of them reads it. None
+  // does: G1 and G11 read an owned snapshot of the commit (evidence.ts).
   const selected = values.gate ? [values.gate] : declared.gates;
   if (selected.some((gate) => !gates.includes(gate))) throw new Error("Unknown raw gate selector");
   // The CI leg keeps the whole-tree rule: there the checkout is the commit, so
@@ -401,10 +402,9 @@ try {
     stage === "nightly";
   const wholeTree = ciRun || bindsWholeTree(selected);
   // The local merge-candidate run: neither the CI leg nor the staged stage. It
-  // binds what its selected gates read, the whole tree while one of them reads
-  // it, and its snapshot gates read an owned snapshot of the evaluated commit
-  // (§5.4). The binding checks and the snapshot read this one predicate, so
-  // they always select the same leg.
+  // binds what its selected gates read, and its snapshot gates read an owned
+  // snapshot of the evaluated commit (§5.4). The binding checks and the
+  // snapshot read this one predicate, so they always select the same leg.
   const localCandidateRun = !ciRun && declared.scope !== "staged";
   // The preconditions depend on the stage's scope, so they are resolved here
   // rather than before the stage is known.
@@ -424,10 +424,9 @@ try {
     if ((gitOptional("symbolic-ref", "--quiet", "--short", "HEAD") ?? "") !== String(receipt.branch))
       throw new Error("G9: HEAD_REF does not match the local branch");
     // A local run binds what its gates read: the inputs the selected gates read
-    // must hold the committed bytes, and the whole tree when a gate reads the
-    // whole tree. A document the gates never read cannot change a result, so an
-    // uncommitted document is the caller's work in progress and not a reason to
-    // refuse the measurement.
+    // must hold the committed bytes. A document the gates never read cannot
+    // change a result, so an uncommitted document is the caller's work in
+    // progress and not a reason to refuse the measurement.
     if (localCandidateRun) {
       const changed = changedEvidenceInputs(Deno.cwd(), String(receipt.evaluatedSha), selected, wholeTree);
       if (changed.files.length) {

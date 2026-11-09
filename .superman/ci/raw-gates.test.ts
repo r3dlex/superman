@@ -164,7 +164,7 @@ test("the CI leg refuses a tree it did not commit, document or not", (t) => {
   assert.equal(result.receipt.inputIntegrity.scope, "whole-tree");
 });
 
-test("a run whose gate reads the whole tree binds the whole tree", (t) => {
+test("a local G1 run binds the inputs its gates read and judges the commit, not an uncommitted document", (t) => {
   const repo = fixture(t);
   repo.write(
     "test/value.test.ts",
@@ -173,10 +173,30 @@ test("a run whose gate reads the whole tree binds the whole tree", (t) => {
   repo.write("src/value.ts", "export const value = 1;\n");
   repo.commit();
   repo.write("GLOSSARY.md", "# An uncommitted document\n");
-  const result = repo.runGate("G1");
-  assert.equal(result.status, 1, result.output);
-  assert.match(result.output, /dirty inputs/u);
-  assert.equal(result.receipt.inputIntegrity.scope, "whole-tree");
+  const archgate = markerArchgate(repo);
+  const result = repo.runGate("G1", [], { ARCHGATE_BIN: archgate.binary, TMPDIR: runTemporary(t) });
+  assert.equal(result.status, 0, result.output);
+  assert.deepEqual(result.receipt.inputIntegrity, { scope: "gate-inputs", status: "pass" });
+  assert.equal(result.receipt.results[0].status, "pass");
+  const judged = new Set(archgate.checks());
+  assert.notEqual(judged.size, 0, "Archgate never checked a tree");
+  for (const root of judged)
+    assert.ok(outside(realpathSync(repo.root), root), `Archgate judged ${root}, inside the caller's repository`);
+});
+
+test("a full local pre-PR run accepts a document it did not commit", (t) => {
+  const repo = fixture(t, "spec/demo");
+  repo.commit();
+  repo.write(".scratch/demo/note.md", "# An uncommitted note\n");
+  const archgate = markerArchgate(repo);
+  const trivy = scanRootTrivy(repo);
+  const result = runPrePr(repo, { ARCHGATE_BIN: archgate.binary, TRIVY_BIN: trivy.binary, TMPDIR: runTemporary(t) });
+  // The fixture is minimal, so the full run's other gates fail on what it
+  // lacks (a test suite, its tool configurations and a ratchet): the case
+  // asserts the binding, not the verdict.
+  assert.ok(result.receipt, result.output);
+  assert.doesNotMatch(result.output, /dirty inputs/u);
+  assert.deepEqual(result.receipt.inputIntegrity, { scope: "gate-inputs", status: "pass" });
 });
 
 test("a staged file the commit does not hold fails the run that would read it", (t) => {
@@ -475,9 +495,18 @@ function runPrePr(
  * exclude file: the exclude file is the clone's and is never committed.
  */
 function plantIgnoredFinding(repo: { root: string; write: (path: string, content: string) => void }): void {
+  writeIgnored(repo, plantedFinding, "a finding the commit does not hold\n");
+}
+
+/** Write a file the commit does not hold, ignored by the caller's own exclude file, which is never committed. */
+function writeIgnored(
+  repo: { root: string; write: (path: string, content: string) => void },
+  file: string,
+  content: string,
+): void {
   mkdirSync(join(repo.root, ".git/info"), { recursive: true });
-  writeFileSync(join(repo.root, ".git/info/exclude"), `${plantedFinding}\n`, { flag: "a" });
-  repo.write(plantedFinding, "a finding the commit does not hold\n");
+  writeFileSync(join(repo.root, ".git/info/exclude"), `${file}\n`, { flag: "a" });
+  repo.write(file, content);
 }
 
 /** A temporary directory handed to the run as its own, so what the run leaves there is visible. */
@@ -557,6 +586,59 @@ test("a local G11 run whose owned snapshot cannot be built fails with the cause 
   assert.equal(trivy.ran(), false, "the scanner ran although its owned snapshot could not be built");
 });
 
+test("a local G11 run scans the commit, not a file the checkout holds untracked", (t) => {
+  const repo = fixture(t);
+  repo.commit();
+  const trivy = scanRootTrivy(repo);
+  repo.write(plantedFinding, "a finding the commit does not hold, neither committed nor ignored\n");
+  const result = repo.runGate("G11", [], { TRIVY_BIN: trivy.binary, TMPDIR: runTemporary(t) });
+  assert.equal(result.status, 0, result.output);
+  assert.deepEqual(result.receipt.inputIntegrity, { scope: "gate-inputs", status: "pass" });
+  const scanned = new Set(trivy.roots());
+  assert.notEqual(scanned.size, 0, "the scanner never scanned");
+  for (const root of scanned)
+    assert.ok(outside(realpathSync(repo.root), root), `the scan read ${root}, inside the caller's repository`);
+});
+
+test("a local G11 run refuses a Trivy config or ignore file the commit holds, though the checkout deleted it", async (t) => {
+  for (const file of ["trivy.yaml", ".trivyignore"]) {
+    await t.test(file, (t) => {
+      const repo = fixture(t, "spec/demo");
+      repo.write(file, "{}\n");
+      repo.commit();
+      // The commit is the approved base, so the policy preflight sees no change.
+      repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+      rmSync(join(repo.root, file));
+      const trivy = scanRootTrivy(repo);
+      const result = repo.runGate("G11", [], { TRIVY_BIN: trivy.binary, TMPDIR: runTemporary(t) });
+      assert.equal(result.status, 1, result.output);
+      assert.equal(result.receipt.error, undefined, "the run was refused as a whole instead of by G11");
+      assert.equal(result.receipt.results[0].kind, "policy-refusal", result.output);
+      assert.match(result.receipt.results[0].reason, /G11: Trivy ignore\/config files are forbidden/u);
+      assert.equal(trivy.ran(), false, "the scanner ran over a commit that holds a Trivy config or ignore file");
+    });
+  }
+});
+
+test("a local G11 run refuses a commit without the reviewed lockfile, though the checkout holds one", (t) => {
+  const repo = fixture(t, "spec/demo");
+  const lock = readFileSync(join(repo.root, "pnpm-lock.yaml"), "utf8");
+  rmSync(join(repo.root, "pnpm-lock.yaml"));
+  repo.commit();
+  // The commit is the approved base, so the policy preflight sees no change.
+  repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+  // The caller's copy of the lock, ignored by the caller's own exclude file,
+  // so the binding does not count a file the commit does not hold.
+  writeIgnored(repo, "pnpm-lock.yaml", lock);
+  const trivy = scanRootTrivy(repo);
+  const result = repo.runGate("G11", [], { TRIVY_BIN: trivy.binary, TMPDIR: runTemporary(t) });
+  assert.equal(result.status, 1, result.output);
+  assert.equal(result.receipt.error, undefined, "the run was refused as a whole instead of by G11");
+  assert.equal(result.receipt.results[0].kind, "policy-refusal", result.output);
+  assert.match(result.receipt.results[0].reason, /G11: dependency scan requires the reviewed lockfile/u);
+  assert.equal(trivy.ran(), false, "the scanner ran over a commit without the reviewed lockfile");
+});
+
 test("a committed finding still fails a local G11 run, which leaves no owned snapshot behind", (t) => {
   const repo = fixture(t);
   repo.write(plantedFinding, "a finding the commit holds\n");
@@ -590,6 +672,8 @@ test("the CI and nightly legs' G11 still reads the checkout and builds no owned 
       assert.equal(result.status, 1, result.output);
       assert.match(result.receipt.results[0].reason, /Trivy reported 1 HIGH\/CRITICAL finding/u);
       assert.deepEqual([...new Set(trivy.roots())], [realpathSync(repo.root)]);
+      // The CI and nightly legs keep the whole-tree rule.
+      assert.equal(result.receipt.inputIntegrity.scope, "whole-tree");
     });
   }
 });
@@ -730,6 +814,8 @@ test("the CI and nightly legs' G1 still judges the checkout and builds no owned 
       assert.equal(result.status, 1, result.output);
       assert.match(result.receipt.results[0].reason, /planted finding in the judged tree/u);
       assert.deepEqual([...new Set(archgate.directories())], [realpathSync(repo.root)]);
+      // The CI and nightly legs keep the whole-tree rule.
+      assert.equal(result.receipt.inputIntegrity.scope, "whole-tree");
     });
   }
 });

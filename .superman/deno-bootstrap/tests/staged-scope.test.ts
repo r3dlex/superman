@@ -573,9 +573,9 @@ test("a local full run refuses a tree it did not commit", (t) => {
     repo.write("src/value.ts", "export const value = 9;\n");
   });
   assert.notEqual(observed.node.status, 0);
-  assert.match(observed.node.output, /dirty inputs; commit or preserve them before replay/u);
+  assert.match(observed.node.output, /dirty inputs; commit or preserve them before replay: src\/value\.ts/u);
   assertParity(observed);
-  assert.match(observed.deno.output, /dirty inputs; commit or preserve them before replay/u);
+  assert.match(observed.deno.output, /dirty inputs; commit or preserve them before replay: src\/value\.ts/u);
   assert.equal(observed.deno.receipt?.verdict, "fail");
 });
 
@@ -595,6 +595,27 @@ test("a local scoped run accepts a document it did not commit", (t) => {
   assert.doesNotMatch(observed.deno.output, /dirty inputs/u);
   assert.equal(observed.node.receipt?.inputIntegrity.status, "pass");
   assert.equal(observed.deno.receipt?.inputIntegrity.status, "pass");
+});
+
+test("a local full run accepts a document it did not commit", (t) => {
+  // The input that reaches the binding: a full local pre-PR run over a tree
+  // whose only difference from the commit is an uncommitted document. The
+  // outcome it produces: both hosts bind the inputs their gates read and pass
+  // input integrity, so the document refuses nothing.
+  const repo = fixture(t);
+  const archgate = markerArchgate(repo);
+  const trivy = scanRootTrivy(repo);
+  const observed = runBoth(
+    repo,
+    ["--stage", "pre-pr"],
+    { ARCHGATE_BIN: archgate.binary, TRIVY_BIN: trivy.binary, TMPDIR: runTemporary(t) },
+    () => repo.write(".scratch/demo/note.md", "# An uncommitted note\n"),
+  );
+  for (const host of [observed.node, observed.deno]) {
+    assert.deepEqual(host.receipt?.inputIntegrity, { scope: "gate-inputs", status: "pass" }, host.output);
+    assert.doesNotMatch(host.output, /dirty inputs/u);
+  }
+  assertParity(observed);
 });
 
 /** The file the Trivy and Archgate stand-ins report as a finding when the tree they read holds it. */
@@ -743,9 +764,18 @@ console.log(JSON.stringify({ pass: true, results: [] }));
  * exclude file: the exclude file is the clone's and is never committed.
  */
 function plantIgnoredFinding(repo: { root: string; write: (file: string, content: string) => void }): void {
+  writeIgnored(repo, plantedFinding, "a finding the commit does not hold\n");
+}
+
+/** Write a file the commit does not hold, ignored by the caller's own exclude file, which is never committed. */
+function writeIgnored(
+  repo: { root: string; write: (file: string, content: string) => void },
+  file: string,
+  content: string,
+): void {
   mkdirSync(join(repo.root, ".git/info"), { recursive: true });
-  writeFileSync(join(repo.root, ".git/info/exclude"), `${plantedFinding}\n`, { flag: "a" });
-  repo.write(plantedFinding, "a finding the commit does not hold\n");
+  writeFileSync(join(repo.root, ".git/info/exclude"), `${file}\n`, { flag: "a" });
+  repo.write(file, content);
 }
 
 /** A temporary directory handed to both hosts as their own, so what a run leaves there is visible. */
@@ -916,6 +946,8 @@ test("the CI and nightly legs' G11 still read the checkout in both hosts", async
       assertParity(observed);
       assert.match(gateResult(observed.deno.receipt, "G11").reason ?? "", /Trivy reported 1 HIGH\/CRITICAL finding/u);
       assert.deepEqual([...new Set(trivy.roots())], [realpathSync(repo.root)]);
+      // The CI and nightly legs keep the whole-tree rule, whatever the host.
+      assert.equal(observed.node.receipt?.inputIntegrity.scope, "whole-tree");
     });
   }
 });
@@ -937,6 +969,8 @@ test("a scoped pre-commit G11 still reads the checkout in both hosts", (t) => {
   assertParity(observed);
   assert.match(gateResult(observed.deno.receipt, "G11").reason ?? "", /Trivy reported 1 HIGH\/CRITICAL finding/u);
   assert.deepEqual([...new Set(trivy.roots())], [realpathSync(repo.root)]);
+  // The staged stage binds its index, even for a scoped G11 run.
+  assert.equal(observed.node.receipt?.inputIntegrity.scope, "index");
 });
 
 test("a local G1 run judges an owned snapshot of the commit, not a file the checkout ignores", (t) => {
@@ -1152,6 +1186,8 @@ test("the CI and nightly legs' G1 still judge the checkout in both hosts", async
       assertParity(observed);
       assert.match(gateResult(observed.deno.receipt, "G1").reason ?? "", /planted finding in the judged tree/u);
       assert.deepEqual([...new Set(archgate.directories())], [realpathSync(repo.root)]);
+      // The CI and nightly legs keep the whole-tree rule, whatever the host.
+      assert.equal(observed.node.receipt?.inputIntegrity.scope, "whole-tree");
     });
   }
 });
@@ -1173,6 +1209,121 @@ test("a scoped pre-commit G1 still judges the checkout in both hosts", (t) => {
   assertParity(observed);
   assert.match(gateResult(observed.deno.receipt, "G1").reason ?? "", /planted finding in the judged tree/u);
   assert.deepEqual([...new Set(archgate.directories())], [realpathSync(repo.root)]);
+  // The staged stage binds its index, even for a scoped G1 run.
+  assert.equal(observed.node.receipt?.inputIntegrity.scope, "index");
+});
+
+test("a local scoped G1 run binds the inputs its gates read and judges the commit in both hosts", (t) => {
+  // The input that reaches the binding: a scoped G1 run over a tree that
+  // carries an uncommitted edit of a document. The outcome it produces: both
+  // hosts bind the inputs their gates read, pass input integrity, and run
+  // Archgate's checks in an owned snapshot of the commit.
+  const repo = fixture(t, ({ write }) => {
+    write(".scratch/demo/note.md", "# Reviewed note\n");
+  });
+  const archgate = markerArchgate(repo);
+  const observed = runBoth(
+    repo,
+    ["--stage", "pre-pr", "--gate", "G1"],
+    { ARCHGATE_BIN: archgate.binary, TMPDIR: runTemporary(t) },
+    () => repo.write(".scratch/demo/note.md", "# Edited note\n"),
+  );
+  assert.equal(observed.node.status, 0, observed.node.output);
+  assertParity(observed);
+  assert.deepEqual(observed.node.receipt?.inputIntegrity, { scope: "gate-inputs", status: "pass" });
+  const judged = new Set(archgate.checks());
+  assert.notEqual(judged.size, 0, "no host ran Archgate's checks");
+  for (const root of judged)
+    assert.ok(outside(realpathSync(repo.root), root), `a host judged ${root}, inside the caller's repository`);
+});
+
+test("a local G11 run scans the commit, not a file the checkout holds untracked, in both hosts", (t) => {
+  // The input that reaches the scan: a local scoped G11 run over a checkout
+  // that holds a finding neither committed nor ignored. The outcome it
+  // produces: the file refuses nothing, and both hosts scan an owned snapshot
+  // of the commit that does not hold it.
+  const repo = fixture(t);
+  const trivy = scanRootTrivy(repo);
+  const observed = runBoth(
+    repo,
+    ["--stage", "pre-pr", "--gate", "G11"],
+    { TRIVY_BIN: trivy.binary, TMPDIR: runTemporary(t) },
+    () => repo.write(plantedFinding, "a finding the commit does not hold, neither committed nor ignored\n"),
+  );
+  assert.equal(observed.node.status, 0, observed.node.output);
+  assertParity(observed);
+  assert.deepEqual(observed.node.receipt?.inputIntegrity, { scope: "gate-inputs", status: "pass" });
+  const scanned = new Set(trivy.roots());
+  assert.notEqual(scanned.size, 0, "no host scanned");
+  for (const root of scanned)
+    assert.ok(outside(realpathSync(repo.root), root), `a host scanned ${root}, inside the caller's repository`);
+});
+
+test("a local G11 run refuses a Trivy config or ignore file the commit holds, though the checkout deleted it, in both hosts", async (t) => {
+  // The input that reaches SUP-007's refusal: a Trivy config or ignore file
+  // the commit holds and the caller's working copy deleted. The outcome it
+  // produces: both hosts refuse it from the root the scan reads, as a policy
+  // refusal, before any scanner runs.
+  for (const file of ["trivy.yaml", ".trivyignore"]) {
+    await t.test(file, (t) => {
+      const repo = fixture(t, ({ write }) => {
+        write(file, "{}\n");
+      });
+      const trivy = scanRootTrivy(repo);
+      const observed = runBoth(
+        repo,
+        ["--stage", "pre-pr", "--gate", "G11"],
+        { TRIVY_BIN: trivy.binary, TMPDIR: runTemporary(t) },
+        () => rmSync(join(repo.root, file)),
+      );
+      assert.equal(observed.node.status, 1, observed.node.output);
+      // Each host's own output names how it decided, so a host that was
+      // refused as a whole, or that passed, says so.
+      for (const host of [observed.node, observed.deno]) {
+        assert.equal(host.receipt?.error, undefined, host.output);
+        const g11 = gateResult(host.receipt, "G11");
+        assert.equal(g11.kind, "policy-refusal", host.output);
+        assert.match(g11.reason ?? "", /G11: Trivy ignore\/config files are forbidden/u);
+      }
+      assertParity(observed);
+      assert.equal(trivy.ran(), false, "a host ran the scanner over a commit that holds a Trivy config or ignore file");
+    });
+  }
+});
+
+test("a local G11 run refuses a commit without the reviewed lockfile, though the checkout holds one, in both hosts", (t) => {
+  // The input that reaches the lockfile precondition: a commit without the
+  // reviewed lockfile, whose caller's checkout holds a copy the caller's own
+  // exclude file ignores. The outcome it produces: both hosts refuse it from
+  // the root the scan reads, as a policy refusal, before any scanner runs.
+  const repo = fixture(t, ({ root, write }) => {
+    rmSync(join(root, "pnpm-lock.yaml"));
+    // The G4 preflight resolves vitest.config.ts's package import only against
+    // the reviewed lockfile, so a commit without the lockfile stops there
+    // while its policy declares that file. This commit's policy declares no
+    // Vitest configuration, which G11 never reads; the raw-gates fixture's
+    // configuration imports no package.
+    rmSync(join(root, "vitest.config.ts"));
+    const policy = JSON.parse(readFileSync(join(root, ".superman/ci/bootstrap.json"), "utf8"));
+    policy.policyInputs = policy.policyInputs.filter((file: string) => file !== "vitest.config.ts");
+    write(".superman/ci/bootstrap.json", `${JSON.stringify(policy, null, 2)}\n`);
+  });
+  const trivy = scanRootTrivy(repo);
+  const observed = runBoth(
+    repo,
+    ["--stage", "pre-pr", "--gate", "G11"],
+    { TRIVY_BIN: trivy.binary, TMPDIR: runTemporary(t) },
+    () => writeIgnored(repo, "pnpm-lock.yaml", readFileSync(join(repository, "pnpm-lock.yaml"), "utf8")),
+  );
+  assert.equal(observed.node.status, 1, observed.node.output);
+  for (const host of [observed.node, observed.deno]) {
+    assert.equal(host.receipt?.error, undefined, host.output);
+    const g11 = gateResult(host.receipt, "G11");
+    assert.equal(g11.kind, "policy-refusal", host.output);
+    assert.match(g11.reason ?? "", /G11: dependency scan requires the reviewed lockfile/u);
+  }
+  assertParity(observed);
+  assert.equal(trivy.ran(), false, "a host ran the scanner over a commit without the reviewed lockfile");
 });
 
 test("a declared partial stage may not declare a whole-repository scope", (t) => {
@@ -1217,6 +1368,8 @@ test("a pre-commit run executes the staged forms and a pre-pr run executes the w
   assert.equal(stagedRun.node.status, 0, stagedRun.node.output);
   assertParity(stagedRun);
   assert.equal(stagedRun.deno.receipt?.inputScope, "staged");
+  // The staged stage binds its index, in both hosts.
+  assert.equal(stagedRun.node.receipt?.inputIntegrity.scope, "index");
   for (const gate of ["G1", "G10"]) {
     assert.equal(
       gateResult(stagedRun.deno.receipt, gate).scope,

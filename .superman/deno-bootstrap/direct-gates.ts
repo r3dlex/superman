@@ -549,14 +549,16 @@ export async function directGate(gate: string, ctx: GateContext): Promise<GateRe
   }
   const policy = await config(ctx);
   if (gate === "G11") {
-    // The lockfile precondition and SUP-007's ignore/config refusal read the
-    // checkout. A local run's G11 binds the whole tree, so a checkout that
-    // lacks or alters a file the commit holds is refused before this gate
-    // runs, and the guards see every file the owned snapshot carries.
-    if (!existsSync(join(ctx.root, "pnpm-lock.yaml")))
+    // The tree the scan reads, before any guard or the scanner runs. The
+    // lockfile precondition and SUP-007's ignore/config refusal read the same
+    // root as the scan: a commit without the lockfile is refused though the
+    // caller's checkout holds one, and a Trivy config or ignore file the commit
+    // holds is refused though the checkout deleted it.
+    const scanContext = judgedContext("G11", ctx);
+    if (!existsSync(join(scanContext.root, "pnpm-lock.yaml")))
       throw new GateFailure("policy-refusal", "G11: dependency scan requires the reviewed lockfile");
     if (
-      readdirSync(ctx.root).some(
+      readdirSync(scanContext.root).some(
         (file) => file.startsWith(".trivyignore") || /^trivy\.(?:ya?ml|json|toml)$/u.test(file),
       )
     )
@@ -571,8 +573,6 @@ export async function directGate(gate: string, ctx: GateContext): Promise<GateRe
         status: "n/a",
         reason: "delegated to the required linux-x64 CI leg; an explicit delegation, not a tool pass",
       };
-    // The tree the scan reads, before the scanner runs.
-    const scanContext = judgedContext("G11", ctx);
     const command = ctx.env.TRIVY_BIN || "trivy";
     // The caller's Trivy environment never reaches the tool: only the cache
     // directory survives, so an inherited severity or skip list cannot shape

@@ -4,8 +4,10 @@
 // claim covers depends on what the gates read: the gates that measure a
 // snapshot of the commit read the commit, so the checkout cannot change their
 // result, and the gates that read the checkout itself bind what they read.
-// The whole tree is bound when a gate reads the whole tree: the SUP-005 rule
-// scans every file, and Trivy walks the checkout.
+// The whole tree is bound when a gate reads the whole tree. None does on the
+// local merge-candidate run, where G1 and G11 read an owned snapshot of the
+// commit; the staged stage binds its index and the CI leg the whole tree,
+// each by its own rule.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, readlinkSync } from "node:fs";
@@ -31,11 +33,13 @@ const ruleDirectory = ".archgate/";
 /**
  * The gates that read the whole tree.
  *
- * G1's Archgate scan reads every tracked file, because the SUP-005 rule
- * scopes every file, and G11's Trivy scan walks the checkout. A run that
- * includes either binds the whole tree.
+ * None does. The set decides only the local merge-candidate run's binding,
+ * and there G1's Archgate checks and G11's Trivy scan read an owned snapshot
+ * of the commit (§5.4), so a file the commit does not hold cannot reach them.
+ * The whole-tree binding remains, naming no gate, for a future gate that
+ * genuinely reads the checkout (§5.4).
  */
-const wholeTreeGates = ["G1", "G11"];
+const wholeTreeGates: readonly string[] = [];
 
 /** Whether a run of these gates binds the whole tree rather than their inputs. */
 export function bindsWholeTree(gates: string[]): boolean {
