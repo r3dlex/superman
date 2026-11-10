@@ -1,0 +1,26 @@
+# 11: Tag-authorized verified-artifact GitHub release
+
+**Milestone:** M11
+
+**What to build:** Release templates and verified-artifact upload behavior for the first usable MIT v0, after all M7b/M7c work and ticket 33's source/three-binary acceptance. André's `v*` tag authorizes GitHub release uploads, **not npm publication**. Unprivileged jobs run uncached applicable checks and exact-artifact scans; a separately restricted uploader verifies run/tag/SHA/provenance/digests without installs/rebuilds/tests/project hooks. Spec §12.2 owns applicability and reviewed-main provenance. The historical filename/ID is retained; no npm/npx channel or registry setup is included.
+
+**Blocked by:** 10, 24, 32, 33, spec/superman-v0-dogfood-init, spec/superman-v0-gate-ci, spec/superman-v0-skills-pin, spec/superman-v0-overlay-catalog, spec/superman-v0-harness-catalogs, spec/superman-v0-remote-cache, spec/superman-v0-affected, spec/superman-v0-vault, spec/superman-v0-wiki-gate, spec/superman-v0-wiki-skills, spec/superman-v0-wiki-maintenance, spec/superman-v0-codegraph
+
+**Status:** ready-for-agent
+
+**Kind:** behavior
+
+**Protected-path follow-up:** `spec/superman-v0-release` installs the reviewed separate-job workflow/uploader policy and final release settings after implementation/fixtures. MIT LICENSE/release metadata and concrete allowlist/build manifests must already have been adopted by `spec/superman-v0-release-assets` before 33; revalidate them rather than creating a 33↔11 dependency cycle. Resolve §8's actual restricted existing self-hosted role/tool/access identities and exact runtime/build inputs first. No hosted uploader or new VM/image platform is authorized. No actual upload, tag/account/credential operation or protected-policy activation is part of implementing this ticket.
+
+- [ ] The rendered workflow triggers only on André's `push` of `v*` tags on reviewed main; no dispatch/call/PR/`pull_request_target` route. A release-version/tag or reviewed-main mismatch fails before privileged activity.
+- [ ] Only the separately restricted uploader has minimum upload authority, normally `contents: write`. Build/install/test/scan jobs have no upload, cache-write/signing or publishing authority; actions are SHA-pinned and checkout credentials are not persisted. No npm publish/OIDC job, npm token or registry setup.
+- [ ] Build/test/scan and upload profiles each satisfy §8 using reviewed existing self-hosted environments and approved job-local locked tools. Unknown required route/runtime/environment/tool/access/support or a missing native leg blocks release, not hosted substitution, a stored-token fallback, new VM delivery or platform omission.
+- [ ] Incomplete v0/M7b/M7c/33 or named activation closure, missing MIT, unverified upload authority or unreviewed-main provenance blocks release. CodeGraph executable absence remains warning-only; the old npm placeholder is not usable-release evidence.
+- [ ] Exact allowlisted source/assets and three Deno binary archives/executables receive pinned Trivy scans; HIGH/CRITICAL blocks. Prove scanner coverage of actual formats/embedded runtimes/assets; unsupported/unscanned content is not green. Only the exact scanned, native-tested bytes are eligible for upload.
+- [ ] Runtime/compiler/denort/source/config/permission/assets/build and artifact identities match 33's verified manifests and exact native conformance evidence. Canonical source coverage/mutation is distinguished from binary process tests, not labeled collected binary coverage.
+- [ ] Before upload, validate a complete accepted §5.4 broad mutation result for the exact release revision/current measurement inputs: canonical approved Linux-x64 run, applicable native controls/delegation and its own §5.3 baseline/read-back. An unrelated weekly result, narrowed PR score, failed/partial receipt or unresolved critical finding blocks release. Unprivileged producers retain the broad lane's 60-minute aggregate mutation deadline/120-minute job cap; the uploader verifies their evidence without running mutation itself.
+- [ ] Human tag/upload-profile/license/closure prerequisites (§12.2) are reported as verified or still blocked; no npm account/publisher steps remain. Actual first-tag/upload evidence is collected only after separate human authorization, never simulated by this implementation ticket.
+- [ ] Artifact/digest/run/attempt/tag/SHA/profile substitution and missing evidence fail before upload. The Deno-operated uploader validates data through its reviewed protected implementation, never unreviewed candidate code; it does not install, rebuild, retest or execute project hooks.
+- [ ] Producer/consumer runtime and existing environment/tool identities plus provenance bind exact artifacts. Operator evidence establishes actual restricted upload credentials/access before activation; different job/Environment/label names alone are insufficient. Project execution cannot reach upload authority. Missing relevant separation blocks the uploader rather than requiring new disposable-VM infrastructure or claiming hostile-code containment on persistent hosts.
+
+Start with a release fixture that substitutes an archive from another run; verification must reject it before any privileged action.

@@ -1,0 +1,32 @@
+---
+Status: accepted
+---
+
+# Zero runtime dependencies, TypeScript only, one exec boundary
+
+The tooling superman replaces (autobahn, northstar) was about 11.5k lines with 6.7k of Python and 1.8k of bash, depended on daemons, and cost about 30k tokens of context. Superman remains TypeScript with zero third-party runtime libraries and no tracked shell/Python helpers. **The interview-confirmed Deno amendment (2026-11-01, ADR 0016) partially supersedes the original Node-only runtime/hook choice in the plan, not executable enforcement:** stable Web/Deno and supported `node:` built-ins are allowed; product subprocesses use `Deno.Command` only through `src/exec.ts`, with argv/no shell interpolation. Owned operational bootstrap/writers also move to Deno, while explicitly bounded dev/test/measurement drivers may retain real Node. External tools stay pinned devDependencies/CI binaries or checked PATH tools. Protected entrypoints are not a way around the product seam. No unmanaged persistent processes remains the restriction, not a ban on ordinary children/workers.
+
+## Considered Options
+
+- zod, commander and similar small dependencies: rejected; a hand-written validator and `node:util` `parseArgs` cover v0, and every dependency is supply-chain surface in a tool that guards merges.
+- Bash or Python glue for hooks and CI: rejected for the reasons above.
+- A second language-specific hook scheduler: rejected in Amendment 4. Lefthook wraps one Superman entrypoint; Superman retains change analysis, commands and receipts, so local/CI policy does not fork.
+
+## Lefthook adoption (M1 amendment 4, 2026-10-30)
+
+André chose language-agnostic hook delivery with external **Lefthook 2.2.2**, MIT, pinned commit `eb4e504b7c1d1ea6cb1fd29542431cb6d1a93a03`. The planned Deno Git adapter supersedes the earlier Node adapter but keeps safe repo-local hooksPath and `lefthook run pre-commit --no-auto-install --no-stage-fixed` after runtime/pin/config validation. Even compiled-CLI users need independently provisioned Deno for this portable hook. The effective config delegates one static `superman gate pre-commit` job; CI/nightly invoke Superman directly. Operational safeguards live in spec §5.6 and ticket 04; the existing Node-hook rule is unchanged pending §17's Gate 1 preparation.
+
+Native Lefthook installation was rejected: it generates shell hooks, replaces/backups existing hooks without chaining them, can remove `.github/hooks/lefthook.json`, and `--reset-hooks-path` can unset global Git configuration. Its npm postinstall calls `install`, so provisioning suppresses lifecycle scripts; `LEFTHOOK=0` alone is insufficient outside CI. `stage_fixed: false` also does not prevent the default partial-staging stash/restore, which is why the adapter uses the CLI flag.
+
+Lefthook executes `run` via `sh -c`, even with a runner. This is an explicit **external static-wrapper exception**, not permission for shell-interpolated gate commands or tracked shell helpers. There are no filename/argument placeholders. Missing tools/bypass config fail closed; child 1/2 distinctions remain in Superman's receipt because Lefthook collapses failures to 1. Existing managers/global config are refused, not silently repaired; concurrent worktree/direct-hook parity remains evidence to obtain, not a source-inspection claim.
+
+Primary sources at the pin: [LICENSE](https://github.com/evilmartians/lefthook/blob/eb4e504b7c1d1ea6cb1fd29542431cb6d1a93a03/LICENSE), [run flags](https://github.com/evilmartians/lefthook/blob/eb4e504b7c1d1ea6cb1fd29542431cb6d1a93a03/cmd/run.go), [partial-staging guard](https://github.com/evilmartians/lefthook/blob/eb4e504b7c1d1ea6cb1fd29542431cb6d1a93a03/internal/run/controller/guard.go), [shell executor](https://github.com/evilmartians/lefthook/blob/eb4e504b7c1d1ea6cb1fd29542431cb6d1a93a03/internal/run/controller/exec/exec_unix.go), [installer](https://github.com/evilmartians/lefthook/blob/eb4e504b7c1d1ea6cb1fd29542431cb6d1a93a03/internal/command/install.go), [postinstall](https://github.com/evilmartians/lefthook/blob/eb4e504b7c1d1ea6cb1fd29542431cb6d1a93a03/packaging/registries/npm/lefthook/postinstall.js).
+
+## Consequences
+
+- Current SUP-001 checks package dependency fields, SUP-002 matches Node spawning and SUP-003 requires Node hooks. They do **not** yet enforce the Deno plan. Gate 1 must prove allowed-runtime-import closure, `Deno.Command`/bypass and Deno-hook enforcement before product admission; no ticket may change its own governing rules.
+- Dev tools are never runtime dependencies (amended 2026-10-29). Biome (`@biomejs/biome`) and tsrs are exact-pinned devDependencies, and their native binaries come through their own `optionalDependencies` at dev time only. Trivy is an exact-pinned, checksum-verified external binary; the confirmed full local/CI profile requires it rather than skipping absent local scans (ADRs 0009/0017). Tools do not enter product `dependencies` or Deno release bundles. ADR 0014's protected coverage collector is the bounded development-tool API exception: c8's locked V8 merger/Istanbul reporters and Vitest's test API plus locked AST converter/parser combine complete subprocess/rule and product measurements. Product code and other bootstrap process boundaries retain the built-in-only rule.
+- No Python tooling either: no Ruff and no Python linters. Polyglot repos use their own language's tools.
+- An OpenCode JS plugin that needs `@opencode/plugin` at runtime would break this rule, so v0 integrates with OpenCode through skills only (ADR 0006).
+- The full YAML/Markdown parser requirement for G12 stays dependency-free despite its substantial implementation cost (ADR 0012). Optional external session-scoped CodeGraph is context, not runtime library or gate authority (ADR 0013).
+- Runtime config/capabilities are explicit protected inputs under spec §5.10. Q23 allows explicitly reviewed broader compiled capability classes where required, not repository least-privilege claims; no `-A`/`--allow-all`, prompts, broker, ambient resolution or runtime downloads. Source/hooks/bootstrap are narrower where feasible, with pre-Deno startup controls proved independently. No JSR `@std`/npm/HTTP/vendored product libraries. Grants do not sandbox tools or prove host/credential isolation; spec §8 uses existing self-hosted environments and bounded safeguards, not a new VM platform. Activation and compatibility/platform evidence remain blocked under §17/ADR 0016.
