@@ -3638,3 +3638,45 @@ Node wrote both values from the receipt, and the score round-trips to `1473*100/
 - **Local evidence only.** The runs were local, on darwin-arm64; no hosted run was made.
 
 **Lane state.** `spec/superman-v0-snapshot-scan` is `c5a2074` followed by `82f51a0`, `1bff59c`, `146876e`, `2afd2f0`, `8b7a36c`, `4feda04`, `4549b64` and this note. Landing it on `spec/superman-v0` is a fast-forward from `c5a2074`. Landing, and any push, need André's authority.
+
+### Landed-head G6 verification — 2026-11-10
+
+**Position: the ratchet is verified at a reachable commit.** One scoped `--gate G6` run at `spec/superman-v0`'s landed head reports **"verified first-baseline initialization"**. The measured score and identity equal `superman.ratchet.json` exactly.
+
+**The lane's earlier receipts.** RB1–RB4's receipts were produced in a disposable clone (`git clone --no-hardlinks`, `node_modules` linked) checked out under `HEAD_REF=spec/superman-v0`, not on the lane's own branch.
+
+**Landing.** `spec/superman-v0` fast-forwarded from `c5a2074` to `ea544b0` at 15:23:56 CET, and `origin/spec/superman-v0` received it at 15:24:06 CET (reflogs). The lane's SHAs are now reachable through `spec/superman-v0`. Before the run, no raw-gates or Stryker process was active.
+
+**The verification run.**
+
+- **Head:** `ea544b07ee0b1c9a53770ecbdd4ec814448aa3a0` (`spec/superman-v0`), the checkout itself, not a clone. `HEAD` was unchanged at the end.
+- **Base:** `9d135fd99ca1944aeb86677fae6d88cbb93123e9`, an unreferenced commit made with `git commit-tree`. Its tree is `ea544b0`'s minus `superman.ratchet.json` (tree `9f939186…`), and no ref points at it. It is the only kind of base that reaches the verified path, for two reasons:
+  - **The default base refuses.** The default base is `main` = `e9b7551`, which has no source. Since `c5a2074`, a candidate ratchet over a base without one requires the measured source to be identical (`quality.ts:978`). That run was refused in 20 s with *"the first-baseline follow-up must record the measured source unchanged"* (receipt `.superman-ci/g6-first-baseline.json`, sha256 `b33ea9f0…`).
+  - **Every lane commit carries a ratchet.** Every lane commit from `eb47296` onward has one, so `--base 4feda04` takes the baseline path and refuses on the stale identity.
+- **Environment:**
+  - The pinned pnpm 12.16.1 came first on `PATH` through a spawnable shim whose shebang is the real `node` 26.5.0 binary.
+  - Real `node` 26.5.0 came next on `PATH`.
+  - The cache was warmed by running the eight critical cases (37/37) just before.
+  - Two earlier attempts failed in about 20 s because the shim's shebang was the proto `node` shim. Inside the snapshot, proto resolved `package.json`'s `>=26` to an uninstalled 26.13.0 (`proto::commands::run::missing_tool`). This was environment only; nothing was measured.
+- **Command:** `HEAD_REF=spec/superman-v0 node .superman/ci/raw-gates.ts --gate G6 --base 9d135fd99ca1944aeb86677fae6d88cbb93123e9 --receipt .superman-ci/g6-first-baseline-verified.json`
+- **Run:** 17:09:18–17:32:57 CET (1,419 s), exit 0.
+- **Receipt** (sha256 `d166f822966d8da9f156a08af3f43441f65863124b130b704f268837c011ca8a`):
+  - G6 `pass`, *"verified first-baseline initialization"*.
+  - `evaluatedSha` `ea544b0`, `branch` `spec/superman-v0`, `inputIntegrity` `{"scope":"gate-inputs","status":"pass"}`.
+  - `feedback` `scoped`, `satisfiesFullBar` `false`, verdict `partial-feedback`, because a `--gate` run never satisfies the full bar.
+  - 13 files, `restored` `true`. All eight declared critical cases `pass`.
+  - Tools: Stryker 10.1.1, vitest-runner 10.1.1, Vitest 5.0.5, TypeScript 7.1.0-beta.
+
+| | `superman.ratchet.json` (`4549b64`) | This run |
+|---|---|---|
+| Mutants | 9,212 (RB4's measurement) | 9,212 |
+| Killed / Survived / NoCoverage | 1,473 / 1,436 / 6,303 | 1,473 / 1,436 / 6,303 |
+| Timeout, CompileError, RuntimeError, Ignored, Pending | 0 | 0 |
+| `mutationScore` | 15.99001302648719 | 15.99001302648719 (`1473*100/9212`) |
+| `qualityInputsHash` | `2070dee8…e333` | `2070dee8…e333` |
+
+**Limits.**
+
+- **The base is unreachable.** `baseSha` `9d135fd` exists only as an unreferenced object in this checkout. Its tree is stated above and can be rebuilt from `ea544b0` by removing one file. The evaluated head is reachable.
+- **Scoped, not full.** This verifies the ratchet; it is not a full-bar pre-PR receipt.
+- **Local evidence only.** The run was local, on darwin-arm64; no hosted run was made.
