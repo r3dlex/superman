@@ -4,7 +4,7 @@
 
 ## Current state
 
-**Updated 2026-11-09.** This is the live status. Existing material under [History](#history) retains its original bytes, verdicts and scope; new dated records are appended. The [mutation-policy decision record](#mutation-policy-decisions-and-preparation-delta--2026-11-08) adds a confirmed, unimplemented preparation delta. The earlier closed criteria/acceptances remain records of their own slices, not evidence that this delta passed.
+**Updated 2026-11-10.** This is the live status. Existing material under [History](#history) retains its original bytes, verdicts and scope; new dated records are appended. The [mutation-policy decision record](#mutation-policy-decisions-and-preparation-delta--2026-11-08) adds a confirmed, unimplemented preparation delta. The earlier closed criteria/acceptances remain records of their own slices, not evidence that this delta passed.
 
 | | |
 | --- | --- |
@@ -21,9 +21,9 @@
 | Mutation-policy amendment | **Planning confirmed 2026-11-08; seams and M01–M08 reconfirmed 2026-11-09; unimplemented/unadmitted.** Bounded critical evidence before 01; risk-affected PR mutation with normal/slow budgets; weekly/release broad audits and fourteen-day freshness stop; scope-bound baseline/disposition read-back. Canonical requirements are spec §§5.3–5.4, 13, 16 and 17; [the finalization record](#mutation-policy-spec-finalization--2026-11-09) records the latest confirmation. |
 | Concurrent G6 reconciliation | **Reconciled 2026-11-09.** The terminal `e498403`/`57bcaba` receipt records **G6 pass, overall fail, exit 1**: the shared-checkout Markdown edits failed input integrity. Its 9,004 raw outcomes include zero Timeouts. [The terminal record](#terminal-result-and-integration--2026-11-09) preserves the bytes, counts and limitations; D1–D14 remain unchanged. |
 | Mutation backlog reconciliation | **Approved and reconciled 2026-11-09.** Thirteen existing tickets now consume the amended policy; [MP1–MP7](#approved-mutation-backlog-reconciliation--2026-11-09) organize M01–M08 with dependencies and observable verification. The existing 01–33 IDs and readiness states are retained. Preparation execution and ticket 01 admission remain outstanding. |
-| §17 gate/baseline read-back slice | **Specified and broken down 2026-11-09; unimplemented.** Seams confirmed; spec §5.4, §16 and §17 (SB01–SB06) and the glossary are amended in [the synthesis record](#17-gatebaseline-read-back-slice--specified-2026-11-09). André approved [RB1–RB4](#implementation-slices--approved-2026-11-09), all `ready-for-agent`; RB1 is the frontier, on a local lane branch. Only RB4 waits for the G6 baseline-preflight fix on `spec/g6-baseline-readback`, and it closes the lane with one G6 remeasurement and one ratchet refresh. |
+| §17 gate/baseline read-back slice | **RB1–RB4 done on the local lane 2026-11-10; not landed.** Seams confirmed; spec §5.4, §16 and §17 (SB01–SB06) and the glossary are amended in [the synthesis record](#17-gatebaseline-read-back-slice--specified-2026-11-09). André approved [RB1–RB4](#implementation-slices--approved-2026-11-09). The G6 baseline-preflight fix landed on `spec/superman-v0` as `c5a2074`. The lane `spec/superman-v0-snapshot-scan` sits on it with RB1–RB3, the ratchet refresh `4549b64` (15.99001302648719, `2070dee8…`, a tightening) and a passing real full local pre-PR run at `4549b64` ([RB4's evidence](#rb4-evidence--2026-11-10)). Landing the lane on `spec/superman-v0`, and any push, await André's authority. |
 
-**Next action.** Select the exact source/test/file/command scope for [MP1](#mp1--map-the-campaign-and-prove-one-operational-deno-control), obtain its narrow execution authorization and review M01's concrete eight-group map before measurement. The existing seams, timeout declaration and D1–D14 remain confirmed. The [parallel G6 reconciliation](#terminal-result-and-integration--2026-11-09) changes the evidence record, not those prerequisites: its scoped Node measurement passed while the whole receipt failed input integrity. The earlier 8,881-mutant run with five Timeouts and 9,004-mutant run with 25 remain failed evidence at their original scope. Preserve rows 1–11's accepted preparation scopes; row 12's operator/live-authority requirements and exact-head Gate 1 approval remain outstanding. Independently of MP1, the §17 gate/baseline read-back slice's [RB1](#rb1--local-g11-scans-an-owned-snapshot-of-the-commit) is the frontier: RB1–RB3 run on a local lane branch now, and RB4 lands the lane after the G6 baseline-preflight fix.
+**Next action.** Select the exact source/test/file/command scope for [MP1](#mp1--map-the-campaign-and-prove-one-operational-deno-control), obtain its narrow execution authorization and review M01's concrete eight-group map before measurement. The existing seams, timeout declaration and D1–D14 remain confirmed. The [parallel G6 reconciliation](#terminal-result-and-integration--2026-11-09) changes the evidence record, not those prerequisites: its scoped Node measurement passed while the whole receipt failed input integrity. The earlier 8,881-mutant run with five Timeouts and 9,004-mutant run with 25 remain failed evidence at their original scope. Preserve rows 1–11's accepted preparation scopes; row 12's operator/live-authority requirements and exact-head Gate 1 approval remain outstanding. Independently of MP1, the §17 gate/baseline read-back lane is complete on its local branch `spec/superman-v0-snapshot-scan` ([RB4's evidence](#rb4-evidence--2026-11-10)). Landing it on `spec/superman-v0`, a fast-forward from `c5a2074`, and any push need André's authority.
 
 **Rules of record.** [ADR 0018](../../docs/adr/0018-admission-evidence-not-tool-correctness.md) decides how a preparation step is judged — read it before starting a step. [The grilling record](gate1-grilling-record.md) holds the reasoning behind those decisions; [the loop diagnosis](gate1-loop-diagnosis.md) holds why three attempts circled, and `gate1-loop-check.mjs` reports whether the last three attempts measured anything (exit 1 means they did not).
 
@@ -3563,10 +3563,78 @@ The passing and failing local cases also assert that the run's own `TMPDIR` is e
 
 **No red step:** an evidence step and a measured-value refresh carry none (spec Testing Decisions).
 
-- [ ] The lane sits on top of the fix on `spec/superman-v0`, with every RB1–RB3 suite green after the rebase
-- [ ] `node .superman/ci/coverage.ts` at its floors, `biome ci`, `tsrs --noEmit`, `knip` and the pinned `archgate check --strict` pass
-- [ ] One G6 measurement completes with valid outcomes and all eight critical cases passing, and `superman.ratchet.json` takes the measured score and `qualityInputsHash` in one commit. A score below the current ratchet is a loosening that André reviews before it lands, never offset by manufactured kills
-- [ ] A real full local pre-PR run over a disposable clone of the lane head, carrying one uncommitted document, records `inputIntegrity` `{"scope":"gate-inputs","status":"pass"}` at that reachable commit, with G1 and G11 passing under the pinned Archgate 0.61.0 and Trivy 0.76.1 (SB06)
-- [ ] Commands, exit codes, receipt digests and counts appended here, and the Current state row updated
+- [x] The lane sits on top of the fix on `spec/superman-v0`, with every RB1–RB3 suite green after the rebase
+- [x] `node .superman/ci/coverage.ts` at its floors, `biome ci`, `tsrs --noEmit`, `knip` and the pinned `archgate check --strict` pass
+- [x] One G6 measurement completes with valid outcomes and all eight critical cases passing, and `superman.ratchet.json` takes the measured score and `qualityInputsHash` in one commit. A score below the current ratchet is a loosening that André reviews before it lands, never offset by manufactured kills
+- [x] A real full local pre-PR run over a disposable clone of the lane head, carrying one uncommitted document, records `inputIntegrity` `{"scope":"gate-inputs","status":"pass"}` at that reachable commit, with G1 and G11 passing under the pinned Archgate 0.61.0 and Trivy 0.76.1 (SB06)
+- [x] Commands, exit codes, receipt digests and counts appended here, and the Current state row updated
 
 **Covers:** SB06; with RB1–RB3, SB01–SB06. The measurement wants a warm cache and a spawnable pinned pnpm, and no other raw-gates run may be active when committing. The [environment notes](#current-state) cover `ARCHGATE_BIN` and `.serena/`.
+
+##### RB4 evidence — 2026-11-10
+
+**Authority and skills.** RB4 asked for its commands to be approved first, and André's instruction of 2026-11-09, "Ensure preconditions are true and run it", gave that approval. RB4 ran after RB3, on the same lane and worktree. Every commit is on the lane. Nothing was pushed, landed on `spec/superman-v0`, installed, activated, approved or merged. `/verify` ran before the refresh commit, and Matt `writing-for-agents` shaped this note.
+
+**Preconditions, rechecked before the measurement.**
+
+- `c5a2074`, the G6 baseline-preflight fix, is `spec/superman-v0`'s head and the lane's base. The lane carries RB1–RB3 above it; RB3's note has the rebase mapping.
+- RB1–RB3 are green after the rebase. On `8b7a36c`'s bytes: Node suites 615/615, twin 118/118, critical cases 37/37, coverage pass (RB3's note).
+- The pinned pnpm 12.16.1 is first on `PATH` and spawnable: `spawnSync("pnpm", ["--version"])` returns `12.16.1`.
+- No orphaned `setInterval` grandchild was running, and no other raw-gates, Stryker or coverage process was active at any commit.
+
+**Whole-repository checks.**
+
+- **At `4feda04`:** `node_modules/.bin/biome ci .` exits 0 with 149 infos. `tsrs --noEmit`, `knip` and the pinned `archgate check --strict` (16 of 16) pass.
+- **Coverage:** RB3's receipt `401593c1…` binds `8b7a36c`. `4feda04` adds only this record and `4549b64` only the ratchet; neither file is in a coverage inventory. Node branches are 2529/2810.
+- **At `4549b64`:** the real run's own G1, G2, G3 and G10 (Archgate, tsrs, knip, Biome) pass (below).
+
+**Two findings that shaped the measurement.**
+
+1. **The branch name.** G4 reads the spec slug from `HEAD_REF`. On the lane's own branch, the G4 preflight refused a `--gate G6` run on all 66 files under `.scratch/superman-v0/`, as another spec's paths (receipt `4e27cf00…`, `evaluatedSha` `4feda04`). The lane lands on `spec/superman-v0`, so every run below happens in a disposable clone (`git clone --no-hardlinks`, `node_modules` linked) that checks the lane head out under that name, with `HEAD_REF=spec/superman-v0`. The evaluated SHAs are the lane's own.
+2. **The fix verifies a recorded ratchet first.** At `4feda04` as `spec/superman-v0`, G4 passed, and G6 refused in 22 s before measuring anything: `forged qualityInputsHash (recorded 84896b26…, actual 2070dee8…)` (receipt `11562c2a…`). A score is reachable only where the head carries no ratchet.
+
+**The measurement.** One G6 run, on the disposable clone's throwaway commit `52b77ab`: `4feda04` with `superman.ratchet.json` removed and nothing else (tree `49e977f9…`). The cache was warm: the suites, coverage and the preflight ran just before.
+
+- **Command:** `HEAD_REF=spec/superman-v0 node .superman/ci/raw-gates.ts --gate G6 --receipt .superman-ci/rb4-g6-measure.json`
+- **Run:** 00:30:26–01:00:42 CET (1,816 s), exit 0.
+- **Receipt** (sha256 `70f29f84…`): G6 `pass` with "measured initialization; no approved-base source comparison"; `inputIntegrity` `{"scope":"gate-inputs","status":"pass"}`; 13 files restored; all eight critical cases `pass`.
+
+| | `eb47296`'s measurement (the current ratchet) | This measurement |
+|---|---|---|
+| Mutants | 9,178 | 9,212 |
+| Killed | 1,467 | 1,473 |
+| Survived | 1,425 | 1,436 |
+| NoCoverage | 6,286 | 6,303 |
+| Timeout, CompileError, RuntimeError, Ignored, Pending | 0 | 0 |
+| `mutationScore` | 15.983874482458052 | 15.99001302648719 |
+| `qualityInputsHash` | `84896b26…` | `2070dee8…`, the preflight's `actual` |
+
+**The ratchet.** The score rose by 0.00613854402913816 points, a tightening. So `superman.ratchet.json` took the measured score and identity in its own commit, `4549b64` (`chore(ci): refresh the baseline's measured identity`), as `eb47296` did:
+
+- `mutationScore` 15.99001302648719
+- `qualityInputsHash` `2070dee8de5d8afc8dcf6dcffbc77ec2c225a4c6e3bdb74e273ce895adc6e333`
+- `jscpdPct` 0, unchanged
+
+Node wrote both values from the receipt, and the score round-trips to `1473*100/9212`. No kill was manufactured: the lane changed none of the critical cases, `test/`, `src/`, `vitest.config.ts`, `stryker.config.json` or `bootstrap.json`.
+
+**The real run.** A disposable clone of `4549b64`, checked out as `spec/superman-v0`, carrying one uncommitted document: an edit to this record.
+
+- **Command:** `HEAD_REF=spec/superman-v0 ARCHGATE_BIN=<pinned 0.61.0> TRIVY_BIN=<pinned 0.76.1> TRIVY_CACHE_DIR=<private copy> node .superman/ci/raw-gates.ts --stage pre-pr --receipt .superman-ci/rb4-real.json`
+- **Run:** exit 0 in 26 s. Receipt sha256 `6553c7b9…`.
+- **Receipt:** `evaluatedSha` `4549b64`, reachable through the lane branch. `inputIntegrity` `{"scope":"gate-inputs","status":"pass"}`. `feedback` `full`, `satisfiesFullBar` `true`, verdict `pass`.
+- **G1 and G11:**
+  - G1 `pass` over the full inventory of 183 files. `tools.archgate` reports 0.61.0 as declared, installed and executed.
+  - G11 `pass`: a fresh vuln/secret/misconfig scan at HIGH and CRITICAL, dev dependencies included, with 0 findings. `tools.trivy` reports 0.76.1.
+- **Other gates:** G2, G3, G4 and G10 `pass`. G5 and G6 `n/a` (see Limits). G7, G8 and G9 `n/a` for a spec-kind change.
+- **Afterwards:** the clone's `HEAD` and its one uncommitted edit were unchanged, and no snapshot remained in the temporary directory.
+
+**Limits.**
+
+- **The ratchet values are not re-verified by G6 at `4549b64`.** A full pre-PR stage applies the pull-request mutation scope, `src/**`, which is empty here, so its G5 and G6 report `n/a` before reading the ratchet. A scoped `--gate G6` run at `4549b64` as `spec/superman-v0` would verify them ("verified first-baseline initialization") in about 30 minutes, but that is the second measurement the lane's plan excludes. The identity is cross-checked against the preflight's `actual`; the score is the receipt's own.
+- **The measurement's commit is unreachable.** Its receipt binds `52b77ab`, which exists only in the disposable clone. Its tree `49e977f9…` is `4feda04`'s tree (`7fd3d7d2…`) minus `superman.ratchet.json`.
+- **The receipts name the landing branch.** They name `spec/superman-v0`. Until André authorizes landing, their SHAs are reachable only through `spec/superman-v0-snapshot-scan`.
+- **Coverage and the empty set.** Node branch coverage sits at its floor (RB3's note). The empty whole-tree set's `[]` is an equivalent mutant.
+- **Trivy's identity and database.** Trivy 0.76.1 is version-bound, not archive-bound (the tool-identities note above). Its database came from a private copy of the local cache, fresh until 00:56 UTC and not refreshed during the run.
+- **Local evidence only.** The runs were local, on darwin-arm64; no hosted run was made.
+
+**Lane state.** `spec/superman-v0-snapshot-scan` is `c5a2074` followed by `82f51a0`, `1bff59c`, `146876e`, `2afd2f0`, `8b7a36c`, `4feda04`, `4549b64` and this note. Landing it on `spec/superman-v0` is a fast-forward from `c5a2074`. Landing, and any push, need André's authority.
